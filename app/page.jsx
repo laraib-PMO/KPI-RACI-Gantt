@@ -57,7 +57,7 @@ body{background:var(--bg);color:var(--fg);transition:background .3s,color .3s}
   .mob-sm-hide{display:none!important}
   .mob-sm-text{font-size:11px!important}
 }
-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:768px){table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}}
 `;
 
 function rowClass(t){if(t.status==="Done")return"done-row rh";if(isOverdue(t))return"overdue-row rh";if(t.risk==="Off track")return"offtrack-row rh";if(t.risk==="At risk")return"atrisk-row rh";return"ontrack-row rh"}
