@@ -43,6 +43,21 @@ const CSS=`
 [data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)}
 [data-theme="light"]{--bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;--fg:#1E293B;--fg2:#64748B;--border:#E8ECEF;--hover:#F8FAFC;--card:#FFFFFF;--hdr:linear-gradient(135deg,#0D1B2A,#1B3A5C)}
 body{background:var(--bg);color:var(--fg);transition:background .3s,color .3s}
+*{box-sizing:border-box}
+@media(max-width:768px){
+  .mob-col1{grid-template-columns:1fr!important}
+  .mob-hide{display:none!important}
+  .mob-wrap{flex-wrap:wrap!important}
+  .mob-full{width:100%!important;min-width:0!important}
+  .mob-scroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+  .mob-pad{padding:12px!important}
+  .mob-stack{flex-direction:column!important;gap:8px!important}
+}
+@media(max-width:480px){
+  .mob-sm-hide{display:none!important}
+  .mob-sm-text{font-size:11px!important}
+}
+table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
 `;
 
 function rowClass(t){if(t.status==="Done")return"done-row rh";if(isOverdue(t))return"overdue-row rh";if(t.risk==="Off track")return"offtrack-row rh";if(t.risk==="At risk")return"atrisk-row rh";return"ontrack-row rh"}
@@ -59,7 +74,7 @@ function InEdit({value,onChange,type="text",options}){
 function AddModal({title,fields,onSave,onClose}){
   const[vals,setVals]=useState({});
   return <div className="af" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
-    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:440,padding:24,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
+    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(440px,95vw)",padding:20,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>{title}</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
       {fields.map(f=><div key={f.key} style={{marginBottom:12}}>
         <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>{f.label}</label>
@@ -77,7 +92,7 @@ function TicketPopup({task,tasks,onClose,onUpdate,onDelete}){
   const blocks=tasks.filter(t=>(t.deps||[]).includes(task.id)).map(t=>t.name);
   const od=isOverdue(task);
   return <div className="af" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
-    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:500,maxHeight:"85vh",overflow:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
+    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(500px,95vw)",maxHeight:"85vh",overflow:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
       <div style={{borderBottom:"4px solid "+cl,padding:"20px 24px 16px",background:od?"linear-gradient(135deg,#FEE2E2,#FEF2F2)":"transparent",borderRadius:"16px 16px 0 0"}}>
         <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:10,color:"var(--fg2)",fontWeight:600}}>TASK-{task.id} / {task.dept}{od?" — OVERDUE":""}</span><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
         <div style={{fontSize:18,fontWeight:800,marginTop:4,color:od?"#DC2626":"var(--fg)"}}><InEdit value={task.name} onChange={v=>onUpdate(task.id,{name:v})}/></div>
@@ -208,7 +223,7 @@ export default function Home(){
         <button onClick={()=>setDark(!dark)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600,transition:"all .2s"}}>{dark?"☀ Light":"◑ Dark"}</button>
         <button onClick={doSync} disabled={syncing} style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
         {syncMsg&&<span style={{fontSize:10,color:"#10B981"}}>{syncMsg}</span>}
-        <div style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
+        <div className="mob-hide" style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
           <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
           {stats.overdue>0&&<span style={{animation:"pulse 1.5s infinite"}}><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span>}
         </div>
@@ -216,9 +231,9 @@ export default function Home(){
     </div>
 
     {/* Tabs */}
-    <div style={{borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",flexWrap:"wrap",background:"var(--card)"}}>
-      {TABS.map(t=><button key={t.id} onClick={()=>setView(t.id)} style={{padding:"10px 14px",border:"none",background:"none",fontWeight:600,fontSize:13,cursor:"pointer",color:view===t.id?"var(--fg)":"var(--fg2)",borderBottom:view===t.id?"2px solid #3B82F6":"2px solid transparent",transition:"all .15s"}}>{t.l}</button>)}
-      <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>{ANCH.map((a,i)=><span key={i} style={{fontSize:9,color:a.c,fontWeight:700,padding:"2px 6px",background:a.c+"12",borderRadius:99}}>{a.l} {fD(a.d)}</span>)}</div>
+    <div style={{borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",flexWrap:"nowrap",background:"var(--card)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+      {TABS.map(t=><button key={t.id} onClick={()=>setView(t.id)} style={{padding:"10px 14px",border:"none",background:"none",fontWeight:600,fontSize:13,cursor:"pointer",color:view===t.id?"var(--fg)":"var(--fg2)",borderBottom:view===t.id?"2px solid #3B82F6":"2px solid transparent",transition:"all .15s",whiteSpace:"nowrap"}}>{t.l}</button>)}
+      <div className="mob-hide" style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>{ANCH.map((a,i)=><span key={i} style={{fontSize:9,color:a.c,fontWeight:700,padding:"2px 6px",background:a.c+"12",borderRadius:99}}>{a.l} {fD(a.d)}</span>)}</div>
     </div>
 
     <div style={{padding:20}}>
@@ -236,7 +251,7 @@ export default function Home(){
           const widthPct=Math.max((dur/TL_DAYS)*100,0.5);
           const od=isOverdue(t);
           return <div key={t.id} className={rowClass(t)+" asl"} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>setSel(t)}>
-            <div style={{width:200,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
               <div style={{width:20,height:20,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{t.owner?.[0]}</span></div>
               <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.name}</span>
             </div>
@@ -255,7 +270,7 @@ export default function Home(){
     {/* ═══ BOARD ═══ */}
     {view==="board"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Board</div><button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>{STS.map(st=><div key={st} onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(st)}
+      <div className="mob-col1" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>{STS.map(st=><div key={st} onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(st)}
         style={{background:"var(--bg2)",borderRadius:10,padding:12,minHeight:200,border:dragId?"2px dashed #3B82F6":"2px solid transparent",transition:"all .2s"}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontWeight:700,fontSize:14,color:"var(--fg)"}}>{st}</span><span style={{background:"var(--bg3)",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,color:"var(--fg2)"}}>{tasks.filter(t=>t.status===st).length}</span></div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>{tasks.filter(t=>t.status===st).map((t,idx)=>{const rc=RC[t.risk];const pc=PC[t.priority];const od=isOverdue(t);
