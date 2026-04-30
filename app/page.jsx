@@ -119,8 +119,8 @@ function KpiChart({kpis}){
   const byDept={};kpis.forEach(k=>{if(!byDept[k.dept])byDept[k.dept]={green:0,yellow:0,red:0,total:0};byDept[k.dept][k.flag]++;byDept[k.dept].total++});
   const depts=Object.keys(byDept);if(!depts.length)return null;
   const bW=70,bH=140,gap=24,w=depts.length*(bW+gap)+60,h=bH+70;
-  return <div className="af" style={{overflowX:"auto",marginBottom:16,background:"var(--bg2)",borderRadius:12,padding:16,border:"1px solid var(--border)"}}>
-    <div style={{fontSize:13,fontWeight:700,marginBottom:12,color:"var(--fg)"}}>Department Health Overview</div>
+  return <div className="af" style={{overflowX:"auto",marginBottom:16,background:"var(--bg2)",borderRadius:12,padding:16,border:"1px solid var(--border)",display:"flex",flexDirection:"column",alignItems:"center"}}>
+    <div style={{fontSize:13,fontWeight:700,marginBottom:12,color:"var(--fg)",alignSelf:"flex-start"}}>Department Health Overview</div>
     <svg width={w} height={h} style={{fontFamily:"Inter,system-ui"}}>{depts.map((d,i)=>{
       const x=30+i*(bW+gap);const data=byDept[d];const t=data.total||1;
       const gH=(data.green/t)*bH;const yH=(data.yellow/t)*bH;const rH=(data.red/t)*bH;
@@ -293,11 +293,11 @@ export default function Home(){
     </div>}
 
     {/* ═══ KPIs ═══ */}
-    {view==="kpi"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
+    {view==="kpi"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto"}}>
       <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>KPIs</div><button onClick={()=>setAddModal("kpi")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add KPI</button></div>
       <KpiChart kpis={kpis}/>
       {Object.entries(kpiByDept).map(([dept,items])=><div key={dept} className="asl"><DeptHdr dept={dept}/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,padding:10,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 8px 8px"}}>{items.map(k=><div key={k.id} className="ch" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:12,background:"var(--bg2)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,padding:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 8px 8px"}}>{items.map(k=><div key={k.id} className="ch" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:14,background:"var(--bg2)"}}>
           <div style={{fontSize:12,fontWeight:700,marginBottom:4,color:"var(--fg)"}}>{k.name}</div><div style={{fontSize:10,color:"var(--fg2)"}}>Target: {k.target}</div>
           <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><div style={{width:8,height:8,borderRadius:"50%",background:FC[k.flag]}}/><span style={{fontSize:11,fontWeight:700,color:FC[k.flag]}}>{k.current_value}</span></div>
           <div style={{marginTop:6,display:"flex",gap:4}}>{["green","yellow","red"].map(f=><button key={f} onClick={()=>updateKpi(k.id,{flag:f})} style={{width:18,height:18,borderRadius:"50%",background:FC[f],border:k.flag===f?"2px solid var(--fg)":"1px solid var(--border)",cursor:"pointer",transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.3)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}/>)}</div>
