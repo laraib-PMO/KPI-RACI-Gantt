@@ -191,6 +191,7 @@ export default function Home(){
   const addTask=useCallback(async v=>{const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
   const addRaci=useCallback(async v=>{const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteRaci=useCallback(async id=>{setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
+  const updateRaci=useCallback(async(id,u)=>{setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
   const addRisk=useCallback(async v=>{const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
   const updateRisk=useCallback(async(id,u)=>{setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
   const deleteRisk=useCallback(async id=>{setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
@@ -201,6 +202,7 @@ export default function Home(){
   const deleteRole=useCallback(async id=>{setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
   const addMeeting=useCallback(async v=>{const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteMeeting=useCallback(async id=>{setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
+  const updateMeeting=useCallback(async(id,u)=>{setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
   const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
 
   const doSync=async()=>{setSyncing(true);setSyncMsg("Syncing...");try{const res=await fetch('/api/sync',{method:'POST'});const data=await res.json();setSyncMsg("Done: "+(data.results?.map(r=>r.source+" "+r.status).join(', ')||'Synced'))}catch(e){setSyncMsg("Error: "+e.message)}setSyncing(false)};
@@ -311,7 +313,15 @@ export default function Home(){
     {view==="raci"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><button onClick={()=>setAddModal("raci")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add</button></div>
       <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)"}}><b>R</b>=Responsible <b>A</b>=Accountable <b>C</b>=Consulted <b>I</b>=Informed <span style={{color:"#3B82F6"}}>[Suggest]</span>=PMO suggestion</div>
-      {Object.entries(raciByDept).map(([dept,rows])=><div key={dept}><DeptHdr dept={dept}/><Tbl headers={["Task","R","A","C","I","Notes",""]} rows={rows.map(r=>[<span style={{fontWeight:600,color:r.is_suggestion?"#3B82F6":"var(--fg)"}}>{r.is_suggestion?"[Suggest] ":""}{r.task}</span>,r.responsible,r.accountable,r.consulted,r.informed,<span style={{fontSize:11,color:"#D97706"}}>{r.notes}</span>,<button onClick={()=>deleteRaci(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/></div>)}
+      {Object.entries(raciByDept).map(([dept,rows])=><div key={dept}><DeptHdr dept={dept}/><Tbl headers={["Task","R","A","C","I","Notes",""]} rows={rows.map(r=>[
+        <InEdit value={r.task} onChange={v=>updateRaci(r.id,{task:v})}/>,
+        <InEdit value={r.responsible} onChange={v=>updateRaci(r.id,{responsible:v})}/>,
+        <InEdit value={r.accountable} onChange={v=>updateRaci(r.id,{accountable:v})}/>,
+        <InEdit value={r.consulted} onChange={v=>updateRaci(r.id,{consulted:v})}/>,
+        <InEdit value={r.informed} onChange={v=>updateRaci(r.id,{informed:v})}/>,
+        <InEdit value={r.notes} onChange={v=>updateRaci(r.id,{notes:v})}/>,
+        <button onClick={()=>deleteRaci(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+      ])}/></div>)}
     </div>}
 
     {/* ═══ KPIs ═══ */}
@@ -320,8 +330,9 @@ export default function Home(){
       <KpiChart kpis={kpis}/>
       {Object.entries(kpiByDept).map(([dept,items])=><div key={dept} className="asl"><DeptHdr dept={dept}/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,padding:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 8px 8px"}}>{items.map(k=><div key={k.id} className="ch" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:14,background:"var(--bg2)"}}>
-          <div style={{fontSize:12,fontWeight:700,marginBottom:4,color:"var(--fg)"}}>{k.name}</div><div style={{fontSize:10,color:"var(--fg2)"}}>Target: {k.target}</div>
-          <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><div style={{width:8,height:8,borderRadius:"50%",background:FC[k.flag]}}/><span style={{fontSize:11,fontWeight:700,color:FC[k.flag]}}>{k.current_value}</span></div>
+          <div style={{fontSize:12,fontWeight:700,marginBottom:4,color:"var(--fg)"}}><InEdit value={k.name} onChange={v=>updateKpi(k.id,{name:v})}/></div>
+          <div style={{fontSize:10,color:"var(--fg2)"}}>Target: <InEdit value={k.target} onChange={v=>updateKpi(k.id,{target:v})}/></div>
+          <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><div style={{width:8,height:8,borderRadius:"50%",background:FC[k.flag]}}/><span style={{fontSize:11,fontWeight:700,color:FC[k.flag]}}><InEdit value={k.current_value} onChange={v=>updateKpi(k.id,{current_value:v})}/></span></div>
           <div style={{marginTop:6,display:"flex",gap:4}}>{["green","yellow","red"].map(f=><button key={f} onClick={()=>updateKpi(k.id,{flag:f})} style={{width:18,height:18,borderRadius:"50%",background:FC[f],border:k.flag===f?"2px solid var(--fg)":"1px solid var(--border)",cursor:"pointer",transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.3)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}/>)}</div>
         </div>)}</div>
       </div>)}
@@ -370,9 +381,12 @@ export default function Home(){
       {(meetFilter==="all"||meetFilter==="recurring")&&<div style={{marginBottom:16}}>
         {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/> Recurring Meetings</div>}
         <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).map(m=>[
-          <Bdg bg={MT_CLR[m.type]||"#94A3B8"} c="#fff">{m.type}</Bdg>,
-          <b style={{color:"var(--fg)"}}>{m.name}</b>,m.schedule,m.duration,<b>{m.owner}</b>,
-          <span style={{color:"var(--fg2)"}}>{m.attendees}</span>,
+          <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
+          <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
+          <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
+          <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
+          <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
+          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
           <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
@@ -380,9 +394,12 @@ export default function Home(){
       {(meetFilter==="all"||meetFilter==="milestone")&&<div>
         {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#F59E0B"}}/> Milestone-Gated Meetings</div>}
         <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>m.type==="Milestone").map(m=>[
-          <Bdg bg={MT_CLR[m.type]||"#94A3B8"} c="#fff">{m.type}</Bdg>,
-          <b style={{color:"var(--fg)"}}>{m.name}</b>,m.schedule,m.duration,<b>{m.owner}</b>,
-          <span style={{color:"var(--fg2)"}}>{m.attendees}</span>,
+          <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
+          <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
+          <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
+          <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
+          <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
+          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
           <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
