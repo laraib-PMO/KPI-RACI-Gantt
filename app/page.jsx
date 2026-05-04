@@ -172,6 +172,12 @@ export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
+  const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
+  const PASS="11223344";
+
+  useEffect(()=>{if(typeof window!=='undefined'&&localStorage.getItem('attimo_auth')==='true')setAuthed(true)},[]);
+  const doLogin=()=>{if(pw===PASS){setAuthed(true);localStorage.setItem('attimo_auth','true');setPwErr(false)}else{setPwErr(true)}};
+  const doLogout=()=>{setAuthed(false);localStorage.removeItem('attimo_auth')};
 
   useEffect(()=>{document.documentElement.setAttribute("data-theme",dark?"dark":"light")},[dark]);
 
@@ -209,6 +215,21 @@ export default function Home(){
 
   if(loading)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontSize:16,color:"var(--fg2)",background:"var(--bg)"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px"}}></div>Loading Attimo...</div></div>;
 
+  if(!authed)return <div style={{fontFamily:"'Inter',system-ui",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)"}}>
+    <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <div className="asc" style={{background:"#1E293B",borderRadius:20,padding:40,width:"min(400px,90vw)",textAlign:"center",border:"1px solid #334155",boxShadow:"0 25px 60px rgba(0,0,0,.5)"}}>
+      <div style={{width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><span style={{color:"#fff",fontSize:24,fontWeight:800}}>A</span></div>
+      <h1 style={{color:"#F1F5F9",fontSize:22,fontWeight:800,margin:"0 0 4px"}}>Attimo</h1>
+      <p style={{color:"#94A3B8",fontSize:13,margin:"0 0 24px"}}>Company Operations Hub</p>
+      <input type="password" placeholder="Enter access code" value={pw} onChange={e=>{setPw(e.target.value);setPwErr(false)}} onKeyDown={e=>{if(e.key==="Enter")doLogin()}}
+        style={{width:"100%",padding:"12px 16px",borderRadius:10,border:pwErr?"2px solid #EF4444":"1px solid #475569",background:"#0F172A",color:"#F1F5F9",fontSize:14,boxSizing:"border-box",outline:"none",textAlign:"center",letterSpacing:4}}/>
+      {pwErr&&<div style={{color:"#EF4444",fontSize:12,marginTop:8,fontWeight:600}}>Incorrect code. Try again.</div>}
+      <button onClick={doLogin} style={{width:"100%",padding:"12px",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",marginTop:16,transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.02)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}>Enter</button>
+      <p style={{color:"#475569",fontSize:10,marginTop:16}}>Access restricted to Attimo team members</p>
+    </div>
+  </div>;
+
   return <div style={{fontFamily:"'Inter',system-ui",background:"var(--bg)",minHeight:"100vh",transition:"all .3s"}}>
     <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -221,6 +242,7 @@ export default function Home(){
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <button onClick={()=>setDark(!dark)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600,transition:"all .2s"}}>{dark?"☀ Light":"◑ Dark"}</button>
+        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:600}}>Logout</button>
         <button onClick={doSync} disabled={syncing} style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
         {syncMsg&&<span style={{fontSize:10,color:"#10B981"}}>{syncMsg}</span>}
         <div className="mob-hide" style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
