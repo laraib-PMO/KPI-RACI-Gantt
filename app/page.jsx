@@ -170,7 +170,7 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);
-  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);
+  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
   const PASS="11223344";
@@ -354,12 +354,38 @@ export default function Home(){
           <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>+ Google Calendar</a>
         </div>
       </div>
-      <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.map(m=>[
-        <Bdg bg={MT_CLR[m.type]||"#94A3B8"} c="#fff">{m.type}</Bdg>,
-        <b style={{color:"var(--fg)"}}>{m.name}</b>,m.schedule,m.duration,<b>{m.owner}</b>,
-        <span style={{color:"var(--fg2)"}}>{m.attendees}</span>,
-        <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
-      ])}/>
+      {/* Toggle filters */}
+      <div style={{display:"flex",gap:4,marginBottom:16,background:"var(--bg3)",borderRadius:10,padding:3,width:"fit-content"}}>
+        {[{id:"all",l:"All Meetings"},{id:"recurring",l:"Recurring"},{id:"milestone",l:"Milestone-Gated"}].map(f=>
+          <button key={f.id} onClick={()=>setMeetFilter(f.id)} style={{padding:"8px 16px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",background:meetFilter===f.id?"var(--fg)":"transparent",color:meetFilter===f.id?"var(--bg)":"var(--fg2)"}}>{f.l}
+            <span style={{marginLeft:6,background:meetFilter===f.id?"rgba(255,255,255,.2)":"var(--border)",borderRadius:99,padding:"1px 6px",fontSize:10}}>{
+              f.id==="all"?meetings.length:
+              f.id==="recurring"?meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).length:
+              meetings.filter(m=>m.type==="Milestone").length
+            }</span>
+          </button>
+        )}
+      </div>
+      {/* Recurring section */}
+      {(meetFilter==="all"||meetFilter==="recurring")&&<div style={{marginBottom:16}}>
+        {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/> Recurring Meetings</div>}
+        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).map(m=>[
+          <Bdg bg={MT_CLR[m.type]||"#94A3B8"} c="#fff">{m.type}</Bdg>,
+          <b style={{color:"var(--fg)"}}>{m.name}</b>,m.schedule,m.duration,<b>{m.owner}</b>,
+          <span style={{color:"var(--fg2)"}}>{m.attendees}</span>,
+          <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        ])}/>
+      </div>}
+      {/* Milestone section */}
+      {(meetFilter==="all"||meetFilter==="milestone")&&<div>
+        {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#F59E0B"}}/> Milestone-Gated Meetings</div>}
+        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>m.type==="Milestone").map(m=>[
+          <Bdg bg={MT_CLR[m.type]||"#94A3B8"} c="#fff">{m.type}</Bdg>,
+          <b style={{color:"var(--fg)"}}>{m.name}</b>,m.schedule,m.duration,<b>{m.owner}</b>,
+          <span style={{color:"var(--fg2)"}}>{m.attendees}</span>,
+          <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        ])}/>
+      </div>}
     </div>}
 
     </div>
