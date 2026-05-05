@@ -170,7 +170,7 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);
-  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");
+  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
   const PASS="11223344";
@@ -266,8 +266,20 @@ export default function Home(){
 
     {/* ═══ TIMELINE ═══ */}
     {view==="timeline"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Company Gantt</div><button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button></div>
-      <div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)"}}>{STS.map(st=>{const items=tasks.filter(t=>t.status===st);return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Gantt Chart</div>
+          <div style={{display:"flex",background:"var(--bg3)",borderRadius:8,padding:2}}>
+            <button onClick={()=>setGanttMode("company")} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="company"?"var(--fg)":"transparent",color:ganttMode==="company"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Company</button>
+            <button onClick={()=>{setGanttMode("department");if(!deptTasks){setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false)}).catch(()=>setDeptLoading(false))}}} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="department"?"var(--fg)":"transparent",color:ganttMode==="department"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Department</button>
+          </div>
+        </div>
+        {ganttMode==="company"&&<button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button>}
+        {ganttMode==="department"&&<button onClick={()=>{setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false)}).catch(()=>setDeptLoading(false))}} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Refresh from Linear + Asana</button>}
+      </div>
+
+      {/* COMPANY GANTT */}
+      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)"}}>{STS.map(st=>{const items=tasks.filter(t=>t.status===st);return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
         <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
         {items.map((t,idx)=>{const cl=CL[t.dept]||"#94A3B8";
           const startStr=String(t.start_date).split('T')[0];const endStr=String(t.end_date).split('T')[0];
@@ -290,7 +302,47 @@ export default function Home(){
             {!od&&t.risk==="At risk"&&<div style={{width:8,height:8,borderRadius:"50%",background:"#F59E0B",flexShrink:0}}/>}
             {!od&&t.risk==="Off track"&&<div className="pulse-dot" style={{width:8,height:8,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
           </div>})}
-      </div>})}</div>
+      </div>})}</div>}
+
+      {/* DEPARTMENT GANTT */}
+      {ganttMode==="department"&&<div>
+        {deptLoading&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Loading from Linear...</div>}
+        {!deptLoading&&!deptTasks&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Click "Department" to load tickets from Linear</div>}
+        {!deptLoading&&deptTasks&&Object.entries(deptTasks.projects||{}).map(([project,tickets])=>{
+          const src=deptTasks.sources?.[project]||'Linear';
+          const cl=project.includes("Phase 0")?"#14B8A6":project.includes("Phase 1")?"#10B981":project.includes("Phase 2")?"#3B82F6":project.includes("Phase 3")?"#8B5CF6":project.includes("Phase 4")?"#EC4899":project.includes("AEC")?"#F59E0B":project.includes("Marketing")?"#EC4899":project.includes("Design")?"#8B5CF6":"#6366F1";
+          const doing=tickets.filter(t=>t.status==="Doing").length;
+          const done=tickets.filter(t=>t.status==="Done").length;
+          const overdue=tickets.filter(t=>t.isOverdue).length;
+          return <div key={project} className="asl" style={{marginBottom:16}}>
+            <div style={{background:cl+"15",color:cl,padding:"10px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+cl,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><span>{project}</span><span style={{fontSize:9,padding:"2px 6px",borderRadius:99,background:src==="Asana"?"#F472B620":"#6366F120",color:src==="Asana"?"#EC4899":"#6366F1",fontWeight:700}}>{src}</span></div>
+              <div style={{display:"flex",gap:8,fontSize:11}}>
+                <span style={{color:"var(--fg2)"}}>{tickets.length} total</span>
+                <span style={{color:"#F59E0B"}}>{doing} doing</span>
+                <span style={{color:"#10B981"}}>{done} done</span>
+                {overdue>0&&<span style={{color:"#EF4444",fontWeight:700}}>{overdue} overdue</span>}
+              </div>
+            </div>
+            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
+              {tickets.slice(0,20).map((t,idx)=>{
+                const od=t.isOverdue;
+                return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 12px",borderBottom:"1px solid var(--border)",animationDelay:idx*20+"ms"}}>
+                  <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                    <div style={{width:18,height:18,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:7,fontWeight:700}}>{t.person?.[0]}</span></div>
+                    <span style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)"}}>{t.title}</span>
+                  </div>
+                  <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:t.status==="Done"?"#DCFCE7":t.status==="Doing"?"#FEF3C7":"#E0E7FF",color:t.status==="Done"?"#166534":t.status==="Doing"?"#92400E":"#3730A3"}}>{t.status}</span>
+                    {t.dueDate&&<span style={{fontSize:10,color:od?"#EF4444":"var(--fg2)"}}>{od?"Overdue: ":"Due: "}{fD(t.dueDate)}</span>}
+                  </div>
+                  <span style={{fontSize:10,color:"var(--fg2)",flexShrink:0}}>{t.person}</span>
+                  {od&&<div className="pulse-dot" style={{width:8,height:8,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
+                </div>})}
+              {tickets.length>20&&<div style={{padding:"8px 12px",fontSize:11,color:"var(--fg2)",textAlign:"center"}}>...and {tickets.length-20} more tickets in Linear</div>}
+            </div>
+          </div>})}
+      </div>}
     </div>}
 
     {/* ═══ BOARD ═══ */}
