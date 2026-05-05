@@ -169,7 +169,7 @@ function Tbl({headers,rows}){return <div style={{border:"1px solid var(--border)
 function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]||"#94A3B8")+"15",color:CL[dept],padding:"8px 12px",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+(CL[dept]||"#94A3B8")}}>{dept}</div>}
 
 export default function Home(){
-  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);
+  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
@@ -181,9 +181,9 @@ export default function Home(){
 
   useEffect(()=>{document.documentElement.setAttribute("data-theme",dark?"dark":"light")},[dark]);
 
-  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro]=await Promise.all([supabase.from('tasks').select('*').order('id'),supabase.from('raci').select('*').order('dept,id'),supabase.from('risks').select('*').order('id'),supabase.from('kpis').select('*').order('dept,id'),supabase.from('meetings').select('*').order('id'),supabase.from('roles').select('*').order('id')]);
-    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);setLoading(false)}la();
-    const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).subscribe();
+  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su]=await Promise.all([supabase.from('tasks').select('*').order('id'),supabase.from('raci').select('*').order('dept,id'),supabase.from('risks').select('*').order('id'),supabase.from('kpis').select('*').order('dept,id'),supabase.from('meetings').select('*').order('id'),supabase.from('roles').select('*').order('id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100)]);
+    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);setLoading(false)}la();
+    const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).subscribe();
     return()=>supabase.removeChannel(ch)},[]);
 
   const updateTask=useCallback(async(id,u)=>{setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
@@ -203,13 +203,15 @@ export default function Home(){
   const addMeeting=useCallback(async v=>{const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteMeeting=useCallback(async id=>{setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
   const updateMeeting=useCallback(async(id,u)=>{setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
+  const addStandup=useCallback(async v=>{const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
+  const deleteStandup=useCallback(async id=>{setStandups(p=>p.filter(s=>s.id!==id));await supabase.from('standups').delete().eq('id',id)},[]);
   const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
 
   const doSync=async()=>{setSyncing(true);setSyncMsg("Syncing...");try{const res=await fetch('/api/sync',{method:'POST'});const data=await res.json();setSyncMsg("Done: "+(data.results?.map(r=>r.source+" "+r.status).join(', ')||'Synced'))}catch(e){setSyncMsg("Error: "+e.message)}setSyncing(false)};
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"}];
+  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"}];
 
   // Timeline date calc constants
   const TL_START="2026-04-25",TL_END="2026-07-05";
@@ -308,6 +310,56 @@ export default function Home(){
     </div>}
 
     {view==="calendar"&&<CalendarView tasks={tasks} onSelect={setSel}/>}
+
+    {/* ═══ DAILY STANDUP ═══ */}
+    {view==="standup"&&<div className="af">
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Daily Standup</div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setAddModal("standup")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Update</button>
+          <a href="https://attimo-labs.slack.com/archives/daily-standup" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>Open #daily-standup</a>
+        </div>
+      </div>
+      <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)",marginBottom:16}}>Updates from Slack workflow and manual entries. Syncs when you click Sync All. Slack workflow sends DMs at 5pm daily.</div>
+      {(()=>{
+        const byDate={};standups.forEach(s=>{const d=String(s.standup_date).split('T')[0];if(!byDate[d])byDate[d]=[];byDate[d].push(s)});
+        const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+        if(dates.length===0)return <div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No standup updates yet. Click "+ Add Update" or wait for the 5pm Slack workflow.</div>;
+        return dates.map(date=><div key={date} className="asl" style={{marginBottom:20}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/>
+            {new Date(date+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+            <span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:10,color:"var(--fg2)"}}>{byDate[date].length} updates</span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
+            {byDate[date].map(s=><div key={s.id} className="ch" style={{background:"var(--card)",borderRadius:10,padding:14,border:"1px solid var(--border)",borderLeft:"4px solid "+(CL[s.person]||"#3B82F6")}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{s.person?.[0]}</span></div>
+                  <span style={{fontWeight:700,fontSize:13,color:"var(--fg)"}}>{s.person}</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:9,color:"var(--fg2)",background:"var(--bg3)",padding:"2px 6px",borderRadius:99}}>{s.source==="slack"?"via Slack":"manual"}</span>
+                  <button onClick={()=>deleteStandup(s.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
+                </div>
+              </div>
+              <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
+                <div style={{color:"#10B981",fontWeight:600,fontSize:10,marginBottom:2}}>COMPLETED</div>
+                <div style={{color:"var(--fg)",lineHeight:1.4}}>{s.completed||"—"}</div>
+              </div>
+              <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
+                <div style={{color:"#3B82F6",fontWeight:600,fontSize:10,marginBottom:2}}>TOMORROW</div>
+                <div style={{color:"var(--fg)",lineHeight:1.4}}>{s.tomorrow||"—"}</div>
+              </div>
+              <div style={{fontSize:12}}>
+                <div style={{color:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?"#EF4444":"#10B981",fontWeight:600,fontSize:10,marginBottom:2}}>BLOCKERS</div>
+                <div style={{color:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?"#EF4444":"var(--fg2)",fontWeight:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?600:400}}>{s.blockers||"None"}</div>
+              </div>
+            </div>)}
+          </div>
+        </div>);
+      })()}
+    </div>}
 
     {/* ═══ RACI ═══ */}
     {view==="raci"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -413,5 +465,6 @@ export default function Home(){
     {addModal==="kpi"&&<AddModal title="Add KPI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"name",label:"KPI"},{key:"target",label:"Target"},{key:"current_value",label:"Current"},{key:"flag",label:"Status",type:"select",options:["green","yellow","red"]},{key:"review_rhythm",label:"Review",type:"select",options:["Weekly","Bi-Weekly","Monthly"]}]} onSave={addKpi} onClose={()=>setAddModal(null)}/>}
     {addModal==="role"&&<AddModal title="Add Role" fields={[{key:"title",label:"Role Title"},{key:"status",label:"Status",type:"select",options:["Not opened","Interviewing","Blocked","Filled"]},{key:"trigger_blocker",label:"Trigger / Blocker"},{key:"target_date",label:"Target Date"}]} onSave={addRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="meeting"&&<AddModal title="Add Meeting" fields={[{key:"type",label:"Type",type:"select",options:["Weekly","Milestone","Bi-weekly","Monthly"]},{key:"name",label:"Meeting Name"},{key:"schedule",label:"When"},{key:"duration",label:"Duration"},{key:"owner",label:"Owner"},{key:"attendees",label:"Attendees"}]} onSave={addMeeting} onClose={()=>setAddModal(null)}/>}
+    {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
   </div>;
 }
