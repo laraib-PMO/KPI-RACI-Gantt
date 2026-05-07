@@ -181,7 +181,7 @@ function CalendarView({tasks,onSelect}){
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncingSU,setSyncingSU]=useState(false);const[lastSync,setLastSync]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[personFilter,setPersonFilter]=useState("all");const[toast,setToast]=useState("");
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[personFilter,setPersonFilter]=useState("all");const[toast,setToast]=useState("");const[dvm,setDvm]=useState("list");
   const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
   const PASS=process.env.NEXT_PUBLIC_DASHBOARD_PASS||"11223344";
 
@@ -322,16 +322,14 @@ export default function Home(){
       {ganttMode==="department"&&<div>
         {deptLoading&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Loading from Linear + Asana...</div>}
         {!deptLoading&&!deptTasks&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Click "Department" to load tickets</div>}
-        {!deptLoading&&deptTasks&&(()=>{
-          const[dvm,setDvm]=useState("list");
-          const projects=deptTasks.projects||{};
-          const projCl=n=>n.includes("Phase 0")?"#14B8A6":n.includes("Phase 1")?"#10B981":n.includes("Phase 2")?"#3B82F6":n.includes("Phase 3")?"#8B5CF6":n.includes("Phase 4")?"#EC4899":n.includes("AEC")?"#F59E0B":n.includes("Marketing")?"#EC4899":n.includes("Design")?"#8B5CF6":"#6366F1";
-          return <div>
+        {!deptLoading&&deptTasks&&<div>
             <div style={{display:"flex",gap:4,marginBottom:16,background:"var(--bg3)",borderRadius:8,padding:2,width:"fit-content"}}>
               {["list","gantt"].map(m=><button key={m} onClick={()=>setDvm(m)} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:dvm===m?"var(--fg)":"transparent",color:dvm===m?"var(--bg)":"var(--fg2)",transition:"all .2s",textTransform:"capitalize"}}>{m}</button>)}
             </div>
-            {Object.entries(projects).map(([project,tickets])=>{
-              const src=deptTasks.sources?.[project]||'Linear';const cl=projCl(project);
+            {Object.entries(deptTasks.projects||{}).map(([project,tickets])=>{
+              const src=deptTasks.sources?.[project]||'Linear';
+              const projCl=n=>n.includes("Phase 0")?"#14B8A6":n.includes("Phase 1")?"#10B981":n.includes("Phase 2")?"#3B82F6":n.includes("Phase 3")?"#8B5CF6":n.includes("Phase 4")?"#EC4899":n.includes("AEC")?"#F59E0B":n.includes("Marketing")?"#EC4899":n.includes("Design")?"#8B5CF6":"#6366F1";
+              const cl=projCl(project);
               const doing=tickets.filter(t=>t.status==="Doing").length;const done=tickets.filter(t=>t.status==="Done").length;const overdue=tickets.filter(t=>t.isOverdue).length;
               return <div key={project} className="asl" style={{marginBottom:16}}>
                 <div style={{background:cl+"15",color:cl,padding:"10px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+cl,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -374,7 +372,7 @@ export default function Home(){
                   {tickets.length>20&&<div style={{padding:"8px 12px",fontSize:11,color:"var(--fg2)",textAlign:"center"}}>...and {tickets.length-20} more tickets</div>}
                 </div>
               </div>})}
-          </div>})()}
+          </div>}
       </div>}
     </div>}
 
