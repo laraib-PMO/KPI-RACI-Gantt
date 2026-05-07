@@ -368,10 +368,11 @@ export default function Home(){
                     // No date: spread evenly across timeline based on index
                     leftPct=(idx/Math.max(items.length,1))*70+5;widthPct=8;dateLabel="no date";
                   }
-                  return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}}>
-                    <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>t.url&&window.open(t.url,'_blank')}>
+                    <div style={{width:"clamp(120px,25vw,220px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                       <div style={{width:20,height:20,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{dn?.[0]}</span></div>
                       <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.title}</span>
+                      {t.identifier&&<span style={{fontSize:7,color:"var(--fg2)",background:"var(--bg3)",padding:"1px 3px",borderRadius:3,flexShrink:0,fontFamily:"monospace"}}>{t.identifier}</span>}
                     </div>
                     <div style={{flex:1,height:26,background:"var(--bg3)",borderRadius:6,position:"relative",overflow:"hidden"}}>
                       <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:od?"linear-gradient(90deg,#EF4444,#F87171)":t.status==="Done"?"linear-gradient(90deg,#10B981,#34D399)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:hasDue?(t.status==="Done"?.3:.9):(t.status==="Done"?.15:.4),display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
@@ -385,9 +386,10 @@ export default function Home(){
               </div>})
               :allT.slice(0,25).map((t,idx)=>{const od=t.isOverdue;const dn=rN(t.person);const dnd=rND(t.person);
                 return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 12px",borderBottom:"1px solid var(--border)",animationDelay:idx*20+"ms"}}>
-                  <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <div style={{width:"clamp(120px,25vw,240px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                     <div style={{width:18,height:18,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:7,fontWeight:700}}>{dn?.[0]}</span></div>
-                    <span style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)"}}>{t.title}</span>
+                    {t.url?<a href={t.url} target="_blank" rel="noopener" style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:"none"}} onMouseEnter={e=>e.target.style.color="#3B82F6"} onMouseLeave={e=>e.target.style.color="var(--fg)"}>{t.title}</a>:<span style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)"}}>{t.title}</span>}
+                    {t.identifier&&<span style={{fontSize:8,color:"var(--fg2)",background:"var(--bg3)",padding:"1px 4px",borderRadius:4,flexShrink:0,fontFamily:"monospace"}}>{t.identifier}</span>}
                   </div>
                   <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:t.status==="Done"?"#DCFCE7":t.status==="Doing"?"#FEF3C7":"#E0E7FF",color:t.status==="Done"?"#166534":t.status==="Doing"?"#92400E":"#3730A3"}}>{t.status}</span>
