@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_KEY);
 
-// Asana project GIDs
 const ASANA_PROJECTS = {
   'Marketing Department Task Tracker': '1214432966703164',
   'Design Department Task Tracker': '1214434740066912'
@@ -12,6 +11,10 @@ function fmtDate(d) {
   if (!d) return '';
   try { return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
   catch { return d; }
+}
+
+function trtTime() {
+  return new Date().toLocaleString('en-GB', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' });
 }
 
 async function fetchLinear() {
@@ -134,13 +137,12 @@ function buildSlackBlocks(people, dayName, totals, errors) {
     blocks.push({ type: "divider" });
   }
 
-  blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `<https://attimo-ops.vercel.app|Open Dashboard>  |  Auto-generated at 17:00 TRT` }] });
+  blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `<https://attimo-ops.vercel.app|Open Dashboard>  |  Auto-generated at ${trtTime()} TRT` }] });
 
   return blocks;
 }
 
 async function saveToSupabase(people, today) {
-  // Clean up entries older than 7 days
   const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
   const weekAgoStr = weekAgo.toISOString().split('T')[0];
   await supabase.from('standups').delete().lt('standup_date', weekAgoStr);
@@ -190,7 +192,6 @@ export async function POST() {
   const allDone = [...linear.done, ...asana.done];
   const allActive = [...linear.active, ...asana.active];
 
-  // Group by person
   const people = {};
   const add = (n, dept) => { if (!people[n]) people[n] = { done: [], inProgress: [], dueSoon: [], overdue: [], dept }; };
 
