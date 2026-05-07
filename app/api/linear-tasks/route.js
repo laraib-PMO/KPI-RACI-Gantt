@@ -35,7 +35,7 @@ async function fetchAllLinearIssues(key) {
       }){
         pageInfo { hasNextPage endCursor }
         nodes {
-          id title
+          id identifier title url
           assignee { name }
           state { name type }
           dueDate startedAt priority
@@ -82,13 +82,16 @@ export async function GET() {
 
         byProject[proj].tasks.push({
           id: i.id,
+          identifier: i.identifier || null,
           title: i.title,
+          url: i.url || null,
           person: rN(i.assignee?.name),
           status,
           dueDate: i.dueDate || null,
           startDate: i.startedAt ? i.startedAt.split('T')[0] : null,
           priority: i.priority,
           isOverdue: i.dueDate && i.dueDate < today && status !== 'Done',
+          projectName: proj,
           source: 'Linear'
         });
       });
@@ -125,11 +128,13 @@ export async function GET() {
           byProject[dept].tasks.push({
             id: t.gid,
             title: t.name,
+            url: `https://app.asana.com/0/${projGid}/${t.gid}`,
             person: rN(t.assignee?.name),
             status,
             dueDate: t.due_on || null,
             startDate: t.start_on || null,
             isOverdue: t.due_on && t.due_on < today && !t.completed,
+            projectName: dept,
             source: 'Asana'
           });
         });
