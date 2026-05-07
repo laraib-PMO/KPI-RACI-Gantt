@@ -350,18 +350,25 @@ export default function Home(){
               {dvm==="gantt"?STS.map(st=>{const items=allT.filter(t=>t.status===st);if(!items.length)return null;return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
                 <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
                 {items.slice(0,20).map((t,idx)=>{const od=t.isOverdue;const dn=rN(t.person);
-                  const hasDue=!!t.dueDate;const endStr=t.dueDate||today;
-                  const startStr=t.startDate||(hasDue?(()=>{const d2=pD(t.dueDate);d2.setDate(d2.getDate()-21);return d2.toISOString().split('T')[0]})():TL_START);
-                  const sOff=Math.max(0,daysB(TL_START,startStr));const dur=Math.max(3,daysB(startStr,endStr)+1);
-                  const leftPct=(sOff/TL_DAYS)*100;const widthPct=Math.max((dur/TL_DAYS)*100,2);
+                  const hasDue=!!t.dueDate;
+                  let leftPct,widthPct,dateLabel="";
+                  if(hasDue){
+                    const endStr=t.dueDate;
+                    const startStr=t.startDate||(()=>{const d2=pD(t.dueDate);d2.setDate(d2.getDate()-21);return d2.toISOString().split('T')[0]})();
+                    const sOff=Math.max(0,daysB(TL_START,startStr));const dur=Math.max(3,daysB(startStr,endStr)+1);
+                    leftPct=(sOff/TL_DAYS)*100;widthPct=Math.max((dur/TL_DAYS)*100,2);dateLabel=fD(t.dueDate);
+                  }else{
+                    // No date: spread evenly across timeline based on index
+                    leftPct=(idx/Math.max(items.length,1))*70+5;widthPct=8;dateLabel="no date";
+                  }
                   return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}}>
                     <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                       <div style={{width:20,height:20,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{dn?.[0]}</span></div>
                       <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.title}</span>
                     </div>
                     <div style={{flex:1,height:26,background:"var(--bg3)",borderRadius:6,position:"relative",overflow:"hidden"}}>
-                      <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:od?"linear-gradient(90deg,#EF4444,#F87171)":t.status==="Done"?"linear-gradient(90deg,#10B981,#34D399)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:t.status==="Done"?.3:.9,display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
-                        <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden"}}>{hasDue?fD(t.dueDate):""}</span>
+                      <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:od?"linear-gradient(90deg,#EF4444,#F87171)":t.status==="Done"?"linear-gradient(90deg,#10B981,#34D399)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:hasDue?(t.status==="Done"?.3:.9):(t.status==="Done"?.15:.4),display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
+                        <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden"}}>{dateLabel}</span>
                       </div>
                     </div>
                     <span style={{fontSize:10,color:"var(--fg2)",flexShrink:0,width:80,textAlign:"right"}}>{dn==="Unassigned"?"":dn}</span>
