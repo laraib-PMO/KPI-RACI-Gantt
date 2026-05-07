@@ -44,7 +44,6 @@ async function syncSlackStandups() {
   const token = process.env.SLACK_BOT_TOKEN;
   if (!token) return { source: 'Slack Standups', status: 'skipped', reason: 'No bot token (add SLACK_BOT_TOKEN)', count: 0 };
   try {
-    // Find #daily-standup channel
     const chRes = await fetch('https://slack.com/api/conversations.list?types=public_channel,private_channel&limit=200', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -52,7 +51,6 @@ async function syncSlackStandups() {
     const channel = chData.channels?.find(c => c.name === 'daily-standup');
     if (!channel) return { source: 'Slack Standups', status: 'error', error: 'Channel #daily-standup not found', count: 0 };
 
-    // Read last 24 hours of messages
     const yesterday = Math.floor(Date.now() / 1000) - 86400;
     const msgRes = await fetch(`https://slack.com/api/conversations.history?channel=${channel.id}&oldest=${yesterday}&limit=50`, {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -60,27 +58,21 @@ async function syncSlackStandups() {
     const msgData = await msgRes.json();
     const messages = msgData.messages?.filter(m => !m.bot_id && m.text && m.text.length > 10) || [];
 
-    // Parse standup messages and save to Supabase
     let saved = 0;
     const today = new Date().toISOString().split('T')[0];
     for (const msg of messages) {
-      // Get user info
       const userRes = await fetch(`https://slack.com/api/users.info?user=${msg.user}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const userData = await userRes.json();
       const name = userData.user?.real_name || userData.user?.name || 'Unknown';
 
-      // Check if already saved today for this person
       const { data: existing } = await supabase.from('standups')
         .select('id').eq('person', name).eq('standup_date', today).eq('source', 'slack');
       if (existing && existing.length > 0) continue;
 
-      // Parse message — look for completed/tomorrow/blockers sections
       const text = msg.text;
       let completed = text, tomorrow = '', blockers = 'None';
-
-      // Try to parse structured format
       const lines = text.split('\n');
       if (lines.length >= 2) {
         completed = lines[0] || text;
@@ -100,23 +92,11 @@ async function syncSlackStandups() {
   }
 }
 
-async function postToSlack(message) {
-  const url = process.env.SLACK_WEBHOOK_URL;
-  if (!url) return;
-  try {
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: message })
-    });
-  } catch (e) { console.error('Slack post failed:', e); }
-}
-
 export async function POST() {
   const results = await Promise.all([syncLinear(), syncAsana(), syncSlackStandups()]);
 
-  const summary = results.map(r => `${r.source}: ${r.status} (${r.count} items)`).join('\n');
-  await postToSlack(`PMO Dashboard Sync Complete:\n${summary}`);
+  // No Slack post here — the digest route handles all Slack reporting.
+  // This keeps Sync All silent (data-only) and prevents double messages.
 
   return Response.json({
     timestamp: new Date().toISOString(),
