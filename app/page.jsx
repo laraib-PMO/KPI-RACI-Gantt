@@ -2,34 +2,141 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL||'', process.env.NEXT_PUBLIC_SUPABASE_KEY||'');
-const CL={PMO:"#3B82F6",Development:"#10B981",Architecture:"#14B8A6","AI/Science":"#F59E0B",Design:"#8B5CF6",Marketing:"#EC4899",Legal:"#64748B",Hiring:"#06B6D4",Leadership:"#6366F1"};
-const STS=["To Do","Doing","Done"];const PRI_OPT=["Low","Medium","High"];const DEPT_OPT=Object.keys(CL);const RSK_OPT=["On track","At risk","Off track"];const IMP_OPT=["CRITICAL","HIGH","MEDIUM","LOW"];
-const RC={"On track":{bg:"#DCFCE7",c:"#166534"},"At risk":{bg:"#FEF3C7",c:"#D97706"},"Off track":{bg:"#FEE2E2",c:"#DC2626"}};
-const PC={Low:{bg:"#DBEAFE",c:"#1D4ED8"},Medium:{bg:"#FEF3C7",c:"#D97706"},High:{bg:"#FEE2E2",c:"#DC2626"}};
-const FC={green:"#16A34A",yellow:"#D97706",red:"#DC2626"};
-const MT_CLR={Weekly:"#3B82F6",Milestone:"#F59E0B","Bi-weekly":"#6366F1",Monthly:"#8B5CF6"};
-const ANCH=[{d:"2026-05-07",l:"Hatchery",c:"#6366F1"},{d:"2026-05-21",l:"GTM",c:"#F59E0B"},{d:"2026-06-10",l:"Launch",c:"#10B981"},{d:"2026-07-01",l:"Pitch Day",c:"#EF4444"}];
+// ─── Supabase Client ─────────────────────────────────────────────────────────
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_KEY || ''
+);
 
-// Robust date parsing for Supabase dates
-const pD=s=>{if(!s)return new Date();const str=String(s).split('T')[0];const[y,m,d]=str.split('-').map(Number);return new Date(y,m-1,d)};
-const fD=s=>{try{return pD(s).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}catch{return String(s)}};
-const daysB=(a,b)=>{const da=pD(a),db=pD(b);return Math.round((db-da)/864e5)};
-const today=new Date().toISOString().split("T")[0];
-const isOverdue=(t)=>t.status!=="Done"&&String(t.end_date).split('T')[0]<today;
+// ─── Constants ───────────────────────────────────────────────────────────────
+const DEPT_COLORS = {
+  PMO: '#3B82F6', Development: '#10B981', Architecture: '#14B8A6',
+  'AI/Science': '#F59E0B', Design: '#8B5CF6', Marketing: '#EC4899',
+  Legal: '#64748B', Hiring: '#06B6D4', Leadership: '#6366F1',
+};
+const STATUSES = ['To Do', 'Doing', 'Done'];
+const PRIORITIES = ['Low', 'Medium', 'High'];
+const DEPARTMENTS = Object.keys(DEPT_COLORS);
+const RISK_LEVELS = ['On track', 'At risk', 'Off track'];
+const IMPACT_LEVELS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+const RISK_STATUSES = ['ACTIVE', 'MITIGATING', 'FUTURE', 'CLOSED'];
 
-const Bdg=({bg,c,children,onClick})=><span onClick={onClick} style={{background:bg,color:c,padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:700,whiteSpace:"nowrap",cursor:onClick?"pointer":"default",transition:"all .2s"}}>{children}</span>;
+const RISK_COLORS = {
+  'On track': { bg: '#DCFCE7', c: '#166534' },
+  'At risk': { bg: '#FEF3C7', c: '#D97706' },
+  'Off track': { bg: '#FEE2E2', c: '#DC2626' },
+};
+const PRI_COLORS = {
+  Low: { bg: '#DBEAFE', c: '#1D4ED8' },
+  Medium: { bg: '#FEF3C7', c: '#D97706' },
+  High: { bg: '#FEE2E2', c: '#DC2626' },
+};
+const FLAG_COLORS = { green: '#16A34A', yellow: '#D97706', red: '#DC2626' };
+const MEETING_COLORS = { Weekly: '#3B82F6', Milestone: '#F59E0B', 'Bi-weekly': '#6366F1', Monthly: '#8B5CF6' };
 
-const CSS=`
+const ANCHORS = [
+  { d: '2026-05-07', l: 'Hatchery', c: '#6366F1' },
+  { d: '2026-05-21', l: 'GTM', c: '#F59E0B' },
+  { d: '2026-06-10', l: 'Launch', c: '#10B981' },
+  { d: '2026-07-01', l: 'Pitch Day', c: '#EF4444' },
+];
+
+const TABS = [
+  { id: 'timeline', l: 'Timeline' }, { id: 'board', l: 'Board' },
+  { id: 'calendar', l: 'Calendar' }, { id: 'standup', l: 'Daily Standup' },
+  { id: 'raci', l: 'RACI' }, { id: 'kpi', l: 'KPIs' },
+  { id: 'risk', l: 'Risks' }, { id: 'roles', l: 'Open Roles' },
+  { id: 'meet', l: 'Meetings' },
+];
+
+// ─── Email → Display Name Mapping (fixes "burak@attimo.com" issue) ───────────
+const EMAIL_TO_NAME = {
+  'burak@attimo.com': 'Burak Çetin',
+  'burak': 'Burak Çetin',
+  'talha': 'Talha Mubeen',
+  'talha@attimo.com': 'Talha Mubeen',
+  'laraib': 'Laraib Haider',
+  'laraib@attimo.com': 'Laraib Haider',
+  'murat': 'Murat Tut',
+  'murat@attimo.com': 'Murat Tut',
+  'sooling': 'Soo Ling Lim',
+  'soo ling': 'Soo Ling Lim',
+  'sooling@attimo.com': 'Soo Ling Lim',
+  'gamze': 'Gamze Savaş',
+  'gamze@attimo.com': 'Gamze Savaş',
+  'claire': 'Claire Eskander',
+  'claire@attimo.com': 'Claire Eskander',
+  'mesude': 'Mesude Gökpınar',
+  'mesude@attimo.com': 'Mesude Gökpınar',
+  'suche': 'Suche Coşkun',
+  'suche@attimo.com': 'Suche Coşkun',
+  'efehan': 'Efehan Maleri',
+  'efehan@attimo.com': 'Efehan Maleri',
+  'syed': 'Syed Osama Ali',
+  'syed@attimo.com': 'Syed Osama Ali',
+  'tunc': 'Tunç Karadağ',
+  'tunch': 'Tunç Karadağ',
+  'tunc@attimo.com': 'Tunç Karadağ',
+};
+
+const NAME_TO_DEPT = {
+  'Burak Çetin': 'AI/Science', 'Talha Mubeen': 'Development',
+  'Laraib Haider': 'PMO', 'Murat Tut': 'Development',
+  'Soo Ling Lim': 'AI/Science', 'Gamze Savaş': 'Design',
+  'Claire Eskander': 'Marketing', 'Mesude Gökpınar': 'PMO',
+  'Suche Coşkun': 'Marketing', 'Efehan Maleri': 'Leadership',
+  'Syed Osama Ali': 'Leadership', 'Tunç Karadağ': 'Design',
+};
+
+function resolveName(raw) {
+  if (!raw) return 'Unassigned';
+  const key = raw.toLowerCase().trim();
+  return EMAIL_TO_NAME[key] || raw;
+}
+
+function resolveNameWithDept(raw) {
+  const name = resolveName(raw);
+  const dept = NAME_TO_DEPT[name];
+  return dept ? `${name} (${dept})` : name;
+}
+
+// ─── Date Utilities ──────────────────────────────────────────────────────────
+function parseDate(s) {
+  if (!s) return new Date();
+  const str = String(s).split('T')[0];
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function formatDate(s) {
+  try { return parseDate(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
+  catch { return String(s); }
+}
+
+function daysBetween(a, b) {
+  return Math.round((parseDate(b) - parseDate(a)) / 864e5);
+}
+
+const TODAY = new Date().toISOString().split('T')[0];
+function isOverdue(t) { return t.status !== 'Done' && String(t.end_date).split('T')[0] < TODAY; }
+
+// ─── Timeline Constants ──────────────────────────────────────────────────────
+const TL_START = '2026-04-25';
+const TL_END = '2026-07-05';
+const TL_DAYS = daysBetween(TL_START, TL_END);
+
+// ─── Global CSS ──────────────────────────────────────────────────────────────
+const CSS = `
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideR{from{opacity:0;transform:translateX(-15px)}to{opacity:1;transform:translateX(0)}}
 @keyframes scaleIn{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 @keyframes glow{0%,100%{box-shadow:0 0 5px rgba(59,130,246,.2)}50%{box-shadow:0 0 15px rgba(59,130,246,.4)}}
-.af{animation:fadeUp .35s ease-out both}.asl{animation:slideR .35s ease-out both}.asc{animation:scaleIn .25s ease-out both}
+@keyframes spin{to{transform:rotate(360deg)}}
+.af{animation:fadeUp .35s ease-out both}
+.asl{animation:slideR .35s ease-out both}
+.asc{animation:scaleIn .25s ease-out both}
 .ch{transition:all .2s ease}.ch:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.08)!important}
 .rh{transition:all .15s ease}.rh:hover{background:var(--hover)!important}
 .bar-g{transform-origin:left;animation:barGrow .5s ease-out both}
@@ -51,482 +158,1314 @@ body{background:var(--bg);color:var(--fg);transition:background .3s,color .3s}
   .mob-full{width:100%!important;min-width:0!important}
   .mob-scroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
   .mob-pad{padding:12px!important}
-  .mob-stack{flex-direction:column!important;gap:8px!important}
+  .mob-stack{flex-direction:column!important;gap:8!important}
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
 @media(max-width:480px){
   .mob-sm-hide{display:none!important}
   .mob-sm-text{font-size:11px!important}
 }
-@media(max-width:768px){table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}}
 `;
 
-function rowClass(t){if(t.status==="Done")return"done-row rh";if(isOverdue(t))return"overdue-row rh";if(t.risk==="Off track")return"offtrack-row rh";if(t.risk==="At risk")return"atrisk-row rh";return"ontrack-row rh"}
-
-function InEdit({value,onChange,type="text",options}){
-  const[editing,setEditing]=useState(false);const[val,setVal]=useState(value);const ref=useRef();
-  useEffect(()=>{setVal(value)},[value]);useEffect(()=>{if(editing&&ref.current)ref.current.focus()},[editing]);
-  if(type==="select")return <select value={val} onChange={e=>{setVal(e.target.value);onChange(e.target.value)}} style={{border:"none",background:"transparent",fontSize:12,color:"var(--fg)",cursor:"pointer",padding:"2px 4px",borderRadius:4}}>{options.map(o=><option key={o}>{o}</option>)}</select>;
-  if(type==="date")return <input type="date" value={val} onChange={e=>{setVal(e.target.value);onChange(e.target.value)}} style={{border:"1px solid var(--border)",borderRadius:4,padding:"2px 4px",fontSize:11,width:120,background:"var(--bg2)",color:"var(--fg)"}}/>;
-  if(!editing)return <span onClick={()=>setEditing(true)} style={{cursor:"text",padding:"2px 4px",borderRadius:4,minWidth:40,display:"inline-block",color:"var(--fg)"}}>{val||"—"}</span>;
-  return <input ref={ref} value={val} onChange={e=>setVal(e.target.value)} onBlur={()=>{setEditing(false);onChange(val)}} onKeyDown={e=>{if(e.key==="Enter"){setEditing(false);onChange(val)}}} style={{border:"1px solid #3B82F6",borderRadius:4,padding:"2px 4px",fontSize:12,width:140,background:"var(--bg2)",color:"var(--fg)"}}/>;
+// ─── Utility Components ──────────────────────────────────────────────────────
+function Badge({ bg, c, children, onClick }) {
+  return (
+    <span onClick={onClick} style={{
+      background: bg, color: c, padding: '2px 8px', borderRadius: 99, fontSize: 10,
+      fontWeight: 700, whiteSpace: 'nowrap', cursor: onClick ? 'pointer' : 'default',
+      transition: 'all .2s',
+    }}>{children}</span>
+  );
 }
 
-function AddModal({title,fields,onSave,onClose}){
-  const[vals,setVals]=useState({});
-  return <div className="af" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
-    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(440px,95vw)",padding:20,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>{title}</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
-      {fields.map(f=><div key={f.key} style={{marginBottom:12}}>
-        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>{f.label}</label>
-        {f.type==="select"?<select value={vals[f.key]||""} onChange={e=>setVals(p=>({...p,[f.key]:e.target.value}))} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)"}}><option value="">Select...</option>{f.options.map(o=><option key={o}>{o}</option>)}</select>
-        :<input type={f.type||"text"} placeholder={f.placeholder} value={vals[f.key]||""} onChange={e=>setVals(p=>({...p,[f.key]:e.target.value}))} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)"}}/>}
-      </div>)}
-      <button onClick={()=>onSave(vals)} style={{width:"100%",padding:10,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",marginTop:8,transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.02)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}>Save</button>
-    </div>
-  </div>;
+function InEdit({ value, onChange, type = 'text', options }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value);
+  const ref = useRef();
+
+  useEffect(() => { setVal(value); }, [value]);
+  useEffect(() => { if (editing && ref.current) ref.current.focus(); }, [editing]);
+
+  if (type === 'select') {
+    return (
+      <select value={val} onChange={e => { setVal(e.target.value); onChange(e.target.value); }}
+        style={{ border: 'none', background: 'transparent', fontSize: 12, color: 'var(--fg)', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+    );
+  }
+
+  if (type === 'date') {
+    return (
+      <input type="date" value={val} onChange={e => { setVal(e.target.value); onChange(e.target.value); }}
+        style={{ border: '1px solid var(--border)', borderRadius: 4, padding: '2px 4px', fontSize: 11, width: 120, background: 'var(--bg2)', color: 'var(--fg)' }} />
+    );
+  }
+
+  if (!editing) {
+    return (
+      <span onClick={() => setEditing(true)} style={{
+        cursor: 'text', padding: '2px 4px', borderRadius: 4, minWidth: 40, display: 'inline-block', color: 'var(--fg)',
+      }}>{val || '—'}</span>
+    );
+  }
+
+  return (
+    <input ref={ref} value={val}
+      onChange={e => setVal(e.target.value)}
+      onBlur={() => { setEditing(false); onChange(val); }}
+      onKeyDown={e => { if (e.key === 'Enter') { setEditing(false); onChange(val); } }}
+      style={{ border: '1px solid #3B82F6', borderRadius: 4, padding: '2px 4px', fontSize: 12, width: 140, background: 'var(--bg2)', color: 'var(--fg)' }} />
+  );
 }
 
-function TicketPopup({task,tasks,onClose,onUpdate,onDelete}){
-  if(!task)return null;const cl=CL[task.dept]||"#94A3B8";const rc=RC[task.risk];const pc=PC[task.priority];
-  const depN=(task.deps||[]).map(id=>tasks.find(t=>t.id===id)?.name||id);
-  const blocks=tasks.filter(t=>(t.deps||[]).includes(task.id)).map(t=>t.name);
-  const od=isOverdue(task);
-  return <div className="af" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
-    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(500px,95vw)",maxHeight:"85vh",overflow:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
-      <div style={{borderBottom:"4px solid "+cl,padding:"20px 24px 16px",background:od?"linear-gradient(135deg,#FEE2E2,#FEF2F2)":"transparent",borderRadius:"16px 16px 0 0"}}>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:10,color:"var(--fg2)",fontWeight:600}}>TASK-{task.id} / {task.dept}{od?" — OVERDUE":""}</span><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
-        <div style={{fontSize:18,fontWeight:800,marginTop:4,color:od?"#DC2626":"var(--fg)"}}><InEdit value={task.name} onChange={v=>onUpdate(task.id,{name:v})}/></div>
-        <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}><Bdg bg={cl+"20"} c={cl}>{task.dept}</Bdg>{pc&&<Bdg bg={pc.bg} c={pc.c}>{task.priority}</Bdg>}{rc&&<Bdg bg={rc.bg} c={rc.c}>{task.risk}</Bdg>}{od&&<Bdg bg="#DC2626" c="#fff">OVERDUE</Bdg>}</div>
-      </div>
-      <div style={{padding:"16px 24px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,fontSize:13,color:"var(--fg2)"}}>
-        <div><div style={{fontSize:10,fontWeight:600}}>Owner</div><InEdit value={task.owner} onChange={v=>onUpdate(task.id,{owner:v})}/></div>
-        <div><div style={{fontSize:10,fontWeight:600}}>Department</div><InEdit value={task.dept} onChange={v=>onUpdate(task.id,{dept:v})} type="select" options={DEPT_OPT}/></div>
-        <div><div style={{fontSize:10,fontWeight:600}}>Start</div><InEdit value={String(task.start_date).split('T')[0]} onChange={v=>onUpdate(task.id,{start_date:v})} type="date"/></div>
-        <div><div style={{fontSize:10,fontWeight:600}}>End</div><InEdit value={String(task.end_date).split('T')[0]} onChange={v=>onUpdate(task.id,{end_date:v})} type="date"/></div>
-        <div><div style={{fontSize:10,fontWeight:600}}>Priority</div><InEdit value={task.priority} onChange={v=>onUpdate(task.id,{priority:v})} type="select" options={PRI_OPT}/></div>
-        <div><div style={{fontSize:10,fontWeight:600}}>Duration</div><b style={{color:"var(--fg)"}}>{daysB(task.start_date,task.end_date)||1} days</b></div>
-      </div>
-      <div style={{padding:"0 24px 16px"}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg2)",marginBottom:4}}>Status</div><div style={{display:"flex",gap:6}}>{STS.map(s=><button key={s} onClick={()=>onUpdate(task.id,{status:s})} style={{padding:"6px 14px",borderRadius:8,border:task.status===s?"2px solid var(--fg)":"1px solid var(--border)",background:task.status===s?"var(--fg)":"var(--card)",color:task.status===s?"var(--bg)":"var(--fg2)",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s"}}>{s}</button>)}</div></div>
-      <div style={{padding:"0 24px 16px"}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg2)",marginBottom:4}}>Risk</div><div style={{display:"flex",gap:6}}>{RSK_OPT.map(r=>{const rc2=RC[r];return <button key={r} onClick={()=>onUpdate(task.id,{risk:r})} style={{padding:"4px 12px",borderRadius:99,border:task.risk===r?"2px solid "+rc2.c:"1px solid var(--border)",background:rc2.bg,color:rc2.c,fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>{r}</button>})}</div></div>
-      {depN.length>0&&<div style={{padding:"0 24px 12px"}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg2)"}}>Depends On</div>{depN.map((n,i)=><div key={i} style={{fontSize:12,color:"#6366F1",padding:"2px 0"}}>→ {n}</div>)}</div>}
-      {blocks.length>0&&<div style={{padding:"0 24px 12px"}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg2)"}}>Blocks</div>{blocks.map((n,i)=><div key={i} style={{fontSize:12,color:"#DC2626",padding:"2px 0"}}>← {n}</div>)}</div>}
-      <div style={{padding:"0 24px 20px"}}><button onClick={()=>{onDelete(task.id);onClose()}} style={{background:"#FEE2E2",color:"#DC2626",border:"none",padding:"6px 14px",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>Delete Task</button></div>
+function Tbl({ headers, rows }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }} className="af">
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: 'var(--bg3)' }}>
+            {headers.map(h => <th key={h} style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600, color: 'var(--fg2)', fontSize: 11 }}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri} className="rh" style={{ borderBottom: '1px solid var(--border)' }}>
+              {row.map((cell, ci) => <td key={ci} style={{ padding: '8px', color: 'var(--fg)' }}>{cell}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-  </div>;
+  );
 }
 
-function KpiChart({kpis}){
-  const byDept={};kpis.forEach(k=>{if(!byDept[k.dept])byDept[k.dept]={green:0,yellow:0,red:0,total:0};byDept[k.dept][k.flag]++;byDept[k.dept].total++});
-  const depts=Object.keys(byDept);if(!depts.length)return null;
-  const bW=70,bH=140,gap=24,w=depts.length*(bW+gap)+60,h=bH+70;
-  return <div className="af" style={{overflowX:"auto",marginBottom:16,background:"var(--bg2)",borderRadius:12,padding:16,border:"1px solid var(--border)",display:"flex",flexDirection:"column",alignItems:"center"}}>
-    <div style={{fontSize:13,fontWeight:700,marginBottom:12,color:"var(--fg)",alignSelf:"flex-start"}}>Department Health Overview</div>
-    <svg width={w} height={h} style={{fontFamily:"Inter,system-ui"}}>{depts.map((d,i)=>{
-      const x=30+i*(bW+gap);const data=byDept[d];const t=data.total||1;
-      const gH=(data.green/t)*bH;const yH=(data.yellow/t)*bH;const rH=(data.red/t)*bH;
-      return <g key={d}>
-        <rect x={x} y={bH-gH} width={bW} height={gH} fill="url(#gGrad)" rx={4}><animate attributeName="height" from="0" to={gH} dur="0.8s" fill="freeze"/><animate attributeName="y" from={bH} to={bH-gH} dur="0.8s" fill="freeze"/></rect>
-        <rect x={x} y={bH-gH-yH} width={bW} height={yH} fill="url(#yGrad)"><animate attributeName="height" from="0" to={yH} dur="0.8s" fill="freeze" begin="0.15s"/><animate attributeName="y" from={bH-gH} to={bH-gH-yH} dur="0.8s" fill="freeze" begin="0.15s"/></rect>
-        <rect x={x} y={bH-gH-yH-rH} width={bW} height={rH} fill="url(#rGrad)" rx={4}><animate attributeName="height" from="0" to={rH} dur="0.8s" fill="freeze" begin="0.3s"/><animate attributeName="y" from={bH-gH-yH} to={bH-gH-yH-rH} dur="0.8s" fill="freeze" begin="0.3s"/></rect>
-        <rect x={x} y={bH+4} width={bW} height={5} fill={CL[d]||"#94A3B8"} rx={2.5}><animate attributeName="width" from="0" to={bW} dur="0.5s" fill="freeze" begin="0.4s"/></rect>
-        <text x={x+bW/2} y={bH+26} textAnchor="middle" fill="var(--fg)" fontSize={10} fontWeight={600}>{d.length>9?d.slice(0,8)+"..":d}</text>
-        <text x={x+bW/2} y={bH+42} textAnchor="middle" fill="var(--fg2)" fontSize={9}>{data.green} on track</text>
-        <text x={x+bW/2} y={bH+56} textAnchor="middle" fill="var(--fg2)" fontSize={8}>{data.yellow} attention · {data.red} under</text>
-      </g>})}
-      <defs><linearGradient id="gGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34D399"/><stop offset="100%" stopColor="#059669"/></linearGradient>
-      <linearGradient id="yGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FBBF24"/><stop offset="100%" stopColor="#D97706"/></linearGradient>
-      <linearGradient id="rGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F87171"/><stop offset="100%" stopColor="#DC2626"/></linearGradient></defs>
-    </svg>
-  </div>;
+function DeptHeader({ dept }) {
+  return (
+    <div className="af" style={{
+      background: (DEPT_COLORS[dept] || '#94A3B8') + '15', color: DEPT_COLORS[dept],
+      padding: '8px 12px', borderRadius: '8px 8px 0 0', fontWeight: 700, fontSize: 13,
+      borderLeft: '4px solid ' + (DEPT_COLORS[dept] || '#94A3B8'),
+    }}>{dept}</div>
+  );
 }
 
-function CalendarView({tasks,onSelect}){
-  const[month,setMonth]=useState(new Date(2026,4,1));
-  const yr=month.getFullYear(),mo=month.getMonth();const fd=new Date(yr,mo,1).getDay();const dim=new Date(yr,mo+1,0).getDate();
-  const cells=[];for(let i=0;i<fd;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
-  return <div className="af">
-    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-      <button onClick={()=>setMonth(new Date(yr,mo-1,1))} style={{background:"var(--bg3)",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontWeight:700,color:"var(--fg)"}}>←</button>
-      <span style={{fontSize:16,fontWeight:700,color:"var(--fg)"}}>{month.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</span>
-      <button onClick={()=>setMonth(new Date(yr,mo+1,1))} style={{background:"var(--bg3)",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontWeight:700,color:"var(--fg)"}}>→</button>
-      <a href="https://calendar.google.com" target="_blank" rel="noopener" style={{marginLeft:"auto",fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"8px 14px",borderRadius:8}}>Connect Google Calendar</a>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1,background:"var(--border)",borderRadius:12,overflow:"hidden"}}>
-      {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} style={{background:"var(--bg3)",padding:8,textAlign:"center",fontWeight:600,fontSize:11,color:"var(--fg2)"}}>{d}</div>)}
-      {cells.map((day,i)=>{if(!day)return <div key={i} style={{background:"var(--bg2)",minHeight:90}}/>;
-        const ds=yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");const isT=ds===today;
-        const dt=tasks.filter(t=>String(t.start_date).split('T')[0]<=ds&&String(t.end_date).split('T')[0]>=ds);
-        return <div key={i} className="ch" style={{background:"var(--card)",minHeight:90,padding:4}}>
-          <div style={{fontSize:12,fontWeight:isT?800:400,color:isT?"#3B82F6":"var(--fg)",marginBottom:2}}>{isT?<span style={{background:"#3B82F6",color:"#fff",borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{day}</span>:day}</div>
-          {dt.slice(0,3).map(t=><div key={t.id} onClick={()=>onSelect(t)} style={{background:CL[t.dept]||"#94A3B8",color:"#fff",fontSize:9,fontWeight:600,padding:"2px 4px",borderRadius:4,marginBottom:1,cursor:"pointer",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",opacity:t.status==="Done"?.35:.85}}>{t.name}</div>)}
-          {dt.length>3&&<div style={{fontSize:9,color:"var(--fg2)"}}>+{dt.length-3}</div>}
-        </div>})}
-    </div>
-  </div>;
+function SyncBtn({ label, onClick, loading }) {
+  return (
+    <button onClick={onClick} disabled={loading} style={{
+      background: loading ? 'var(--bg3)' : 'var(--bg3)', color: 'var(--fg)',
+      border: '1px solid var(--border)', padding: '6px 14px', borderRadius: 8,
+      fontWeight: 600, fontSize: 11, cursor: loading ? 'wait' : 'pointer',
+      display: 'flex', alignItems: 'center', gap: 6,
+    }}>
+      {loading && <div style={{ width: 12, height: 12, border: '2px solid var(--border)', borderTopColor: '#3B82F6', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />}
+      {label}
+    </button>
+  );
 }
 
-function Tbl({headers,rows}){return <div style={{border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}} className="af"><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"var(--bg3)"}}>{headers.map(h=><th key={h} style={{padding:"10px 8px",textAlign:"left",fontWeight:600,color:"var(--fg2)",fontSize:11}}>{h}</th>)}</tr></thead><tbody>{rows.map((row,ri)=><tr key={ri} className="rh" style={{borderBottom:"1px solid var(--border)"}}>{row.map((cell,ci)=><td key={ci} style={{padding:"8px",color:"var(--fg)"}}>{cell}</td>)}</tr>)}</tbody></table></div>}
-function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]||"#94A3B8")+"15",color:CL[dept],padding:"8px 12px",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+(CL[dept]||"#94A3B8")}}>{dept}</div>}
+function rowClass(t) {
+  if (t.status === 'Done') return 'done-row rh';
+  if (isOverdue(t)) return 'overdue-row rh';
+  if (t.risk === 'Off track') return 'offtrack-row rh';
+  if (t.risk === 'At risk') return 'atrisk-row rh';
+  return 'ontrack-row rh';
+}
 
-export default function Home(){
-  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);
-  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
-  const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
-  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");
-  const PASS="11223344";
-
-  useEffect(()=>{if(typeof window!=='undefined'&&localStorage.getItem('attimo_auth')==='true')setAuthed(true)},[]);
-  const doLogin=()=>{if(pw===PASS){setAuthed(true);localStorage.setItem('attimo_auth','true');setPwErr(false)}else{setPwErr(true)}};
-  const doLogout=()=>{setAuthed(false);localStorage.removeItem('attimo_auth')};
-
-  useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
-  const showToast=(msg)=>setToast(msg);
-  useEffect(()=>{document.documentElement.setAttribute("data-theme",dark?"dark":"light")},[dark]);
-
-  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su]=await Promise.all([supabase.from('tasks').select('*').order('id'),supabase.from('raci').select('*').order('dept,id'),supabase.from('risks').select('*').order('id'),supabase.from('kpis').select('*').order('dept,id'),supabase.from('meetings').select('*').order('id'),supabase.from('roles').select('*').order('id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100)]);
-    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);setLoading(false)}la();
-    const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).subscribe();
-    return()=>supabase.removeChannel(ch)},[]);
-
-  const updateTask=useCallback(async(id,u)=>{setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
-  const deleteTask=useCallback(async id=>{setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
-  const addTask=useCallback(async v=>{const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
-  const addRaci=useCallback(async v=>{const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
-  const deleteRaci=useCallback(async id=>{setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
-  const updateRaci=useCallback(async(id,u)=>{setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
-  const addRisk=useCallback(async v=>{const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
-  const updateRisk=useCallback(async(id,u)=>{setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
-  const deleteRisk=useCallback(async id=>{setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
-  const addKpi=useCallback(async v=>{const{data}=await supabase.from('kpis').insert({dept:v.dept||"PMO",name:v.name||"",target:v.target||"",current_value:v.current_value||"",flag:v.flag||"yellow",review_rhythm:v.review_rhythm||"Weekly"}).select();if(data)setKpis(p=>[...p,...data]);setAddModal(null)},[]);
-  const updateKpi=useCallback(async(id,u)=>{setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
-  const addRole=useCallback(async v=>{const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
-  const updateRole=useCallback(async(id,u)=>{setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
-  const deleteRole=useCallback(async id=>{setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
-  const addMeeting=useCallback(async v=>{const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
-  const deleteMeeting=useCallback(async id=>{setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
-  const updateMeeting=useCallback(async(id,u)=>{setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
-  const addStandup=useCallback(async v=>{const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
-  const deleteStandup=useCallback(async id=>{setStandups(p=>p.filter(s=>s.id!==id));await supabase.from('standups').delete().eq('id',id)},[]);
-  const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
-
-  const doSync=async()=>{setSyncing(true);setSyncMsg("Syncing...");showToast("Syncing...");try{const res=await fetch('/api/sync',{method:'POST'});const data=await res.json();const msg="Done: "+(data.results?.map(r=>r.source+" "+r.status).join(', ')||'Synced');setSyncMsg(msg);showToast("Sync complete")}catch(e){setSyncMsg("Error");showToast("Sync failed")}setSyncing(false)};
-  const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
-  const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
-  const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"}];
-
-  // Timeline date calc constants
-  const TL_START="2026-04-25",TL_END="2026-07-05";
-  const TL_DAYS=daysB(TL_START,TL_END);
-
-  if(loading)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontSize:16,color:"var(--fg2)",background:"var(--bg)"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px"}}></div>Loading Attimo...</div></div>;
-
-  if(!authed)return <div style={{fontFamily:"'Inter',system-ui",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)"}}>
-    <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-    <div className="asc" style={{background:"#1E293B",borderRadius:20,padding:40,width:"min(400px,90vw)",textAlign:"center",border:"1px solid #334155",boxShadow:"0 25px 60px rgba(0,0,0,.5)"}}>
-      <div style={{width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><span style={{color:"#fff",fontSize:24,fontWeight:800}}>A</span></div>
-      <h1 style={{color:"#F1F5F9",fontSize:22,fontWeight:800,margin:"0 0 4px"}}>Attimo</h1>
-      <p style={{color:"#94A3B8",fontSize:13,margin:"0 0 24px"}}>Company Operations Hub</p>
-      <input type="password" placeholder="Enter access code" value={pw} onChange={e=>{setPw(e.target.value);setPwErr(false)}} onKeyDown={e=>{if(e.key==="Enter")doLogin()}}
-        style={{width:"100%",padding:"12px 16px",borderRadius:10,border:pwErr?"2px solid #EF4444":"1px solid #475569",background:"#0F172A",color:"#F1F5F9",fontSize:14,boxSizing:"border-box",outline:"none",textAlign:"center",letterSpacing:4}}/>
-      {pwErr&&<div style={{color:"#EF4444",fontSize:12,marginTop:8,fontWeight:600}}>Incorrect code. Try again.</div>}
-      <button onClick={doLogin} style={{width:"100%",padding:"12px",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",marginTop:16,transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.02)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}>Enter</button>
-      <p style={{color:"#475569",fontSize:10,marginTop:16}}>Access restricted to Attimo team members</p>
-    </div>
-  </div>;
-
-  return <div style={{fontFamily:"'Inter',system-ui",background:"var(--bg)",minHeight:"100vh",transition:"all .3s"}}>
-    <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-
-    {/* Header */}
-    <div style={{background:"var(--hdr)",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div className="glow-btn" style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:15,fontWeight:800}}>A</span></div>
-        <span style={{fontSize:17,fontWeight:800,color:"#fff",letterSpacing:-.5}}>Attimo</span><span style={{color:"#475569"}}>|</span><span style={{fontSize:12,color:"#94A3B8"}}>Company Operations</span>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <button onClick={()=>setDark(!dark)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600}}>{dark?"Light":"Dark"}</button>
-        <button onClick={doSync} disabled={syncing} style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
-        <div className="mob-hide" style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
-          <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
-          {stats.overdue>0&&<span style={{animation:"pulse 1.5s infinite"}}><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span>}
+// ─── Add Modal ───────────────────────────────────────────────────────────────
+function AddModal({ title, fields, onSave, onClose }) {
+  const [vals, setVals] = useState({});
+  return (
+    <div className="af" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div className="asc" onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 16, width: 'min(440px,95vw)', padding: 20, boxShadow: '0 25px 60px rgba(0,0,0,.3)', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--fg)' }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--fg2)' }}>✕</button>
         </div>
-        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:600,marginLeft:4}}>Logout</button>
-      </div>
-    </div>
-
-    {/* Tabs */}
-    <div style={{borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",flexWrap:"nowrap",background:"var(--card)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-      {TABS.map(t=><button key={t.id} onClick={()=>setView(t.id)} style={{padding:"10px 14px",border:"none",background:"none",fontWeight:600,fontSize:13,cursor:"pointer",color:view===t.id?"var(--fg)":"var(--fg2)",borderBottom:view===t.id?"2px solid #3B82F6":"2px solid transparent",transition:"all .15s",whiteSpace:"nowrap"}}>{t.l}</button>)}
-      <div className="mob-hide" style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>{ANCH.map((a,i)=><span key={i} style={{fontSize:9,color:a.c,fontWeight:700,padding:"2px 6px",background:a.c+"12",borderRadius:99}}>{a.l} {fD(a.d)}</span>)}</div>
-    </div>
-
-    <div style={{padding:20}}>
-
-    {/* ═══ TIMELINE ═══ */}
-    {view==="timeline"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Gantt Chart</div>
-          <div style={{display:"flex",background:"var(--bg3)",borderRadius:8,padding:2}}>
-            <button onClick={()=>setGanttMode("company")} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="company"?"var(--fg)":"transparent",color:ganttMode==="company"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Company</button>
-            <button onClick={()=>{setGanttMode("department");if(!deptTasks){setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false);showToast("Loaded from Linear + Asana")}).catch(()=>setDeptLoading(false))}}} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="department"?"var(--fg)":"transparent",color:ganttMode==="department"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Department</button>
+        {fields.map(f => (
+          <div key={f.key} style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg2)', display: 'block', marginBottom: 4 }}>{f.label}</label>
+            {f.type === 'select' ? (
+              <select value={vals[f.key] || ''} onChange={e => setVals(p => ({ ...p, [f.key]: e.target.value }))}
+                style={{ width: '100%', padding: 8, border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, background: 'var(--bg2)', color: 'var(--fg)' }}>
+                <option value="">Select...</option>
+                {f.options.map(o => <option key={o}>{o}</option>)}
+              </select>
+            ) : (
+              <input type={f.type || 'text'} placeholder={f.placeholder} value={vals[f.key] || ''}
+                onChange={e => setVals(p => ({ ...p, [f.key]: e.target.value }))}
+                style={{ width: '100%', padding: 8, border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, boxSizing: 'border-box', background: 'var(--bg2)', color: 'var(--fg)' }} />
+            )}
           </div>
-          <select value={personFilter} onChange={e=>setPersonFilter(e.target.value)} style={{border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",fontSize:11,background:"var(--bg2)",color:"var(--fg)",cursor:"pointer"}}>
-            <option value="all">All People</option>
-            {[...new Set(tasks.map(t=>t.owner).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        {ganttMode==="company"&&<button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button>}
-        {ganttMode==="department"&&<button onClick={()=>{setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false);showToast("Synced from Linear + Asana")}).catch(()=>{setDeptLoading(false);showToast("Sync failed")})}} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Refresh from Linear + Asana</button>}
+        ))}
+        <button onClick={() => onSave(vals)} style={{
+          width: '100%', padding: 10, background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)',
+          color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13,
+          cursor: 'pointer', marginTop: 8, transition: 'transform .15s',
+        }} onMouseEnter={e => e.target.style.transform = 'scale(1.02)'}
+          onMouseLeave={e => e.target.style.transform = 'scale(1)'}>Save</button>
       </div>
+    </div>
+  );
+}
 
-      {/* COMPANY GANTT */}
-      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)"}}>{STS.map(st=>{const items=tasks.filter(t=>t.status===st&&(personFilter==="all"||t.owner===personFilter));return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
-        <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
-        {items.map((t,idx)=>{const cl=CL[t.dept]||"#94A3B8";
-          const startStr=String(t.start_date).split('T')[0];const endStr=String(t.end_date).split('T')[0];
-          const sOff=Math.max(0,daysB(TL_START,startStr));
-          const dur=Math.max(1,daysB(startStr,endStr)+1);
-          const leftPct=(sOff/TL_DAYS)*100;
-          const widthPct=Math.max((dur/TL_DAYS)*100,0.5);
-          const od=isOverdue(t);
-          return <div key={t.id} className={rowClass(t)+" asl"} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>setSel(t)}>
-            <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-              <div style={{width:20,height:20,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{t.owner?.[0]}</span></div>
-              <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.name}</span>
-            </div>
-            <div style={{flex:1,height:26,background:"var(--bg3)",borderRadius:6,position:"relative",overflow:"hidden"}}>
-              <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:od?"linear-gradient(90deg,#EF4444,#F87171)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:t.status==="Done"?.3:.9,display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
-                <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden"}}>{fD(startStr)} – {fD(endStr)}</span>
-              </div>
-            </div>
-            {od&&<div className="pulse-dot" style={{width:10,height:10,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
-            {!od&&t.risk==="At risk"&&<div style={{width:8,height:8,borderRadius:"50%",background:"#F59E0B",flexShrink:0}}/>}
-            {!od&&t.risk==="Off track"&&<div className="pulse-dot" style={{width:8,height:8,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
-          </div>})}
-      </div>})}</div>}
+// ─── Ticket Popup ────────────────────────────────────────────────────────────
+function TicketPopup({ task, tasks, onClose, onUpdate, onDelete }) {
+  if (!task) return null;
+  const cl = DEPT_COLORS[task.dept] || '#94A3B8';
+  const rc = RISK_COLORS[task.risk];
+  const pc = PRI_COLORS[task.priority];
+  const depNames = (task.deps || []).map(id => tasks.find(t => t.id === id)?.name || id);
+  const blocks = tasks.filter(t => (t.deps || []).includes(task.id)).map(t => t.name);
+  const od = isOverdue(task);
 
-      {/* DEPARTMENT GANTT */}
-      {ganttMode==="department"&&<div>
-        {deptLoading&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Loading from Linear...</div>}
-        {!deptLoading&&!deptTasks&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Click "Department" to load tickets from Linear</div>}
-        {!deptLoading&&deptTasks&&Object.entries(deptTasks.projects||{}).map(([project,tickets])=>{
-          const src=deptTasks.sources?.[project]||'Linear';
-          const cl=project.includes("Phase 0")?"#14B8A6":project.includes("Phase 1")?"#10B981":project.includes("Phase 2")?"#3B82F6":project.includes("Phase 3")?"#8B5CF6":project.includes("Phase 4")?"#EC4899":project.includes("AEC")?"#F59E0B":project.includes("Marketing")?"#EC4899":project.includes("Design")?"#8B5CF6":"#6366F1";
-          const doing=tickets.filter(t=>t.status==="Doing").length;
-          const done=tickets.filter(t=>t.status==="Done").length;
-          const overdue=tickets.filter(t=>t.isOverdue).length;
-          return <div key={project} className="asl" style={{marginBottom:16}}>
-            <div style={{background:cl+"15",color:cl,padding:"10px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+cl,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}><span>{project}</span><span style={{fontSize:9,padding:"2px 6px",borderRadius:99,background:src==="Asana"?"#F472B620":"#6366F120",color:src==="Asana"?"#EC4899":"#6366F1",fontWeight:700}}>{src}</span></div>
-              <div style={{display:"flex",gap:8,fontSize:11}}>
-                <span style={{color:"var(--fg2)"}}>{tickets.length} total</span>
-                <span style={{color:"#F59E0B"}}>{doing} doing</span>
-                <span style={{color:"#10B981"}}>{done} done</span>
-                {overdue>0&&<span style={{color:"#EF4444",fontWeight:700}}>{overdue} overdue</span>}
+  return (
+    <div className="af" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div className="asc" onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 16, width: 'min(500px,95vw)', maxHeight: '85vh', overflow: 'auto', boxShadow: '0 25px 60px rgba(0,0,0,.3)', border: '1px solid var(--border)' }}>
+        {/* Header */}
+        <div style={{ borderBottom: '4px solid ' + cl, padding: '20px 24px 16px', background: od ? 'linear-gradient(135deg,#FEE2E2,#FEF2F2)' : 'transparent', borderRadius: '16px 16px 0 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 10, color: 'var(--fg2)', fontWeight: 600 }}>TASK-{task.id} / {task.dept}{od ? ' — OVERDUE' : ''}</span>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--fg2)' }}>✕</button>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4, color: od ? '#DC2626' : 'var(--fg)' }}>
+            <InEdit value={task.name} onChange={v => onUpdate(task.id, { name: v })} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <Badge bg={cl + '20'} c={cl}>{task.dept}</Badge>
+            {pc && <Badge bg={pc.bg} c={pc.c}>{task.priority}</Badge>}
+            {rc && <Badge bg={rc.bg} c={rc.c}>{task.risk}</Badge>}
+            {od && <Badge bg="#DC2626" c="#fff">OVERDUE</Badge>}
+          </div>
+        </div>
+        {/* Fields */}
+        <div style={{ padding: '16px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, color: 'var(--fg2)' }}>
+          <div><div style={{ fontSize: 10, fontWeight: 600 }}>Owner</div><InEdit value={task.owner} onChange={v => onUpdate(task.id, { owner: v })} /></div>
+          <div><div style={{ fontSize: 10, fontWeight: 600 }}>Department</div><InEdit value={task.dept} onChange={v => onUpdate(task.id, { dept: v })} type="select" options={DEPARTMENTS} /></div>
+          <div><div style={{ fontSize: 10, fontWeight: 600 }}>Start</div><InEdit value={String(task.start_date).split('T')[0]} onChange={v => onUpdate(task.id, { start_date: v })} type="date" /></div>
+          <div><div style={{ fontSize: 10, fontWeight: 600 }}>End</div><InEdit value={String(task.end_date).split('T')[0]} onChange={v => onUpdate(task.id, { end_date: v })} type="date" /></div>
+          <div><div style={{ fontSize: 10, fontWeight: 600 }}>Priority</div><InEdit value={task.priority} onChange={v => onUpdate(task.id, { priority: v })} type="select" options={PRIORITIES} /></div>
+          <div><div style={{ fontSize: 10, fontWeight: 600 }}>Duration</div><b style={{ color: 'var(--fg)' }}>{daysBetween(task.start_date, task.end_date) || 1} days</b></div>
+        </div>
+        {/* Status */}
+        <div style={{ padding: '0 24px 16px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg2)', marginBottom: 4 }}>Status</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {STATUSES.map(s => (
+              <button key={s} onClick={() => onUpdate(task.id, { status: s })} style={{
+                padding: '6px 14px', borderRadius: 8,
+                border: task.status === s ? '2px solid var(--fg)' : '1px solid var(--border)',
+                background: task.status === s ? 'var(--fg)' : 'var(--card)',
+                color: task.status === s ? 'var(--bg)' : 'var(--fg2)',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
+              }}>{s}</button>
+            ))}
+          </div>
+        </div>
+        {/* Risk */}
+        <div style={{ padding: '0 24px 16px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg2)', marginBottom: 4 }}>Risk</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {RISK_LEVELS.map(r => {
+              const rc2 = RISK_COLORS[r];
+              return (
+                <button key={r} onClick={() => onUpdate(task.id, { risk: r })} style={{
+                  padding: '4px 12px', borderRadius: 99,
+                  border: task.risk === r ? '2px solid ' + rc2.c : '1px solid var(--border)',
+                  background: rc2.bg, color: rc2.c, fontSize: 11, fontWeight: 700,
+                  cursor: 'pointer', transition: 'all .15s',
+                }}>{r}</button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Dependencies */}
+        {depNames.length > 0 && <div style={{ padding: '0 24px 12px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg2)' }}>Depends On</div>
+          {depNames.map((n, i) => <div key={i} style={{ fontSize: 12, color: '#6366F1', padding: '2px 0' }}>→ {n}</div>)}
+        </div>}
+        {blocks.length > 0 && <div style={{ padding: '0 24px 12px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg2)' }}>Blocks</div>
+          {blocks.map((n, i) => <div key={i} style={{ fontSize: 12, color: '#DC2626', padding: '2px 0' }}>← {n}</div>)}
+        </div>}
+        <div style={{ padding: '0 24px 20px' }}>
+          <button onClick={() => { onDelete(task.id); onClose(); }} style={{
+            background: '#FEE2E2', color: '#DC2626', border: 'none', padding: '6px 14px',
+            borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          }}>Delete Task</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── KPI Chart ───────────────────────────────────────────────────────────────
+function KpiChart({ kpis }) {
+  const byDept = {};
+  kpis.forEach(k => {
+    if (!byDept[k.dept]) byDept[k.dept] = { green: 0, yellow: 0, red: 0, total: 0 };
+    byDept[k.dept][k.flag]++;
+    byDept[k.dept].total++;
+  });
+  const depts = Object.keys(byDept);
+  if (!depts.length) return null;
+
+  const bW = 70, bH = 140, gap = 24;
+  const w = depts.length * (bW + gap) + 60, h = bH + 70;
+
+  return (
+    <div className="af" style={{ overflowX: 'auto', marginBottom: 16, background: 'var(--bg2)', borderRadius: 12, padding: 16, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: 'var(--fg)', alignSelf: 'flex-start' }}>Department Health Overview</div>
+      <svg width={w} height={h} style={{ fontFamily: 'Inter,system-ui' }}>
+        {depts.map((d, i) => {
+          const x = 30 + i * (bW + gap);
+          const data = byDept[d];
+          const t = data.total || 1;
+          const gH = (data.green / t) * bH;
+          const yH = (data.yellow / t) * bH;
+          const rH = (data.red / t) * bH;
+          return (
+            <g key={d}>
+              <rect x={x} y={bH - gH} width={bW} height={gH} fill="url(#gGrad)" rx={4}>
+                <animate attributeName="height" from="0" to={gH} dur="0.8s" fill="freeze" />
+                <animate attributeName="y" from={bH} to={bH - gH} dur="0.8s" fill="freeze" />
+              </rect>
+              <rect x={x} y={bH - gH - yH} width={bW} height={yH} fill="url(#yGrad)">
+                <animate attributeName="height" from="0" to={yH} dur="0.8s" fill="freeze" begin="0.15s" />
+                <animate attributeName="y" from={bH - gH} to={bH - gH - yH} dur="0.8s" fill="freeze" begin="0.15s" />
+              </rect>
+              <rect x={x} y={bH - gH - yH - rH} width={bW} height={rH} fill="url(#rGrad)" rx={4}>
+                <animate attributeName="height" from="0" to={rH} dur="0.8s" fill="freeze" begin="0.3s" />
+                <animate attributeName="y" from={bH - gH - yH} to={bH - gH - yH - rH} dur="0.8s" fill="freeze" begin="0.3s" />
+              </rect>
+              <rect x={x} y={bH + 4} width={bW} height={5} fill={DEPT_COLORS[d] || '#94A3B8'} rx={2.5}>
+                <animate attributeName="width" from="0" to={bW} dur="0.5s" fill="freeze" begin="0.4s" />
+              </rect>
+              <text x={x + bW / 2} y={bH + 26} textAnchor="middle" fill="var(--fg)" fontSize={10} fontWeight={600}>{d.length > 9 ? d.slice(0, 8) + '..' : d}</text>
+              <text x={x + bW / 2} y={bH + 42} textAnchor="middle" fill="var(--fg2)" fontSize={9}>{data.green} on track</text>
+              <text x={x + bW / 2} y={bH + 56} textAnchor="middle" fill="var(--fg2)" fontSize={8}>{data.yellow} attention · {data.red} under</text>
+            </g>
+          );
+        })}
+        <defs>
+          <linearGradient id="gGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34D399" /><stop offset="100%" stopColor="#059669" /></linearGradient>
+          <linearGradient id="yGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FBBF24" /><stop offset="100%" stopColor="#D97706" /></linearGradient>
+          <linearGradient id="rGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F87171" /><stop offset="100%" stopColor="#DC2626" /></linearGradient>
+        </defs>
+      </svg>
+    </div>
+  );
+}
+
+// ─── Calendar View ───────────────────────────────────────────────────────────
+function CalendarView({ tasks, onSelect }) {
+  const [month, setMonth] = useState(new Date(2026, 4, 1));
+  const yr = month.getFullYear(), mo = month.getMonth();
+  const fd = new Date(yr, mo, 1).getDay();
+  const dim = new Date(yr, mo + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < fd; i++) cells.push(null);
+  for (let d = 1; d <= dim; d++) cells.push(d);
+
+  return (
+    <div className="af">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <button onClick={() => setMonth(new Date(yr, mo - 1, 1))} style={{ background: 'var(--bg3)', border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontWeight: 700, color: 'var(--fg)' }}>←</button>
+        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)' }}>{month.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</span>
+        <button onClick={() => setMonth(new Date(yr, mo + 1, 1))} style={{ background: 'var(--bg3)', border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontWeight: 700, color: 'var(--fg)' }}>→</button>
+        <a href="https://calendar.google.com" target="_blank" rel="noopener" style={{ marginLeft: 'auto', fontSize: 11, color: '#3B82F6', fontWeight: 600, textDecoration: 'none', background: '#EFF6FF', padding: '8px 14px', borderRadius: 8 }}>Connect Google Calendar</a>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: 'var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+          <div key={d} style={{ background: 'var(--bg3)', padding: 8, textAlign: 'center', fontWeight: 600, fontSize: 11, color: 'var(--fg2)' }}>{d}</div>
+        ))}
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} style={{ background: 'var(--bg2)', minHeight: 90 }} />;
+          const ds = yr + '-' + String(mo + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+          const isT = ds === TODAY;
+          const dt = tasks.filter(t => String(t.start_date).split('T')[0] <= ds && String(t.end_date).split('T')[0] >= ds);
+          return (
+            <div key={i} className="ch" style={{ background: 'var(--card)', minHeight: 90, padding: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: isT ? 800 : 400, color: isT ? '#3B82F6' : 'var(--fg)', marginBottom: 2 }}>
+                {isT ? <span style={{ background: '#3B82F6', color: '#fff', borderRadius: '50%', width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{day}</span> : day}
               </div>
+              {dt.slice(0, 3).map(t => (
+                <div key={t.id} onClick={() => onSelect(t)} style={{
+                  background: DEPT_COLORS[t.dept] || '#94A3B8', color: '#fff', fontSize: 9, fontWeight: 600,
+                  padding: '2px 4px', borderRadius: 4, marginBottom: 1, cursor: 'pointer',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  opacity: t.status === 'Done' ? .35 : .85,
+                }}>{t.name}</div>
+              ))}
+              {dt.length > 3 && <div style={{ fontSize: 9, color: 'var(--fg2)' }}>+{dt.length - 3}</div>}
             </div>
-            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
-              {tickets.slice(0,20).map((t,idx)=>{
-                const od=t.isOverdue;
-                return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 12px",borderBottom:"1px solid var(--border)",animationDelay:idx*20+"ms"}}>
-                  <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                    <div style={{width:18,height:18,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:7,fontWeight:700}}>{t.person?.[0]}</span></div>
-                    <span style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)"}}>{t.title}</span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Company Gantt ───────────────────────────────────────────────────────────
+function CompanyGantt({ tasks, personFilter, onSelect }) {
+  return (
+    <div style={{ background: 'var(--card)', borderRadius: 10, border: '1px solid var(--border)' }}>
+      {STATUSES.map(st => {
+        const items = tasks.filter(t => t.status === st && (personFilter === 'all' || t.owner === personFilter));
+        return (
+          <div key={st} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--fg)' }}>
+              ▼ {st}
+              <span style={{ background: 'var(--bg3)', borderRadius: 99, padding: '1px 8px', fontSize: 11, color: 'var(--fg2)' }}>{items.length}</span>
+            </div>
+            {items.map((t, idx) => {
+              const cl = DEPT_COLORS[t.dept] || '#94A3B8';
+              const startStr = String(t.start_date).split('T')[0];
+              const endStr = String(t.end_date).split('T')[0];
+              const sOff = Math.max(0, daysBetween(TL_START, startStr));
+              const dur = Math.max(1, daysBetween(startStr, endStr) + 1);
+              const leftPct = (sOff / TL_DAYS) * 100;
+              const widthPct = Math.max((dur / TL_DAYS) * 100, 0.5);
+              const od = isOverdue(t);
+              return (
+                <div key={t.id} className={rowClass(t) + ' asl'}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '5px 8px', cursor: 'pointer', borderRadius: 6, animationDelay: idx * 25 + 'ms' }}
+                  onClick={() => onSelect(t)}>
+                  <div style={{ width: 'clamp(120px,25vw,200px)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: cl, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ color: '#fff', fontSize: 8, fontWeight: 700 }}>{t.owner?.[0]}</span>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg)', textDecoration: t.status === 'Done' ? 'line-through' : 'none' }}>{t.name}</span>
                   </div>
-                  <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:t.status==="Done"?"#DCFCE7":t.status==="Doing"?"#FEF3C7":"#E0E7FF",color:t.status==="Done"?"#166534":t.status==="Doing"?"#92400E":"#3730A3"}}>{t.status}</span>
-                    {t.dueDate&&<span style={{fontSize:10,color:od?"#EF4444":"var(--fg2)"}}>{od?"Overdue: ":"Due: "}{fD(t.dueDate)}</span>}
+                  <div style={{ flex: 1, height: 26, background: 'var(--bg3)', borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
+                    <div className="bar-g" style={{
+                      position: 'absolute', left: leftPct + '%', width: widthPct + '%', top: 2, bottom: 2, borderRadius: 4,
+                      background: od ? 'linear-gradient(90deg,#EF4444,#F87171)' : 'linear-gradient(90deg,' + cl + ',' + cl + 'CC)',
+                      opacity: t.status === 'Done' ? .3 : .9, display: 'flex', alignItems: 'center', paddingLeft: 6,
+                      animationDelay: idx * 40 + 'ms',
+                    }}>
+                      <span style={{ color: '#fff', fontSize: 9, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' }}>{formatDate(startStr)} – {formatDate(endStr)}</span>
+                    </div>
                   </div>
-                  <span style={{fontSize:10,color:"var(--fg2)",flexShrink:0}}>{t.person}</span>
-                  {od&&<div className="pulse-dot" style={{width:8,height:8,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
-                </div>})}
-              {tickets.length>20&&<div style={{padding:"8px 12px",fontSize:11,color:"var(--fg2)",textAlign:"center"}}>...and {tickets.length-20} more tickets in Linear</div>}
+                  {od && <div className="pulse-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />}
+                  {!od && t.risk === 'At risk' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />}
+                  {!od && t.risk === 'Off track' && <div className="pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Department View (FIX #1: Gantt + List toggle, FIX #2: name resolution) ─
+function DepartmentView({ deptTasks, deptLoading, showToast }) {
+  const [deptViewMode, setDeptViewMode] = useState('list');
+
+  if (deptLoading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--fg2)' }}>Loading from Linear + Asana...</div>;
+  if (!deptTasks) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--fg2)' }}>Click "Department" to load tickets</div>;
+
+  const projects = deptTasks.projects || {};
+
+  function getProjectColor(name) {
+    if (name.includes('Phase 0')) return '#14B8A6';
+    if (name.includes('Phase 1')) return '#10B981';
+    if (name.includes('Phase 2')) return '#3B82F6';
+    if (name.includes('Phase 3')) return '#8B5CF6';
+    if (name.includes('Phase 4')) return '#EC4899';
+    if (name.includes('AEC')) return '#F59E0B';
+    if (name.includes('Marketing')) return '#EC4899';
+    if (name.includes('Design')) return '#8B5CF6';
+    return '#6366F1';
+  }
+
+  return (
+    <div>
+      {/* FIX #1: Gantt / List toggle */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg3)', borderRadius: 8, padding: 2, width: 'fit-content' }}>
+        <button onClick={() => setDeptViewMode('list')} style={{
+          padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+          cursor: 'pointer', background: deptViewMode === 'list' ? 'var(--fg)' : 'transparent',
+          color: deptViewMode === 'list' ? 'var(--bg)' : 'var(--fg2)', transition: 'all .2s',
+        }}>List</button>
+        <button onClick={() => setDeptViewMode('gantt')} style={{
+          padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+          cursor: 'pointer', background: deptViewMode === 'gantt' ? 'var(--fg)' : 'transparent',
+          color: deptViewMode === 'gantt' ? 'var(--bg)' : 'var(--fg2)', transition: 'all .2s',
+        }}>Gantt</button>
+      </div>
+
+      {Object.entries(projects).map(([project, tickets]) => {
+        const src = deptTasks.sources?.[project] || 'Linear';
+        const cl = getProjectColor(project);
+        const doing = tickets.filter(t => t.status === 'Doing').length;
+        const done = tickets.filter(t => t.status === 'Done').length;
+        const overdue = tickets.filter(t => t.isOverdue).length;
+
+        return (
+          <div key={project} className="asl" style={{ marginBottom: 16 }}>
+            {/* Project header */}
+            <div style={{
+              background: cl + '15', color: cl, padding: '10px 14px', borderRadius: '10px 10px 0 0',
+              fontWeight: 700, fontSize: 13, borderLeft: '4px solid ' + cl,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>{project}</span>
+                <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: src === 'Asana' ? '#F472B620' : '#6366F120', color: src === 'Asana' ? '#EC4899' : '#6366F1', fontWeight: 700 }}>{src}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+                <span style={{ color: 'var(--fg2)' }}>{tickets.length} total</span>
+                <span style={{ color: '#F59E0B' }}>{doing} doing</span>
+                <span style={{ color: '#10B981' }}>{done} done</span>
+                {overdue > 0 && <span style={{ color: '#EF4444', fontWeight: 700 }}>{overdue} overdue</span>}
+              </div>
             </div>
-          </div>})}
-      </div>}
-    </div>}
 
-    {/* ═══ BOARD ═══ */}
-    {view==="board"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Board</div><button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button></div>
-      <div className="mob-col1" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>{STS.map(st=><div key={st} onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(st)}
-        style={{background:"var(--bg2)",borderRadius:10,padding:12,minHeight:200,border:dragId?"2px dashed #3B82F6":"2px solid transparent",transition:"all .2s"}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontWeight:700,fontSize:14,color:"var(--fg)"}}>{st}</span><span style={{background:"var(--bg3)",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,color:"var(--fg2)"}}>{tasks.filter(t=>t.status===st).length}</span></div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>{tasks.filter(t=>t.status===st).map((t,idx)=>{const rc=RC[t.risk];const pc=PC[t.priority];const od=isOverdue(t);
-          return <div key={t.id} className="ch asl" draggable onDragStart={()=>setDragId(t.id)} onDragEnd={()=>setDragId(null)}
-            onClick={()=>setSel(t)} style={{background:"var(--card)",borderRadius:10,padding:12,border:"1px solid var(--border)",borderLeft:od?"4px solid #EF4444":"4px solid "+(CL[t.dept]||"#94A3B8"),cursor:"grab",animationDelay:idx*40+"ms"}}>
-            <div style={{fontSize:13,fontWeight:600,marginBottom:6,color:od?"#DC2626":"var(--fg)"}}>{t.name}{od&&<span style={{fontSize:9,marginLeft:6,color:"#EF4444",animation:"pulse 1.5s infinite"}}>OVERDUE</span>}</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>{pc&&<Bdg bg={pc.bg} c={pc.c}>{t.priority}</Bdg>}{rc&&<Bdg bg={rc.bg} c={rc.c}>{t.risk}</Bdg>}</div>
-            <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--fg2)"}}><div style={{width:16,height:16,borderRadius:"50%",background:CL[t.dept],display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:7,fontWeight:700}}>{t.owner?.[0]}</span></div>{fD(t.start_date)}–{fD(t.end_date)}</div>
-          </div>})}</div>
-      </div>)}</div>
-    </div>}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
+              {deptViewMode === 'list' && (
+                /* ── LIST VIEW ── */
+                tickets.slice(0, 20).map((t, idx) => {
+                  const od = t.isOverdue;
+                  const displayName = resolveNameWithDept(t.person);
+                  return (
+                    <div key={t.id} className={'rh asl' + (od ? ' overdue-row' : '')}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '5px 12px', borderBottom: '1px solid var(--border)', animationDelay: idx * 20 + 'ms' }}>
+                      <div style={{ width: 'clamp(120px,25vw,200px)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: cl, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <span style={{ color: '#fff', fontSize: 7, fontWeight: 700 }}>{resolveName(t.person)?.[0]}</span>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg)' }}>{t.title}</span>
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 99,
+                          background: t.status === 'Done' ? '#DCFCE7' : t.status === 'Doing' ? '#FEF3C7' : '#E0E7FF',
+                          color: t.status === 'Done' ? '#166534' : t.status === 'Doing' ? '#92400E' : '#3730A3',
+                        }}>{t.status}</span>
+                        {t.dueDate && <span style={{ fontSize: 10, color: od ? '#EF4444' : 'var(--fg2)' }}>{od ? 'Overdue: ' : 'Due: '}{formatDate(t.dueDate)}</span>}
+                      </div>
+                      {/* FIX #2: Show resolved name with department tag */}
+                      <span style={{ fontSize: 10, color: 'var(--fg2)', flexShrink: 0 }}>{displayName}</span>
+                      {od && <div className="pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />}
+                    </div>
+                  );
+                })
+              )}
 
-    {view==="calendar"&&<CalendarView tasks={tasks} onSelect={setSel}/>}
+              {deptViewMode === 'gantt' && (
+                /* ── GANTT VIEW ── */
+                tickets.slice(0, 20).map((t, idx) => {
+                  const od = t.isOverdue;
+                  const displayName = resolveName(t.person);
+                  // Compute bar position — use dueDate if available, else estimate
+                  const startStr = t.startDate || TL_START;
+                  const endStr = t.dueDate || TL_END;
+                  const sOff = Math.max(0, daysBetween(TL_START, startStr));
+                  const dur = Math.max(1, daysBetween(startStr, endStr) + 1);
+                  const leftPct = Math.min((sOff / TL_DAYS) * 100, 95);
+                  const widthPct = Math.max(Math.min((dur / TL_DAYS) * 100, 100 - leftPct), 1);
 
-    {/* ═══ DAILY STANDUP ═══ */}
-    {view==="standup"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
-        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Daily Standup</div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setAddModal("standup")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Update</button>
-          <button onClick={()=>{showToast("Syncing standups...");fetch('/api/digest').then(r=>r.json()).then(()=>{showToast("Standup synced");supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})}).catch(()=>showToast("Sync failed"))}} style={{background:"var(--bg3)",color:"var(--fg)",border:"1px solid var(--border)",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Sync from Linear + Asana</button>
-          <a href="https://attimo-labs.slack.com/archives/daily-standup" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>Open #daily-standup</a>
-        </div>
-      </div>
-      <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)",marginBottom:16}}>Updates from Slack workflow and manual entries. Syncs when you click Sync All. Slack workflow sends DMs at 5pm daily.</div>
-      {(()=>{
-        const byDate={};standups.forEach(s=>{const d=String(s.standup_date).split('T')[0];if(!byDate[d])byDate[d]=[];byDate[d].push(s)});
-        const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
-        if(dates.length===0)return <div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No standup updates yet. Click "+ Add Update" or wait for the 5pm Slack workflow.</div>;
-        return dates.map(date=><div key={date} className="asl" style={{marginBottom:20}}>
-          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/>
-            {new Date(date+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-            <span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:10,color:"var(--fg2)"}}>{byDate[date].length} updates</span>
+                  return (
+                    <div key={t.id} className={'rh asl' + (od ? ' overdue-row' : '')}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 12px', borderBottom: '1px solid var(--border)', animationDelay: idx * 20 + 'ms' }}>
+                      <div style={{ width: 'clamp(100px,20vw,180px)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <div style={{ width: 16, height: 16, borderRadius: '50%', background: cl, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <span style={{ color: '#fff', fontSize: 7, fontWeight: 700 }}>{displayName?.[0]}</span>
+                        </div>
+                        <span style={{ fontSize: 10, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg)' }}>{t.title}</span>
+                      </div>
+                      <div style={{ flex: 1, height: 22, background: 'var(--bg3)', borderRadius: 5, position: 'relative', overflow: 'hidden' }}>
+                        <div className="bar-g" style={{
+                          position: 'absolute', left: leftPct + '%', width: widthPct + '%', top: 2, bottom: 2, borderRadius: 3,
+                          background: od ? 'linear-gradient(90deg,#EF4444,#F87171)' :
+                            t.status === 'Done' ? 'linear-gradient(90deg,#10B981,#34D399)' :
+                            'linear-gradient(90deg,' + cl + ',' + cl + 'CC)',
+                          opacity: t.status === 'Done' ? .4 : .9,
+                          display: 'flex', alignItems: 'center', paddingLeft: 4,
+                          animationDelay: idx * 30 + 'ms',
+                        }}>
+                          <span style={{ color: '#fff', fontSize: 8, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                            {t.dueDate ? formatDate(t.dueDate) : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 9, color: 'var(--fg2)', flexShrink: 0, width: 60, textAlign: 'right' }}>{displayName?.split(' ')[0]}</span>
+                      {od && <div className="pulse-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />}
+                    </div>
+                  );
+                })
+              )}
+
+              {tickets.length > 20 && <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--fg2)', textAlign: 'center' }}>...and {tickets.length - 20} more tickets</div>}
+            </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
-            {byDate[date].map(s=><div key={s.id} className="ch" style={{background:"var(--card)",borderRadius:10,padding:14,border:"1px solid var(--border)",borderLeft:"4px solid "+(CL[s.person]||"#3B82F6")}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{s.person?.[0]}</span></div>
-                  <span style={{fontWeight:700,fontSize:13,color:"var(--fg)"}}>{s.person}</span>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:9,color:"var(--fg2)",background:"var(--bg3)",padding:"2px 6px",borderRadius:99}}>{s.source==="slack"?"via Slack":"manual"}</span>
-                  <button onClick={()=>deleteStandup(s.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
-                </div>
-              </div>
-              <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
-                <div style={{color:"#10B981",fontWeight:600,fontSize:10,marginBottom:2}}>COMPLETED</div>
-                <div style={{color:"var(--fg)",lineHeight:1.4}}>{s.completed||"—"}</div>
-              </div>
-              <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
-                <div style={{color:"#3B82F6",fontWeight:600,fontSize:10,marginBottom:2}}>TOMORROW</div>
-                <div style={{color:"var(--fg)",lineHeight:1.4}}>{s.tomorrow||"—"}</div>
-              </div>
-              <div style={{fontSize:12}}>
-                <div style={{color:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?"#EF4444":"#10B981",fontWeight:600,fontSize:10,marginBottom:2}}>BLOCKERS</div>
-                <div style={{color:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?"#EF4444":"var(--fg2)",fontWeight:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?600:400}}>{s.blockers||"None"}</div>
-              </div>
-            </div>)}
-          </div>
-        </div>);
-      })()}
-    </div>}
+        );
+      })}
+    </div>
+  );
+}
 
-    {/* ═══ RACI ═══ */}
-    {view==="raci"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><button onClick={()=>setAddModal("raci")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add</button></div>
-      <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)"}}><b>R</b>=Responsible <b>A</b>=Accountable <b>C</b>=Consulted <b>I</b>=Informed <span style={{color:"#3B82F6"}}>[Suggest]</span>=PMO suggestion</div>
-      {Object.entries(raciByDept).map(([dept,rows])=><div key={dept}><DeptHdr dept={dept}/><Tbl headers={["Task","R","A","C","I","Notes",""]} rows={rows.map(r=>[
-        <InEdit value={r.task} onChange={v=>updateRaci(r.id,{task:v})}/>,
-        <InEdit value={r.responsible} onChange={v=>updateRaci(r.id,{responsible:v})}/>,
-        <InEdit value={r.accountable} onChange={v=>updateRaci(r.id,{accountable:v})}/>,
-        <InEdit value={r.consulted} onChange={v=>updateRaci(r.id,{consulted:v})}/>,
-        <InEdit value={r.informed} onChange={v=>updateRaci(r.id,{informed:v})}/>,
-        <InEdit value={r.notes} onChange={v=>updateRaci(r.id,{notes:v})}/>,
-        <button onClick={()=>deleteRaci(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
-      ])}/></div>)}
-    </div>}
+// ─── Main Dashboard ──────────────────────────────────────────────────────────
+export default function Home() {
+  // Data state
+  const [tasks, setTasks] = useState([]);
+  const [raci, setRaci] = useState([]);
+  const [risks, setRisks] = useState([]);
+  const [kpis, setKpis] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [standups, setStandups] = useState([]);
 
-    {/* ═══ KPIs ═══ */}
-    {view==="kpi"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto"}}>
-      <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>KPIs</div><button onClick={()=>setAddModal("kpi")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add KPI</button></div>
-      <KpiChart kpis={kpis}/>
-      {Object.entries(kpiByDept).map(([dept,items])=><div key={dept} className="asl"><DeptHdr dept={dept}/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,padding:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 8px 8px"}}>{items.map(k=><div key={k.id} className="ch" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:14,background:"var(--bg2)"}}>
-          <div style={{fontSize:12,fontWeight:700,marginBottom:4,color:"var(--fg)"}}><InEdit value={k.name} onChange={v=>updateKpi(k.id,{name:v})}/></div>
-          <div style={{fontSize:10,color:"var(--fg2)"}}>Target: <InEdit value={k.target} onChange={v=>updateKpi(k.id,{target:v})}/></div>
-          <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><div style={{width:8,height:8,borderRadius:"50%",background:FC[k.flag]}}/><span style={{fontSize:11,fontWeight:700,color:FC[k.flag]}}><InEdit value={k.current_value} onChange={v=>updateKpi(k.id,{current_value:v})}/></span></div>
-          <div style={{marginTop:6,display:"flex",gap:4}}>{["green","yellow","red"].map(f=><button key={f} onClick={()=>updateKpi(k.id,{flag:f})} style={{width:18,height:18,borderRadius:"50%",background:FC[f],border:k.flag===f?"2px solid var(--fg)":"1px solid var(--border)",cursor:"pointer",transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.3)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}/>)}</div>
-        </div>)}</div>
-      </div>)}
-    </div>}
+  // UI state
+  const [view, setView] = useState('timeline');
+  const [sel, setSel] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [addModal, setAddModal] = useState(null);
+  const [meetFilter, setMeetFilter] = useState('all');
+  const [ganttMode, setGanttMode] = useState('company');
+  const [deptTasks, setDeptTasks] = useState(null);
+  const [deptLoading, setDeptLoading] = useState(false);
+  const [dark, setDark] = useState(false);
+  const [dragId, setDragId] = useState(null);
+  const [personFilter, setPersonFilter] = useState('all');
+  const [toast, setToast] = useState('');
 
-    {/* ═══ RISKS ═══ */}
-    {view==="risk"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Risk Register</div><button onClick={()=>setAddModal("risk")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Risk</button></div>
-      <Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation",""]} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<button onClick={()=>deleteRisk(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>
-    </div>}
+  // Auth state
+  const [authed, setAuthed] = useState(false);
+  const [pw, setPw] = useState('');
+  const [pwErr, setPwErr] = useState(false);
+  const PASS = process.env.NEXT_PUBLIC_DASHBOARD_PASS || '11223344';
 
-    {/* ═══ OPEN ROLES (dynamic from DB) ═══ */}
-    {view==="roles"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Open Hiring Positions</div><button onClick={()=>setAddModal("role")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Role</button></div>
-      <Tbl headers={["Role","Status","Trigger / Blocker","Target",""]} rows={roles.map(r=>[
-        <InEdit value={r.title} onChange={v=>updateRole(r.id,{title:v})}/>,
-        <InEdit value={r.status} onChange={v=>updateRole(r.id,{status:v})} type="select" options={["Not opened","Interviewing","Blocked","Filled"]}/>,
-        <InEdit value={r.trigger_blocker} onChange={v=>updateRole(r.id,{trigger_blocker:v})}/>,
-        <InEdit value={r.target_date} onChange={v=>updateRole(r.id,{target_date:v})}/>,
-        <button onClick={()=>deleteRole(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
-      ])}/>
-    </div>}
+  // Auth persistence
+  useEffect(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('attimo_auth') === 'true') setAuthed(true);
+  }, []);
 
-    {/* ═══ MEETINGS (dynamic) ═══ */}
-    {view==="meet"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
-        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Meeting Cadence</div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setAddModal("meeting")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Meeting</button>
-          <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>+ Google Calendar</a>
-        </div>
+  const doLogin = () => {
+    if (pw === PASS) { setAuthed(true); localStorage.setItem('attimo_auth', 'true'); setPwErr(false); }
+    else { setPwErr(true); }
+  };
+
+  const doLogout = () => { setAuthed(false); localStorage.removeItem('attimo_auth'); };
+
+  // Toast
+  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3000); return () => clearTimeout(t); } }, [toast]);
+  const showToast = (msg) => setToast(msg);
+
+  // Theme
+  useEffect(() => { document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light'); }, [dark]);
+
+  // ─── Data Loading + Realtime ─────────────────────────────────────────────
+  useEffect(() => {
+    async function loadAll() {
+      const [t, r, ri, k, m, ro, su] = await Promise.all([
+        supabase.from('tasks').select('*').order('id'),
+        supabase.from('raci').select('*').order('dept,id'),
+        supabase.from('risks').select('*').order('id'),
+        supabase.from('kpis').select('*').order('dept,id'),
+        supabase.from('meetings').select('*').order('id'),
+        supabase.from('roles').select('*').order('id'),
+        supabase.from('standups').select('*').order('standup_date', { ascending: false }).order('created_at', { ascending: false }).limit(100),
+      ]);
+      if (t.data) setTasks(t.data);
+      if (r.data) setRaci(r.data);
+      if (ri.data) setRisks(ri.data);
+      if (k.data) setKpis(k.data);
+      if (m.data) setMeetings(m.data);
+      if (ro.data) setRoles(ro.data);
+      if (su.data) setStandups(su.data);
+      setLoading(false);
+    }
+    loadAll();
+
+    const ch = supabase.channel('rt-all')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => supabase.from('tasks').select('*').order('id').then(({ data }) => { if (data) setTasks(data); }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'risks' }, () => supabase.from('risks').select('*').order('id').then(({ data }) => { if (data) setRisks(data); }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kpis' }, () => supabase.from('kpis').select('*').order('dept,id').then(({ data }) => { if (data) setKpis(data); }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'raci' }, () => supabase.from('raci').select('*').order('dept,id').then(({ data }) => { if (data) setRaci(data); }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => supabase.from('roles').select('*').order('id').then(({ data }) => { if (data) setRoles(data); }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => supabase.from('meetings').select('*').order('id').then(({ data }) => { if (data) setMeetings(data); }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'standups' }, () => supabase.from('standups').select('*').order('standup_date', { ascending: false }).order('created_at', { ascending: false }).limit(100).then(({ data }) => { if (data) setStandups(data); }))
+      .subscribe();
+
+    return () => supabase.removeChannel(ch);
+  }, []);
+
+  // ─── CRUD Operations ─────────────────────────────────────────────────────
+  const updateTask = useCallback(async (id, u) => {
+    setTasks(p => p.map(t => t.id === id ? { ...t, ...u } : t));
+    setSel(p => p?.id === id ? { ...p, ...u } : p);
+    await supabase.from('tasks').update(u).eq('id', id);
+  }, []);
+
+  const deleteTask = useCallback(async id => {
+    setTasks(p => p.filter(t => t.id !== id));
+    await supabase.from('tasks').delete().eq('id', id);
+  }, []);
+
+  const addTask = useCallback(async v => {
+    const { data } = await supabase.from('tasks').insert({
+      name: v.name || 'New Task', dept: v.dept || 'PMO', owner: v.owner || '',
+      start_date: v.start_date || TODAY, end_date: v.end_date || TODAY,
+      status: 'To Do', priority: v.priority || 'Medium', risk: 'On track', deps: [],
+    }).select();
+    if (data) setTasks(p => [...p, ...data]);
+    setAddModal(null);
+  }, []);
+
+  const addRaci = useCallback(async v => {
+    const { data } = await supabase.from('raci').insert({
+      dept: v.dept || 'PMO', task: v.task || '', responsible: v.responsible || '',
+      accountable: v.accountable || '', consulted: v.consulted || '', informed: v.informed || '',
+      notes: v.notes || '', is_suggestion: v.is_suggestion === 'true',
+    }).select();
+    if (data) setRaci(p => [...p, ...data]);
+    setAddModal(null);
+  }, []);
+
+  const deleteRaci = useCallback(async id => {
+    setRaci(p => p.filter(r => r.id !== id));
+    await supabase.from('raci').delete().eq('id', id);
+  }, []);
+
+  const updateRaci = useCallback(async (id, u) => {
+    setRaci(p => p.map(r => r.id === id ? { ...r, ...u } : r));
+    await supabase.from('raci').update(u).eq('id', id);
+  }, []);
+
+  const addRisk = useCallback(async v => {
+    const ni = 'R' + (risks.length + 1).toString().padStart(2, '0');
+    const { data } = await supabase.from('risks').insert({
+      id: v.id || ni, description: v.description || '', impact: v.impact || 'HIGH',
+      status: 'ACTIVE', owner: v.owner || '', mitigation: v.mitigation || '', linked_to: v.linked_to || '',
+    }).select();
+    if (data) setRisks(p => [...p, ...data]);
+    setAddModal(null);
+  }, [risks]);
+
+  const updateRisk = useCallback(async (id, u) => {
+    setRisks(p => p.map(r => r.id === id ? { ...r, ...u } : r));
+    await supabase.from('risks').update(u).eq('id', id);
+  }, []);
+
+  const deleteRisk = useCallback(async id => {
+    setRisks(p => p.filter(r => r.id !== id));
+    await supabase.from('risks').delete().eq('id', id);
+  }, []);
+
+  const addKpi = useCallback(async v => {
+    const { data } = await supabase.from('kpis').insert({
+      dept: v.dept || 'PMO', name: v.name || '', target: v.target || '',
+      current_value: v.current_value || '', flag: v.flag || 'yellow', review_rhythm: v.review_rhythm || 'Weekly',
+    }).select();
+    if (data) setKpis(p => [...p, ...data]);
+    setAddModal(null);
+  }, []);
+
+  const updateKpi = useCallback(async (id, u) => {
+    setKpis(p => p.map(k => k.id === id ? { ...k, ...u } : k));
+    await supabase.from('kpis').update(u).eq('id', id);
+  }, []);
+
+  const addRole = useCallback(async v => {
+    const { data } = await supabase.from('roles').insert({
+      title: v.title || '', status: v.status || 'Not opened',
+      trigger_blocker: v.trigger_blocker || '', target_date: v.target_date || '',
+    }).select();
+    if (data) setRoles(p => [...p, ...data]);
+    setAddModal(null);
+  }, []);
+
+  const updateRole = useCallback(async (id, u) => {
+    setRoles(p => p.map(r => r.id === id ? { ...r, ...u } : r));
+    await supabase.from('roles').update(u).eq('id', id);
+  }, []);
+
+  const deleteRole = useCallback(async id => {
+    setRoles(p => p.filter(r => r.id !== id));
+    await supabase.from('roles').delete().eq('id', id);
+  }, []);
+
+  const addMeeting = useCallback(async v => {
+    const { data } = await supabase.from('meetings').insert({
+      type: v.type || 'Milestone', name: v.name || '', schedule: v.schedule || '',
+      duration: v.duration || '', owner: v.owner || '', attendees: v.attendees || '', output: v.output || '',
+    }).select();
+    if (data) setMeetings(p => [...p, ...data]);
+    setAddModal(null);
+  }, []);
+
+  const updateMeeting = useCallback(async (id, u) => {
+    setMeetings(p => p.map(m => m.id === id ? { ...m, ...u } : m));
+    await supabase.from('meetings').update(u).eq('id', id);
+  }, []);
+
+  const deleteMeeting = useCallback(async id => {
+    setMeetings(p => p.filter(m => m.id !== id));
+    await supabase.from('meetings').delete().eq('id', id);
+  }, []);
+
+  const addStandup = useCallback(async v => {
+    const { data } = await supabase.from('standups').insert({
+      person: v.person || '', completed: v.completed || '', tomorrow: v.tomorrow || '',
+      blockers: v.blockers || 'None', standup_date: v.standup_date || TODAY, source: 'manual',
+    }).select();
+    if (data) setStandups(p => [...data, ...p]);
+    setAddModal(null);
+  }, []);
+
+  const deleteStandup = useCallback(async id => {
+    setStandups(p => p.filter(s => s.id !== id));
+    await supabase.from('standups').delete().eq('id', id);
+  }, []);
+
+  const onDrop = useCallback(ns => {
+    if (dragId) { updateTask(dragId, { status: ns }); setDragId(null); }
+  }, [dragId, updateTask]);
+
+  // ─── Sync Operations ─────────────────────────────────────────────────────
+  const doSync = async () => {
+    setSyncing(true);
+    setSyncMsg('Syncing...');
+    showToast('Syncing...');
+    try {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      const data = await res.json();
+      const msg = 'Done: ' + (data.results?.map(r => r.source + ' ' + r.status).join(', ') || 'Synced');
+      setSyncMsg(msg);
+      showToast('Sync complete');
+    } catch (e) {
+      setSyncMsg('Error');
+      showToast('Sync failed');
+    }
+    setSyncing(false);
+  };
+
+  const loadDeptTasks = () => {
+    setDeptLoading(true);
+    fetch('/api/linear-tasks').then(r => r.json()).then(d => {
+      setDeptTasks(d);
+      setDeptLoading(false);
+      showToast('Loaded from Linear + Asana');
+    }).catch(() => { setDeptLoading(false); showToast('Failed to load department tasks'); });
+  };
+
+  const syncStandups = () => {
+    showToast('Syncing standups...');
+    fetch('/api/digest').then(r => r.json()).then(() => {
+      showToast('Standup synced');
+      supabase.from('standups').select('*').order('standup_date', { ascending: false })
+        .order('created_at', { ascending: false }).limit(100)
+        .then(({ data }) => { if (data) setStandups(data); });
+    }).catch(() => showToast('Sync failed'));
+  };
+
+  // ─── Computed Values ─────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    total: tasks.length,
+    todo: tasks.filter(t => t.status === 'To Do').length,
+    doing: tasks.filter(t => t.status === 'Doing').length,
+    done: tasks.filter(t => t.status === 'Done').length,
+    risk: tasks.filter(t => t.risk !== 'On track').length,
+    overdue: tasks.filter(t => isOverdue(t)).length,
+  }), [tasks]);
+
+  const raciByDept = {};
+  raci.forEach(r => { if (!raciByDept[r.dept]) raciByDept[r.dept] = []; raciByDept[r.dept].push(r); });
+
+  const kpiByDept = {};
+  kpis.forEach(k => { if (!kpiByDept[k.dept]) kpiByDept[k.dept] = []; kpiByDept[k.dept].push(k); });
+
+  // ─── Loading Screen ──────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: 16, color: 'var(--fg2)', background: 'var(--bg)' }}>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ width: 40, height: 40, border: '3px solid var(--border)', borderTopColor: '#3B82F6', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+        Loading Attimo...
       </div>
-      {/* Toggle filters */}
-      <div style={{display:"flex",gap:4,marginBottom:16,background:"var(--bg3)",borderRadius:10,padding:3,width:"fit-content"}}>
-        {[{id:"all",l:"All Meetings"},{id:"recurring",l:"Recurring"},{id:"milestone",l:"Milestone-Gated"}].map(f=>
-          <button key={f.id} onClick={()=>setMeetFilter(f.id)} style={{padding:"8px 16px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",background:meetFilter===f.id?"var(--fg)":"transparent",color:meetFilter===f.id?"var(--bg)":"var(--fg2)"}}>{f.l}
-            <span style={{marginLeft:6,background:meetFilter===f.id?"rgba(255,255,255,.2)":"var(--border)",borderRadius:99,padding:"1px 6px",fontSize:10}}>{
-              f.id==="all"?meetings.length:
-              f.id==="recurring"?meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).length:
-              meetings.filter(m=>m.type==="Milestone").length
-            }</span>
+    </div>
+  );
+
+  // ─── Login Screen ────────────────────────────────────────────────────────
+  if (!authed) return (
+    <div style={{ fontFamily: "'Inter',system-ui", minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)' }}>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      <div className="asc" style={{ background: '#1E293B', borderRadius: 20, padding: 40, width: 'min(400px,90vw)', textAlign: 'center', border: '1px solid #334155', boxShadow: '0 25px 60px rgba(0,0,0,.5)' }}>
+        <div style={{ width: 50, height: 50, borderRadius: 12, background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <span style={{ color: '#fff', fontSize: 24, fontWeight: 800 }}>A</span>
+        </div>
+        <h1 style={{ color: '#F1F5F9', fontSize: 22, fontWeight: 800, margin: '0 0 4px' }}>Attimo</h1>
+        <p style={{ color: '#94A3B8', fontSize: 13, margin: '0 0 24px' }}>Company Operations Hub</p>
+        <input type="password" placeholder="Enter access code" value={pw}
+          onChange={e => { setPw(e.target.value); setPwErr(false); }}
+          onKeyDown={e => { if (e.key === 'Enter') doLogin(); }}
+          style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: pwErr ? '2px solid #EF4444' : '1px solid #475569', background: '#0F172A', color: '#F1F5F9', fontSize: 14, boxSizing: 'border-box', outline: 'none', textAlign: 'center', letterSpacing: 4 }} />
+        {pwErr && <div style={{ color: '#EF4444', fontSize: 12, marginTop: 8, fontWeight: 600 }}>Incorrect code. Try again.</div>}
+        <button onClick={doLogin} style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 16, transition: 'transform .15s' }}
+          onMouseEnter={e => e.target.style.transform = 'scale(1.02)'}
+          onMouseLeave={e => e.target.style.transform = 'scale(1)'}>Enter</button>
+        <p style={{ color: '#475569', fontSize: 10, marginTop: 16 }}>Access restricted to Attimo team members</p>
+      </div>
+    </div>
+  );
+
+  // ─── Main Dashboard ──────────────────────────────────────────────────────
+  return (
+    <div style={{ fontFamily: "'Inter',system-ui", background: 'var(--bg)', minHeight: '100vh', transition: 'all .3s' }}>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+      {/* ═══ HEADER ═══ */}
+      <div style={{ background: 'var(--hdr)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="glow-btn" style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ color: '#fff', fontSize: 15, fontWeight: 800 }}>A</span>
+          </div>
+          <span style={{ fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: -.5 }}>Attimo</span>
+          <span style={{ color: '#475569' }}>|</span>
+          <span style={{ fontSize: 12, color: '#94A3B8' }}>Company Operations</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => setDark(!dark)} style={{ background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 11, color: '#fff', fontWeight: 600 }}>
+            {dark ? 'Light' : 'Dark'}
           </button>
-        )}
+          <button onClick={doSync} disabled={syncing} style={{
+            background: syncing ? 'rgba(255,255,255,.1)' : 'rgba(59,130,246,.8)',
+            color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8,
+            fontWeight: 600, fontSize: 11, cursor: syncing ? 'wait' : 'pointer',
+          }}>{syncing ? 'Syncing...' : 'Sync All'}</button>
+          <div className="mob-hide" style={{ display: 'flex', gap: 8, fontSize: 11, color: '#94A3B8' }}>
+            <span><b style={{ color: '#93C5FD' }}>{stats.total}</b> total</span>
+            <span><b style={{ color: '#FDE68A' }}>{stats.doing}</b> doing</span>
+            <span><b style={{ color: '#6EE7B7' }}>{stats.done}</b> done</span>
+            {stats.overdue > 0 && <span style={{ animation: 'pulse 1.5s infinite' }}><b style={{ color: '#FCA5A5' }}>{stats.overdue}</b> overdue</span>}
+          </div>
+          <button onClick={doLogout} style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 11, color: '#94A3B8', fontWeight: 600, marginLeft: 4 }}>Logout</button>
+        </div>
       </div>
-      {/* Recurring section */}
-      {(meetFilter==="all"||meetFilter==="recurring")&&<div style={{marginBottom:16}}>
-        {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/> Recurring Meetings</div>}
-        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).map(m=>[
-          <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
-          <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
-          <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
-          <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
-          <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
-          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
-          <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
-        ])}/>
-      </div>}
-      {/* Milestone section */}
-      {(meetFilter==="all"||meetFilter==="milestone")&&<div>
-        {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#F59E0B"}}/> Milestone-Gated Meetings</div>}
-        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>m.type==="Milestone").map(m=>[
-          <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
-          <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
-          <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
-          <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
-          <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
-          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
-          <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
-        ])}/>
-      </div>}
-    </div>}
 
+      {/* ═══ TABS ═══ */}
+      <div style={{ borderBottom: '1px solid var(--border)', padding: '0 20px', display: 'flex', flexWrap: 'nowrap', background: 'var(--card)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setView(t.id)} style={{
+            padding: '10px 14px', border: 'none', background: 'none', fontWeight: 600, fontSize: 13,
+            cursor: 'pointer', color: view === t.id ? 'var(--fg)' : 'var(--fg2)',
+            borderBottom: view === t.id ? '2px solid #3B82F6' : '2px solid transparent',
+            transition: 'all .15s', whiteSpace: 'nowrap',
+          }}>{t.l}</button>
+        ))}
+        <div className="mob-hide" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {ANCHORS.map((a, i) => (
+            <span key={i} style={{ fontSize: 9, color: a.c, fontWeight: 700, padding: '2px 6px', background: a.c + '12', borderRadius: 99 }}>
+              {a.l} {formatDate(a.d)}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ CONTENT ═══ */}
+      <div style={{ padding: 20 }}>
+
+        {/* ═══ TIMELINE ═══ */}
+        {view === 'timeline' && <div className="af">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>Gantt Chart</div>
+              <div style={{ display: 'flex', background: 'var(--bg3)', borderRadius: 8, padding: 2 }}>
+                <button onClick={() => setGanttMode('company')} style={{
+                  padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', background: ganttMode === 'company' ? 'var(--fg)' : 'transparent',
+                  color: ganttMode === 'company' ? 'var(--bg)' : 'var(--fg2)', transition: 'all .2s',
+                }}>Company</button>
+                <button onClick={() => { setGanttMode('department'); if (!deptTasks) loadDeptTasks(); }} style={{
+                  padding: '6px 14px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', background: ganttMode === 'department' ? 'var(--fg)' : 'transparent',
+                  color: ganttMode === 'department' ? 'var(--bg)' : 'var(--fg2)', transition: 'all .2s',
+                }}>Department</button>
+              </div>
+              {/* FIX #6: Person filter — removed extra empty-bordered box by not rendering an extra element */}
+              {ganttMode === 'company' && (
+                <select value={personFilter} onChange={e => setPersonFilter(e.target.value)} style={{
+                  border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11,
+                  background: 'var(--bg2)', color: 'var(--fg)', cursor: 'pointer',
+                }}>
+                  <option value="all">All People</option>
+                  {[...new Set(tasks.map(t => t.owner).filter(Boolean))].sort().map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {/* FIX #5: Contextual sync for Timeline */}
+              <SyncBtn label="Sync Timeline" onClick={doSync} loading={syncing} />
+              {ganttMode === 'company' && <button onClick={() => setAddModal('task')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add Task</button>}
+              {ganttMode === 'department' && <button onClick={loadDeptTasks} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>Refresh from Linear + Asana</button>}
+            </div>
+          </div>
+
+          {ganttMode === 'company' && <CompanyGantt tasks={tasks} personFilter={personFilter} onSelect={setSel} />}
+          {ganttMode === 'department' && <DepartmentView deptTasks={deptTasks} deptLoading={deptLoading} showToast={showToast} />}
+        </div>}
+
+        {/* ═══ BOARD ═══ */}
+        {view === 'board' && <div className="af">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>Board</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SyncBtn label="Sync Board" onClick={doSync} loading={syncing} />
+              <button onClick={() => setAddModal('task')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add Task</button>
+            </div>
+          </div>
+          <div className="mob-col1" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+            {STATUSES.map(st => (
+              <div key={st} onDragOver={e => e.preventDefault()} onDrop={() => onDrop(st)}
+                style={{ background: 'var(--bg2)', borderRadius: 10, padding: 12, minHeight: 200, border: dragId ? '2px dashed #3B82F6' : '2px solid transparent', transition: 'all .2s' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--fg)' }}>{st}</span>
+                  <span style={{ background: 'var(--bg3)', borderRadius: 99, padding: '2px 8px', fontSize: 11, fontWeight: 600, color: 'var(--fg2)' }}>{tasks.filter(t => t.status === st).length}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {tasks.filter(t => t.status === st).map((t, idx) => {
+                    const rc = RISK_COLORS[t.risk]; const pc = PRI_COLORS[t.priority]; const od = isOverdue(t);
+                    return (
+                      <div key={t.id} className="ch asl" draggable onDragStart={() => setDragId(t.id)} onDragEnd={() => setDragId(null)}
+                        onClick={() => setSel(t)} style={{
+                          background: 'var(--card)', borderRadius: 10, padding: 12,
+                          border: '1px solid var(--border)',
+                          borderLeft: od ? '4px solid #EF4444' : '4px solid ' + (DEPT_COLORS[t.dept] || '#94A3B8'),
+                          cursor: 'grab', animationDelay: idx * 40 + 'ms',
+                        }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: od ? '#DC2626' : 'var(--fg)' }}>
+                          {t.name}{od && <span style={{ fontSize: 9, marginLeft: 6, color: '#EF4444', animation: 'pulse 1.5s infinite' }}>OVERDUE</span>}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                          {pc && <Badge bg={pc.bg} c={pc.c}>{t.priority}</Badge>}
+                          {rc && <Badge bg={rc.bg} c={rc.c}>{t.risk}</Badge>}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--fg2)' }}>
+                          <div style={{ width: 16, height: 16, borderRadius: '50%', background: DEPT_COLORS[t.dept], display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: '#fff', fontSize: 7, fontWeight: 700 }}>{t.owner?.[0]}</span>
+                          </div>
+                          {formatDate(t.start_date)}–{formatDate(t.end_date)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>}
+
+        {/* ═══ CALENDAR ═══ */}
+        {view === 'calendar' && <CalendarView tasks={tasks} onSelect={setSel} />}
+
+        {/* ═══ DAILY STANDUP ═══ */}
+        {view === 'standup' && <div className="af">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>Daily Standup</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => setAddModal('standup')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add Update</button>
+              {/* FIX #5: Contextual sync for Standups */}
+              <SyncBtn label="Sync from Linear + Asana" onClick={syncStandups} loading={false} />
+              <a href="https://attimo-labs.slack.com/archives/daily-standup" target="_blank" rel="noopener" style={{ fontSize: 11, color: '#3B82F6', fontWeight: 600, textDecoration: 'none', background: '#EFF6FF', padding: '6px 14px', borderRadius: 8, display: 'flex', alignItems: 'center' }}>Open #daily-standup</a>
+            </div>
+          </div>
+          <div style={{ background: 'var(--bg2)', padding: '8px 12px', borderRadius: 8, fontSize: 11, color: 'var(--fg2)', marginBottom: 16 }}>
+            Updates from Slack workflow and manual entries. Syncs when you click Sync All. Slack workflow sends DMs at 5pm daily.
+          </div>
+          {(() => {
+            const byDate = {};
+            standups.forEach(s => { const d = String(s.standup_date).split('T')[0]; if (!byDate[d]) byDate[d] = []; byDate[d].push(s); });
+            const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+            if (dates.length === 0) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--fg2)' }}>No standup updates yet. Click "+ Add Update" or wait for the 5pm Slack workflow.</div>;
+            return dates.map(date => (
+              <div key={date} className="asl" style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 4, height: 16, borderRadius: 2, background: '#3B82F6' }} />
+                  {new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                  <span style={{ background: 'var(--bg3)', borderRadius: 99, padding: '1px 8px', fontSize: 10, color: 'var(--fg2)' }}>{byDate[date].length} updates</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 12 }}>
+                  {byDate[date].map(s => (
+                    <div key={s.id} className="ch" style={{ background: 'var(--card)', borderRadius: 10, padding: 14, border: '1px solid var(--border)', borderLeft: '4px solid ' + (DEPT_COLORS[s.person] || '#3B82F6') }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>{s.person?.[0]}</span>
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{s.person}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 9, color: 'var(--fg2)', background: 'var(--bg3)', padding: '2px 6px', borderRadius: 99 }}>{s.source === 'slack' ? 'via Slack' : 'manual'}</span>
+                          <button onClick={() => deleteStandup(s.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--fg)', marginBottom: 6 }}>
+                        <div style={{ color: '#10B981', fontWeight: 600, fontSize: 10, marginBottom: 2 }}>COMPLETED</div>
+                        <div style={{ color: 'var(--fg)', lineHeight: 1.4 }}>{s.completed || '—'}</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--fg)', marginBottom: 6 }}>
+                        <div style={{ color: '#3B82F6', fontWeight: 600, fontSize: 10, marginBottom: 2 }}>TOMORROW</div>
+                        <div style={{ color: 'var(--fg)', lineHeight: 1.4 }}>{s.tomorrow || '—'}</div>
+                      </div>
+                      <div style={{ fontSize: 12 }}>
+                        <div style={{ color: s.blockers && s.blockers !== 'None' && s.blockers !== 'none' ? '#EF4444' : '#10B981', fontWeight: 600, fontSize: 10, marginBottom: 2 }}>BLOCKERS</div>
+                        <div style={{ color: s.blockers && s.blockers !== 'None' && s.blockers !== 'none' ? '#EF4444' : 'var(--fg2)', fontWeight: s.blockers && s.blockers !== 'None' && s.blockers !== 'none' ? 600 : 400 }}>{s.blockers || 'None'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
+        </div>}
+
+        {/* ═══ RACI ═══ */}
+        {view === 'raci' && <div className="af" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>RACI Matrix</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SyncBtn label="Sync RACI" onClick={doSync} loading={syncing} />
+              <button onClick={() => setAddModal('raci')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add</button>
+            </div>
+          </div>
+          <div style={{ background: 'var(--bg2)', padding: '8px 12px', borderRadius: 8, fontSize: 11, color: 'var(--fg2)' }}>
+            <b>R</b>=Responsible <b>A</b>=Accountable <b>C</b>=Consulted <b>I</b>=Informed <span style={{ color: '#3B82F6' }}>[Suggest]</span>=PMO suggestion
+          </div>
+          {Object.entries(raciByDept).map(([dept, rows]) => (
+            <div key={dept}>
+              <DeptHeader dept={dept} />
+              <Tbl headers={['Task', 'R', 'A', 'C', 'I', 'Notes', '']} rows={rows.map(r => [
+                <span key="t">{r.is_suggestion && <span style={{ color: '#3B82F6', fontSize: 10, marginRight: 4 }}>[Suggest]</span>}<InEdit value={r.task} onChange={v => updateRaci(r.id, { task: v })} /></span>,
+                <InEdit key="r" value={r.responsible} onChange={v => updateRaci(r.id, { responsible: v })} />,
+                <InEdit key="a" value={r.accountable} onChange={v => updateRaci(r.id, { accountable: v })} />,
+                <InEdit key="c" value={r.consulted} onChange={v => updateRaci(r.id, { consulted: v })} />,
+                <InEdit key="i" value={r.informed} onChange={v => updateRaci(r.id, { informed: v })} />,
+                <InEdit key="n" value={r.notes} onChange={v => updateRaci(r.id, { notes: v })} />,
+                <button key="d" onClick={() => deleteRaci(r.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button>,
+              ])} />
+            </div>
+          ))}
+        </div>}
+
+        {/* ═══ KPIs ═══ */}
+        {view === 'kpi' && <div className="af" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>KPIs</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SyncBtn label="Sync KPIs" onClick={doSync} loading={syncing} />
+              <button onClick={() => setAddModal('kpi')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add KPI</button>
+            </div>
+          </div>
+          <KpiChart kpis={kpis} />
+          {Object.entries(kpiByDept).map(([dept, items]) => (
+            <div key={dept} className="asl">
+              <DeptHeader dept={dept} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, padding: 16, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0 0 8px 8px' }}>
+                {items.map(k => (
+                  <div key={k.id} className="ch" style={{ borderLeft: '3px solid ' + FLAG_COLORS[k.flag], borderRadius: 8, padding: 14, background: 'var(--bg2)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4, color: 'var(--fg)' }}><InEdit value={k.name} onChange={v => updateKpi(k.id, { name: v })} /></div>
+                    <div style={{ fontSize: 10, color: 'var(--fg2)' }}>Target: <InEdit value={k.target} onChange={v => updateKpi(k.id, { target: v })} /></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: FLAG_COLORS[k.flag] }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: FLAG_COLORS[k.flag] }}><InEdit value={k.current_value} onChange={v => updateKpi(k.id, { current_value: v })} /></span>
+                    </div>
+                    <div style={{ marginTop: 6, display: 'flex', gap: 4 }}>
+                      {['green', 'yellow', 'red'].map(f => (
+                        <button key={f} onClick={() => updateKpi(k.id, { flag: f })} style={{
+                          width: 18, height: 18, borderRadius: '50%', background: FLAG_COLORS[f],
+                          border: k.flag === f ? '2px solid var(--fg)' : '1px solid var(--border)',
+                          cursor: 'pointer', transition: 'transform .15s',
+                        }} onMouseEnter={e => e.target.style.transform = 'scale(1.3)'}
+                          onMouseLeave={e => e.target.style.transform = 'scale(1)'} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>}
+
+        {/* ═══ RISKS (FIX #4: Shows linked_to field) ═══ */}
+        {view === 'risk' && <div className="af">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>Risk Register</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SyncBtn label="Sync Risks" onClick={doSync} loading={syncing} />
+              <button onClick={() => setAddModal('risk')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add Risk</button>
+            </div>
+          </div>
+          <Tbl
+            headers={['#', 'Risk', 'Impact', 'Status', 'Owner', 'Mitigation', 'Linked To', '']}
+            rows={risks.map(r => [
+              <b key="id">{r.id}</b>,
+              <InEdit key="d" value={r.description} onChange={v => updateRisk(r.id, { description: v })} />,
+              <InEdit key="im" value={r.impact} onChange={v => updateRisk(r.id, { impact: v })} type="select" options={IMPACT_LEVELS} />,
+              <InEdit key="st" value={r.status} onChange={v => updateRisk(r.id, { status: v })} type="select" options={RISK_STATUSES} />,
+              <InEdit key="ow" value={r.owner} onChange={v => updateRisk(r.id, { owner: v })} />,
+              <InEdit key="mi" value={r.mitigation} onChange={v => updateRisk(r.id, { mitigation: v })} />,
+              /* FIX #4: Show linked_to as editable field + resolve to task name if possible */
+              <span key="lt" style={{ fontSize: 11 }}>
+                <InEdit value={r.linked_to || ''} onChange={v => updateRisk(r.id, { linked_to: v })} />
+                {r.linked_to && (() => {
+                  const linked = tasks.find(t => t.id === r.linked_to || t.name === r.linked_to);
+                  return linked ? <div style={{ fontSize: 9, color: '#6366F1', marginTop: 2 }}>→ {linked.name}</div> : null;
+                })()}
+              </span>,
+              <button key="del" onClick={() => deleteRisk(r.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button>,
+            ])}
+          />
+        </div>}
+
+        {/* ═══ OPEN ROLES ═══ */}
+        {view === 'roles' && <div className="af">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>Open Hiring Positions</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SyncBtn label="Sync Roles" onClick={doSync} loading={syncing} />
+              <button onClick={() => setAddModal('role')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add Role</button>
+            </div>
+          </div>
+          <Tbl headers={['Role', 'Status', 'Trigger / Blocker', 'Target', '']} rows={roles.map(r => [
+            <InEdit key="t" value={r.title} onChange={v => updateRole(r.id, { title: v })} />,
+            <InEdit key="s" value={r.status} onChange={v => updateRole(r.id, { status: v })} type="select" options={['Not opened', 'Interviewing', 'Blocked', 'Filled']} />,
+            <InEdit key="tb" value={r.trigger_blocker} onChange={v => updateRole(r.id, { trigger_blocker: v })} />,
+            <InEdit key="td" value={r.target_date} onChange={v => updateRole(r.id, { target_date: v })} />,
+            <button key="d" onClick={() => deleteRole(r.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button>,
+          ])} />
+        </div>}
+
+        {/* ═══ MEETINGS ═══ */}
+        {view === 'meet' && <div className="af">
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg)' }}>Meeting Cadence</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SyncBtn label="Sync Meetings" onClick={doSync} loading={syncing} />
+              <button onClick={() => setAddModal('meeting')} style={{ background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>+ Add Meeting</button>
+              <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" rel="noopener" style={{ fontSize: 11, color: '#3B82F6', fontWeight: 600, textDecoration: 'none', background: '#EFF6FF', padding: '6px 14px', borderRadius: 8, display: 'flex', alignItems: 'center' }}>+ Google Calendar</a>
+            </div>
+          </div>
+          {/* Toggle filters */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg3)', borderRadius: 10, padding: 3, width: 'fit-content' }}>
+            {[{ id: 'all', l: 'All Meetings' }, { id: 'recurring', l: 'Recurring' }, { id: 'milestone', l: 'Milestone-Gated' }].map(f => (
+              <button key={f.id} onClick={() => setMeetFilter(f.id)} style={{
+                padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', transition: 'all .2s',
+                background: meetFilter === f.id ? 'var(--fg)' : 'transparent',
+                color: meetFilter === f.id ? 'var(--bg)' : 'var(--fg2)',
+              }}>
+                {f.l}
+                <span style={{ marginLeft: 6, background: meetFilter === f.id ? 'rgba(255,255,255,.2)' : 'var(--border)', borderRadius: 99, padding: '1px 6px', fontSize: 10 }}>
+                  {f.id === 'all' ? meetings.length :
+                    f.id === 'recurring' ? meetings.filter(m => ['Weekly', 'Bi-weekly', 'Monthly'].includes(m.type)).length :
+                    meetings.filter(m => m.type === 'Milestone').length}
+                </span>
+              </button>
+            ))}
+          </div>
+          {/* Recurring section */}
+          {(meetFilter === 'all' || meetFilter === 'recurring') && <div style={{ marginBottom: 16 }}>
+            {meetFilter === 'all' && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 4, height: 16, borderRadius: 2, background: '#3B82F6' }} /> Recurring Meetings</div>}
+            <Tbl headers={['Type', 'Meeting', 'When', 'Duration', 'Owner', 'Attendees', '']} rows={meetings.filter(m => ['Weekly', 'Bi-weekly', 'Monthly'].includes(m.type)).map(m => [
+              <InEdit key="ty" value={m.type} onChange={v => updateMeeting(m.id, { type: v })} type="select" options={['Weekly', 'Bi-weekly', 'Monthly', 'Milestone']} />,
+              <InEdit key="n" value={m.name} onChange={v => updateMeeting(m.id, { name: v })} />,
+              <InEdit key="s" value={m.schedule} onChange={v => updateMeeting(m.id, { schedule: v })} />,
+              <InEdit key="d" value={m.duration} onChange={v => updateMeeting(m.id, { duration: v })} />,
+              <InEdit key="o" value={m.owner} onChange={v => updateMeeting(m.id, { owner: v })} />,
+              <InEdit key="a" value={m.attendees} onChange={v => updateMeeting(m.id, { attendees: v })} />,
+              <button key="del" onClick={() => deleteMeeting(m.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button>,
+            ])} />
+          </div>}
+          {/* Milestone section */}
+          {(meetFilter === 'all' || meetFilter === 'milestone') && <div>
+            {meetFilter === 'all' && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 4, height: 16, borderRadius: 2, background: '#F59E0B' }} /> Milestone-Gated Meetings</div>}
+            <Tbl headers={['Type', 'Meeting', 'When', 'Duration', 'Owner', 'Attendees', '']} rows={meetings.filter(m => m.type === 'Milestone').map(m => [
+              <InEdit key="ty" value={m.type} onChange={v => updateMeeting(m.id, { type: v })} type="select" options={['Weekly', 'Bi-weekly', 'Monthly', 'Milestone']} />,
+              <InEdit key="n" value={m.name} onChange={v => updateMeeting(m.id, { name: v })} />,
+              <InEdit key="s" value={m.schedule} onChange={v => updateMeeting(m.id, { schedule: v })} />,
+              <InEdit key="d" value={m.duration} onChange={v => updateMeeting(m.id, { duration: v })} />,
+              <InEdit key="o" value={m.owner} onChange={v => updateMeeting(m.id, { owner: v })} />,
+              <InEdit key="a" value={m.attendees} onChange={v => updateMeeting(m.id, { attendees: v })} />,
+              <button key="del" onClick={() => deleteMeeting(m.id)} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer' }}>✕</button>,
+            ])} />
+          </div>}
+        </div>}
+
+      </div>
+
+      {/* ═══ MODALS ═══ */}
+      <TicketPopup task={sel} tasks={tasks} onClose={() => setSel(null)} onUpdate={updateTask} onDelete={deleteTask} />
+
+      {addModal === 'task' && <AddModal title="Add Task" fields={[
+        { key: 'name', label: 'Task Name', placeholder: 'e.g. Landing page' },
+        { key: 'dept', label: 'Department', type: 'select', options: DEPARTMENTS },
+        { key: 'owner', label: 'Owner' },
+        { key: 'start_date', label: 'Start', type: 'date' },
+        { key: 'end_date', label: 'End', type: 'date' },
+        { key: 'priority', label: 'Priority', type: 'select', options: PRIORITIES },
+      ]} onSave={addTask} onClose={() => setAddModal(null)} />}
+
+      {addModal === 'raci' && <AddModal title="Add RACI" fields={[
+        { key: 'dept', label: 'Department', type: 'select', options: DEPARTMENTS },
+        { key: 'task', label: 'Task' },
+        { key: 'responsible', label: 'R' }, { key: 'accountable', label: 'A' },
+        { key: 'consulted', label: 'C' }, { key: 'informed', label: 'I' },
+        { key: 'notes', label: 'Notes' },
+        { key: 'is_suggestion', label: 'PMO Suggestion?', type: 'select', options: ['false', 'true'] },
+      ]} onSave={addRaci} onClose={() => setAddModal(null)} />}
+
+      {addModal === 'risk' && <AddModal title="Add Risk" fields={[
+        { key: 'description', label: 'Risk' },
+        { key: 'impact', label: 'Impact', type: 'select', options: IMPACT_LEVELS },
+        { key: 'owner', label: 'Owner' },
+        { key: 'mitigation', label: 'Mitigation' },
+        { key: 'linked_to', label: 'Linked Task (name or ID)' },
+      ]} onSave={addRisk} onClose={() => setAddModal(null)} />}
+
+      {addModal === 'kpi' && <AddModal title="Add KPI" fields={[
+        { key: 'dept', label: 'Department', type: 'select', options: DEPARTMENTS },
+        { key: 'name', label: 'KPI' }, { key: 'target', label: 'Target' },
+        { key: 'current_value', label: 'Current' },
+        { key: 'flag', label: 'Status', type: 'select', options: ['green', 'yellow', 'red'] },
+        { key: 'review_rhythm', label: 'Review', type: 'select', options: ['Weekly', 'Bi-Weekly', 'Monthly'] },
+      ]} onSave={addKpi} onClose={() => setAddModal(null)} />}
+
+      {addModal === 'role' && <AddModal title="Add Role" fields={[
+        { key: 'title', label: 'Role Title' },
+        { key: 'status', label: 'Status', type: 'select', options: ['Not opened', 'Interviewing', 'Blocked', 'Filled'] },
+        { key: 'trigger_blocker', label: 'Trigger / Blocker' },
+        { key: 'target_date', label: 'Target Date' },
+      ]} onSave={addRole} onClose={() => setAddModal(null)} />}
+
+      {addModal === 'meeting' && <AddModal title="Add Meeting" fields={[
+        { key: 'type', label: 'Type', type: 'select', options: ['Weekly', 'Milestone', 'Bi-weekly', 'Monthly'] },
+        { key: 'name', label: 'Meeting Name' }, { key: 'schedule', label: 'When' },
+        { key: 'duration', label: 'Duration' }, { key: 'owner', label: 'Owner' },
+        { key: 'attendees', label: 'Attendees' },
+      ]} onSave={addMeeting} onClose={() => setAddModal(null)} />}
+
+      {addModal === 'standup' && <AddModal title="Add Standup Update" fields={[
+        { key: 'person', label: 'Person', placeholder: 'e.g. Talha' },
+        { key: 'completed', label: 'What did you complete today?', placeholder: 'Finished the API endpoints...' },
+        { key: 'tomorrow', label: 'What are you working on tomorrow?', placeholder: 'Starting the frontend...' },
+        { key: 'blockers', label: 'Any blockers?', placeholder: 'None' },
+        { key: 'standup_date', label: 'Date', type: 'date' },
+      ]} onSave={addStandup} onClose={() => setAddModal(null)} />}
+
+      {/* Toast */}
+      {toast && <div className="asc" style={{
+        position: 'fixed', bottom: 24, right: 24, background: 'var(--fg)', color: 'var(--bg)',
+        padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+        boxShadow: '0 8px 30px rgba(0,0,0,.2)', zIndex: 2000, display: 'flex', alignItems: 'center', gap: 8,
+      }}>{toast}</div>}
     </div>
-    <TicketPopup task={sel} tasks={tasks} onClose={()=>setSel(null)} onUpdate={updateTask} onDelete={deleteTask}/>
-    {addModal==="task"&&<AddModal title="Add Task" fields={[{key:"name",label:"Task Name",placeholder:"e.g. Landing page"},{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"owner",label:"Owner"},{key:"start_date",label:"Start",type:"date"},{key:"end_date",label:"End",type:"date"},{key:"priority",label:"Priority",type:"select",options:PRI_OPT}]} onSave={addTask} onClose={()=>setAddModal(null)}/>}
-    {addModal==="raci"&&<AddModal title="Add RACI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"task",label:"Task"},{key:"responsible",label:"R"},{key:"accountable",label:"A"},{key:"consulted",label:"C"},{key:"informed",label:"I"},{key:"notes",label:"Notes"},{key:"is_suggestion",label:"PMO Suggestion?",type:"select",options:["false","true"]}]} onSave={addRaci} onClose={()=>setAddModal(null)}/>}
-    {addModal==="risk"&&<AddModal title="Add Risk" fields={[{key:"description",label:"Risk"},{key:"impact",label:"Impact",type:"select",options:IMP_OPT},{key:"owner",label:"Owner"},{key:"mitigation",label:"Mitigation"}]} onSave={addRisk} onClose={()=>setAddModal(null)}/>}
-    {addModal==="kpi"&&<AddModal title="Add KPI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"name",label:"KPI"},{key:"target",label:"Target"},{key:"current_value",label:"Current"},{key:"flag",label:"Status",type:"select",options:["green","yellow","red"]},{key:"review_rhythm",label:"Review",type:"select",options:["Weekly","Bi-Weekly","Monthly"]}]} onSave={addKpi} onClose={()=>setAddModal(null)}/>}
-    {addModal==="role"&&<AddModal title="Add Role" fields={[{key:"title",label:"Role Title"},{key:"status",label:"Status",type:"select",options:["Not opened","Interviewing","Blocked","Filled"]},{key:"trigger_blocker",label:"Trigger / Blocker"},{key:"target_date",label:"Target Date"}]} onSave={addRole} onClose={()=>setAddModal(null)}/>}
-    {addModal==="meeting"&&<AddModal title="Add Meeting" fields={[{key:"type",label:"Type",type:"select",options:["Weekly","Milestone","Bi-weekly","Monthly"]},{key:"name",label:"Meeting Name"},{key:"schedule",label:"When"},{key:"duration",label:"Duration"},{key:"owner",label:"Owner"},{key:"attendees",label:"Attendees"}]} onSave={addMeeting} onClose={()=>setAddModal(null)}/>}
-    {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
-
-    {/* Toast notification */}
-    {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
-  </div>;
+  );
 }
