@@ -5,7 +5,13 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_KEY
 );
 
-async function syncLinear() {
+const ASANA_PROJECTS = {
+  'Marketing Department Task Tracker': '1214432966703164',
+  'Design Department Task Tracker': '1214434740066912'
+};
+
+// Check Linear connectivity + return count of active issues
+async function checkLinear() {
   const key = process.env.LINEAR_API_KEY;
   if (!key) return { source: 'Linear', status: 'skipped', reason: 'No API key', count: 0 };
   try {
@@ -26,30 +32,37 @@ async function syncLinear() {
   }
 }
 
-async function syncAsana() {
+// Check Asana connectivity using actual project GIDs (fixes "0 items" bug)
+async function checkAsana() {
   const token = process.env.ASANA_TOKEN;
   if (!token) return { source: 'Asana', status: 'skipped', reason: 'No token', count: 0 };
   try {
-    const res = await fetch('https://app.asana.com/api/1.0/tasks?opt_fields=name,assignee.name,due_on,start_on,completed,custom_fields&limit=50', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const data = await res.json();
-    return { source: 'Asana', status: 'ok', count: data?.data?.length || 0 };
+    let total = 0;
+    for (const [name, gid] of Object.entries(ASANA_PROJECTS)) {
+      const res = await fetch(
+        `https://app.asana.com/api/1.0/tasks?project=${gid}&opt_fields=name,completed&limit=100`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      if (!data.errors) total += (data?.data?.length || 0);
+    }
+    return { source: 'Asana', status: 'ok', count: total };
   } catch (e) {
     return { source: 'Asana', status: 'error', error: e.message, count: 0 };
   }
 }
 
+// Scrape #daily-standup messages and save to Supabase standups table
 async function syncSlackStandups() {
   const token = process.env.SLACK_BOT_TOKEN;
-  if (!token) return { source: 'Slack Standups', status: 'skipped', reason: 'No bot token (add SLACK_BOT_TOKEN)', count: 0 };
+  if (!token) return { source: 'Slack Standups', status: 'skipped', reason: 'No bot token', count: 0 };
   try {
     const chRes = await fetch('https://slack.com/api/conversations.list?types=public_channel,private_channel&limit=200', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const chData = await chRes.json();
     const channel = chData.channels?.find(c => c.name === 'daily-standup');
-    if (!channel) return { source: 'Slack Standups', status: 'error', error: 'Channel #daily-standup not found', count: 0 };
+    if (!channel) return { source: 'Slack Standups', status: 'error', error: '#daily-standup not found', count: 0 };
 
     const yesterday = Math.floor(Date.now() / 1000) - 86400;
     const msgRes = await fetch(`https://slack.com/api/conversations.history?channel=${channel.id}&oldest=${yesterday}&limit=50`, {
@@ -58,14 +71,23 @@ async function syncSlackStandups() {
     const msgData = await msgRes.json();
     const messages = msgData.messages?.filter(m => !m.bot_id && m.text && m.text.length > 10) || [];
 
+    // Resolve all user names in parallel (fixes timeout on sequential calls)
+    const userIds = [...new Set(messages.map(m => m.user).filter(Boolean))];
+    const userMap = {};
+    await Promise.all(userIds.map(async uid => {
+      try {
+        const r = await fetch(`https://slack.com/api/users.info?user=${uid}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const d = await r.json();
+        userMap[uid] = d.user?.real_name || d.user?.name || 'Unknown';
+      } catch { userMap[uid] = 'Unknown'; }
+    }));
+
     let saved = 0;
     const today = new Date().toISOString().split('T')[0];
     for (const msg of messages) {
-      const userRes = await fetch(`https://slack.com/api/users.info?user=${msg.user}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const userData = await userRes.json();
-      const name = userData.user?.real_name || userData.user?.name || 'Unknown';
+      const name = userMap[msg.user] || 'Unknown';
 
       const { data: existing } = await supabase.from('standups')
         .select('id').eq('person', name).eq('standup_date', today).eq('source', 'slack');
@@ -93,11 +115,9 @@ async function syncSlackStandups() {
 }
 
 export async function POST() {
-  const results = await Promise.all([syncLinear(), syncAsana(), syncSlackStandups()]);
+  const results = await Promise.all([checkLinear(), checkAsana(), syncSlackStandups()]);
 
-  // No Slack post here — the digest route handles all Slack reporting.
-  // This keeps Sync All silent (data-only) and prevents double messages.
-
+  // No Slack post — digest route handles all Slack reporting.
   return Response.json({
     timestamp: new Date().toISOString(),
     results,
