@@ -7,6 +7,35 @@ const ASANA_PROJECTS = {
   'Design Department Task Tracker': '1214434740066912'
 };
 
+// Name mapping — keeps Slack consistent with dashboard display
+const E2N = {
+  'burak':'Burak Çetin','talha':'Talha Mubeen','laraib':'Laraib Haider',
+  'murat':'Murat Tut','sooling':'Soo Ling Lim','soo ling':'Soo Ling Lim',
+  'gamze':'Gamze Savaş','claire':'Claire Eskander','mesude':'Mesude Gökpınar',
+  'suche':'Suche Coşkun','efehan':'Efehan Maleri','syed':'Syed Osama Ali',
+  'tunc':'Tunç Karadağ','tunch':'Tunç Karadağ',
+  'burak çetin':'Burak Çetin','burak cetin':'Burak Çetin',
+  'talha mubeen':'Talha Mubeen','murat tut':'Murat Tut',
+  'soo ling lim':'Soo Ling Lim','gamze savaş':'Gamze Savaş','gamze savas':'Gamze Savaş',
+  'claire eskander':'Claire Eskander','mesude gökpınar':'Mesude Gökpınar','mesude gokpinar':'Mesude Gökpınar',
+  'suche coşkun':'Suche Coşkun','suche coskun':'Suche Coşkun',
+  'efehan maleri':'Efehan Maleri','syed osama ali':'Syed Osama Ali',
+  'tunç karadağ':'Tunç Karadağ','tunc karadag':'Tunç Karadağ',
+};
+const N2D = {
+  'Burak Çetin':'AI/Science','Talha Mubeen':'Development','Laraib Haider':'PMO',
+  'Murat Tut':'Development','Soo Ling Lim':'AI/Science','Gamze Savaş':'Design',
+  'Claire Eskander':'Marketing','Mesude Gökpınar':'PMO','Suche Coşkun':'Marketing',
+  'Efehan Maleri':'Leadership','Syed Osama Ali':'Leadership','Tunç Karadağ':'Design',
+};
+function resolveName(raw) {
+  if (!raw || raw === 'Unassigned') return raw || 'Unassigned';
+  return E2N[raw.toLowerCase().trim()] || raw;
+}
+function resolveDept(name) {
+  return N2D[name] || 'Team';
+}
+
 function fmtDate(d) {
   if (!d) return '';
   try { return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
@@ -32,22 +61,26 @@ async function fetchLinear() {
       body: JSON.stringify({ query: `{issues(first:100,filter:{completedAt:{gte:"${yStr}T00:00:00Z"}}){nodes{title assignee{name}project{name}}}}` })
     });
     const doneData = await doneRes.json();
-    const done = (doneData?.data?.issues?.nodes || []).map(i => ({
-      title: i.title, person: i.assignee?.name || 'Unassigned', dept: 'Development', project: i.project?.name || ''
-    }));
+    const done = (doneData?.data?.issues?.nodes || []).map(i => {
+      const name = resolveName(i.assignee?.name);
+      return { title: i.title, person: name, dept: resolveDept(name), project: i.project?.name || '' };
+    });
 
     const activeRes = await fetch('https://api.linear.app/graphql', {
       method: 'POST', headers: { 'Authorization': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: `{issues(first:150,filter:{state:{type:{in:["started","unstarted"]}}}){nodes{title assignee{name}state{name type}dueDate priority project{name}}}}` })
     });
     const activeData = await activeRes.json();
-    const active = (activeData?.data?.issues?.nodes || []).map(i => ({
-      title: i.title, person: i.assignee?.name || 'Unassigned', dept: 'Development',
-      project: i.project?.name || '', state: i.state?.type, dueDate: i.dueDate,
-      isOverdue: i.dueDate && i.dueDate < today,
-      isDueSoon: i.dueDate && i.dueDate >= today && i.dueDate <= soonStr,
-      isInProgress: i.state?.type === 'started'
-    }));
+    const active = (activeData?.data?.issues?.nodes || []).map(i => {
+      const name = resolveName(i.assignee?.name);
+      return {
+        title: i.title, person: name, dept: resolveDept(name),
+        project: i.project?.name || '', state: i.state?.type, dueDate: i.dueDate,
+        isOverdue: i.dueDate && i.dueDate < today,
+        isDueSoon: i.dueDate && i.dueDate >= today && i.dueDate <= soonStr,
+        isInProgress: i.state?.type === 'started'
+      };
+    });
 
     return { done, active, error: null };
   } catch (e) { return { done: [], active: [], error: e.message }; }
@@ -58,6 +91,8 @@ async function fetchAsana() {
   if (!token) return { done: [], active: [], error: 'No token' };
   try {
     const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().split('T')[0];
     const soon = new Date(); soon.setDate(soon.getDate() + 3);
     const soonStr = soon.toISOString().split('T')[0];
     let allDone = [], allActive = [];
@@ -72,11 +107,16 @@ async function fetchAsana() {
       const tasks = data?.data || [];
 
       tasks.forEach(t => {
+        const name = resolveName(t.assignee?.name);
         if (t.completed) {
-          allDone.push({ title: t.name, person: t.assignee?.name || 'Unassigned', dept, project: projName });
+          // FIX #3: Only count as "done" if completed since yesterday
+          const completedDate = t.completed_at ? t.completed_at.split('T')[0] : null;
+          if (completedDate && completedDate >= yStr) {
+            allDone.push({ title: t.name, person: name, dept, project: projName });
+          }
         } else {
           allActive.push({
-            title: t.name, person: t.assignee?.name || 'Unassigned', dept,
+            title: t.name, person: name, dept,
             project: projName, dueDate: t.due_on,
             isOverdue: t.due_on && t.due_on < today,
             isDueSoon: t.due_on && t.due_on >= today && t.due_on <= soonStr,
