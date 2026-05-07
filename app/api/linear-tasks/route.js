@@ -74,9 +74,6 @@ export async function GET() {
       issues.forEach(i => {
         const proj = i.project?.name || 'Other';
 
-        // Exclude internal PMO board
-        if (proj.toLowerCase().includes('pmo') || proj.toLowerCase().includes('operations')) return;
-
         if (!byProject[proj]) byProject[proj] = { source: 'Linear', tasks: [] };
 
         let status = 'To Do';
