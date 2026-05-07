@@ -8,7 +8,6 @@ const STS=["To Do","Doing","Done"];const PRI_OPT=["Low","Medium","High"];const D
 const RC={"On track":{bg:"#DCFCE7",c:"#166534"},"At risk":{bg:"#FEF3C7",c:"#D97706"},"Off track":{bg:"#FEE2E2",c:"#DC2626"}};
 const PC={Low:{bg:"#DBEAFE",c:"#1D4ED8"},Medium:{bg:"#FEF3C7",c:"#D97706"},High:{bg:"#FEE2E2",c:"#DC2626"}};
 const FC={green:"#16A34A",yellow:"#D97706",red:"#DC2626"};
-const MT_CLR={Weekly:"#3B82F6",Milestone:"#F59E0B","Bi-weekly":"#6366F1",Monthly:"#8B5CF6"};
 const ANCH=[{d:"2026-05-07",l:"Hatchery",c:"#6366F1"},{d:"2026-05-21",l:"GTM",c:"#F59E0B"},{d:"2026-06-10",l:"Launch",c:"#10B981"},{d:"2026-07-01",l:"Pitch Day",c:"#EF4444"}];
 
 // Robust date parsing for Supabase dates
@@ -176,11 +175,11 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);
-  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
+  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");
-  const PASS="11223344";
+  const PASS=process.env.NEXT_PUBLIC_DASHBOARD_PASS||"11223344";
 
   useEffect(()=>{if(typeof window!=='undefined'){if(localStorage.getItem('attimo_auth')==='true')setAuthed(true);const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
   const doLogin=()=>{if(pw===PASS){setAuthed(true);localStorage.setItem('attimo_auth','true');setPwErr(false)}else{setPwErr(true)}};
@@ -222,9 +221,17 @@ export default function Home(){
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
   const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"}];
 
-  // Timeline date calc constants
-  const TL_START="2026-04-25",TL_END="2026-07-05";
-  const TL_DAYS=daysB(TL_START,TL_END);
+  // Timeline window — auto-calculated from task dates, with sensible padding
+  const tlBounds=useMemo(()=>{
+    const dates=tasks.flatMap(t=>[t.start_date,t.end_date]).filter(Boolean).map(d=>String(d).split('T')[0]).sort();
+    if(dates.length<2)return{s:"2026-04-25",e:"2026-07-05"};
+    const earliest=dates[0];const latest=dates[dates.length-1];
+    const pad=d=>{const dt=pD(d);dt.setDate(dt.getDate()-7);return dt.toISOString().split('T')[0]};
+    const padE=d=>{const dt=pD(d);dt.setDate(dt.getDate()+14);return dt.toISOString().split('T')[0]};
+    return{s:pad(earliest),e:padE(latest)};
+  },[tasks]);
+  const TL_START=tlBounds.s,TL_END=tlBounds.e;
+  const TL_DAYS=daysB(TL_START,TL_END)||1;
 
   if(loading)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontSize:16,color:"var(--fg2)",background:"var(--bg)"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px"}}></div>Loading Attimo...</div></div>;
 
@@ -279,8 +286,8 @@ export default function Home(){
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Gantt Chart</div>
           <div style={{display:"flex",background:"var(--bg3)",borderRadius:8,padding:2}}>
-            <button onClick={()=>setGanttMode("company")} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="company"?"var(--fg)":"transparent",color:ganttMode==="company"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Company</button>
-            <button onClick={()=>{setGanttMode("department");if(!deptTasks){setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false);showToast("Loaded from Linear + Asana")}).catch(()=>setDeptLoading(false))}}} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="department"?"var(--fg)":"transparent",color:ganttMode==="department"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Department</button>
+            <button onClick={()=>{setGanttMode("company");setPersonFilter("all")}} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="company"?"var(--fg)":"transparent",color:ganttMode==="company"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Company</button>
+            <button onClick={()=>{setGanttMode("department");setPersonFilter("all");if(!deptTasks){setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false);showToast("Loaded from Linear + Asana")}).catch(()=>setDeptLoading(false))}}} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="department"?"var(--fg)":"transparent",color:ganttMode==="department"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Department</button>
           </div>
           <select value={personFilter} onChange={e=>setPersonFilter(e.target.value)} style={{border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",fontSize:11,background:"var(--bg2)",color:"var(--fg)",cursor:"pointer"}}>
             <option value="all">All People</option>
