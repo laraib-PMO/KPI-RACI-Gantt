@@ -1,4 +1,4 @@
-// ─── Name Resolution (consistent with page.jsx and digest) ───────────────────
+// ─── Name Resolution ─────────────────────────────────────────────────────────
 const E2N = {
   'burak':'Burak Çetin','talha':'Talha Mubeen','laraib':'Laraib Haider',
   'murat':'Murat Tut','sooling':'Soo Ling Lim','soo ling':'Soo Ling Lim',
@@ -18,7 +18,9 @@ function rN(raw) {
   return E2N[raw.toLowerCase().trim()] || raw;
 }
 
-// ─── Linear: paginated fetch (handles 250+ tickets) ─────────────────────────
+// ─── Linear: paginated fetch ─────────────────────────────────────────────────
+// Only fetches: started (Doing), completed (Done), unstarted (To Do)
+// Excludes: backlog (unplanned), triage (uncategorized), canceled
 async function fetchAllLinearIssues(key) {
   const all = [];
   let cursor = null;
@@ -28,7 +30,7 @@ async function fetchAllLinearIssues(key) {
     const afterClause = cursor ? `,after:"${cursor}"` : '';
     const query = `{
       issues(first:250${afterClause},filter:{
-        state:{type:{nin:["canceled","triage"]}},
+        state:{type:{in:["started","completed","unstarted"]}},
         project:{null:false}
       }){
         pageInfo { hasNextPage endCursor }
@@ -63,7 +65,7 @@ export async function GET() {
   const today = new Date().toISOString().split('T')[0];
   const byProject = {};
 
-  // ═══ FETCH LINEAR (all projects except Operations & PMO) ═══
+  // ═══ LINEAR ═══
   const linearKey = process.env.LINEAR_API_KEY;
   if (linearKey) {
     try {
@@ -72,16 +74,14 @@ export async function GET() {
       issues.forEach(i => {
         const proj = i.project?.name || 'Other';
 
-        // Exclude Operations & PMO (internal board, not product work)
+        // Exclude internal PMO board
         if (proj.toLowerCase().includes('pmo') || proj.toLowerCase().includes('operations')) return;
 
         if (!byProject[proj]) byProject[proj] = { source: 'Linear', tasks: [] };
 
-        // Status mapping from Linear state types
         let status = 'To Do';
         if (i.state?.type === 'started') status = 'Doing';
         if (i.state?.type === 'completed') status = 'Done';
-        // 'unstarted' stays as 'To Do', 'backlog' stays as 'To Do'
 
         byProject[proj].tasks.push({
           id: i.id,
@@ -95,10 +95,10 @@ export async function GET() {
           source: 'Linear'
         });
       });
-    } catch (e) { console.error('Linear error:', e); }
+    } catch (e) { console.error('Linear fetch error:', e); }
   }
 
-  // ═══ FETCH ASANA (Marketing + Design) ═══
+  // ═══ ASANA ═══
   const asanaToken = process.env.ASANA_TOKEN;
   if (asanaToken) {
     const asanaProjects = {
@@ -120,10 +120,8 @@ export async function GET() {
         if (!byProject[dept]) byProject[dept] = { source: 'Asana', tasks: [] };
 
         tasks.forEach(t => {
-          // Skip section headers (resource_subtype=section) and empty names
-          if (!t.name || t.resource_subtype === 'section') return;
-          // Also skip old-style section headers ending with ":"
-          if (t.name.endsWith(':')) return;
+          // Skip sections and empty names
+          if (!t.name || t.resource_subtype === 'section' || t.name.endsWith(':')) return;
 
           const status = t.completed ? 'Done' : (t.due_on ? 'Doing' : 'To Do');
 
@@ -138,7 +136,7 @@ export async function GET() {
             source: 'Asana'
           });
         });
-      } catch (e) { console.error('Asana error:', e); }
+      } catch (e) { console.error('Asana fetch error:', e); }
     }
   }
 
