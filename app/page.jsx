@@ -173,12 +173,15 @@ export default function Home(){
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[syncMsg,setSyncMsg]=useState("");const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
+  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");
   const PASS="11223344";
 
   useEffect(()=>{if(typeof window!=='undefined'&&localStorage.getItem('attimo_auth')==='true')setAuthed(true)},[]);
   const doLogin=()=>{if(pw===PASS){setAuthed(true);localStorage.setItem('attimo_auth','true');setPwErr(false)}else{setPwErr(true)}};
   const doLogout=()=>{setAuthed(false);localStorage.removeItem('attimo_auth')};
 
+  useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
+  const showToast=(msg)=>setToast(msg);
   useEffect(()=>{document.documentElement.setAttribute("data-theme",dark?"dark":"light")},[dark]);
 
   useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su]=await Promise.all([supabase.from('tasks').select('*').order('id'),supabase.from('raci').select('*').order('dept,id'),supabase.from('risks').select('*').order('id'),supabase.from('kpis').select('*').order('dept,id'),supabase.from('meetings').select('*').order('id'),supabase.from('roles').select('*').order('id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100)]);
@@ -207,7 +210,7 @@ export default function Home(){
   const deleteStandup=useCallback(async id=>{setStandups(p=>p.filter(s=>s.id!==id));await supabase.from('standups').delete().eq('id',id)},[]);
   const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
 
-  const doSync=async()=>{setSyncing(true);setSyncMsg("Syncing...");try{const res=await fetch('/api/sync',{method:'POST'});const data=await res.json();setSyncMsg("Done: "+(data.results?.map(r=>r.source+" "+r.status).join(', ')||'Synced'))}catch(e){setSyncMsg("Error: "+e.message)}setSyncing(false)};
+  const doSync=async()=>{setSyncing(true);setSyncMsg("Syncing...");showToast("Syncing...");try{const res=await fetch('/api/sync',{method:'POST'});const data=await res.json();const msg="Done: "+(data.results?.map(r=>r.source+" "+r.status).join(', ')||'Synced');setSyncMsg(msg);showToast("Sync complete")}catch(e){setSyncMsg("Error");showToast("Sync failed")}setSyncing(false)};
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
@@ -244,15 +247,14 @@ export default function Home(){
         <div className="glow-btn" style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:15,fontWeight:800}}>A</span></div>
         <span style={{fontSize:17,fontWeight:800,color:"#fff",letterSpacing:-.5}}>Attimo</span><span style={{color:"#475569"}}>|</span><span style={{fontSize:12,color:"#94A3B8"}}>Company Operations</span>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <button onClick={()=>setDark(!dark)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600,transition:"all .2s"}}>{dark?"☀ Light":"◑ Dark"}</button>
-        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:600}}>Logout</button>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={()=>setDark(!dark)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600}}>{dark?"Light":"Dark"}</button>
         <button onClick={doSync} disabled={syncing} style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
-        {syncMsg&&<span style={{fontSize:10,color:"#10B981"}}>{syncMsg}</span>}
         <div className="mob-hide" style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
           <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
           {stats.overdue>0&&<span style={{animation:"pulse 1.5s infinite"}}><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span>}
         </div>
+        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:600,marginLeft:4}}>Logout</button>
       </div>
     </div>
 
@@ -271,15 +273,19 @@ export default function Home(){
           <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Gantt Chart</div>
           <div style={{display:"flex",background:"var(--bg3)",borderRadius:8,padding:2}}>
             <button onClick={()=>setGanttMode("company")} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="company"?"var(--fg)":"transparent",color:ganttMode==="company"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Company</button>
-            <button onClick={()=>{setGanttMode("department");if(!deptTasks){setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false)}).catch(()=>setDeptLoading(false))}}} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="department"?"var(--fg)":"transparent",color:ganttMode==="department"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Department</button>
+            <button onClick={()=>{setGanttMode("department");if(!deptTasks){setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false);showToast("Loaded from Linear + Asana")}).catch(()=>setDeptLoading(false))}}} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:ganttMode==="department"?"var(--fg)":"transparent",color:ganttMode==="department"?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>Department</button>
           </div>
+          <select value={personFilter} onChange={e=>setPersonFilter(e.target.value)} style={{border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",fontSize:11,background:"var(--bg2)",color:"var(--fg)",cursor:"pointer"}}>
+            <option value="all">All People</option>
+            {[...new Set(tasks.map(t=>t.owner).filter(Boolean))].sort().map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
         </div>
         {ganttMode==="company"&&<button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button>}
-        {ganttMode==="department"&&<button onClick={()=>{setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false)}).catch(()=>setDeptLoading(false))}} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Refresh from Linear + Asana</button>}
+        {ganttMode==="department"&&<button onClick={()=>{setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false);showToast("Synced from Linear + Asana")}).catch(()=>{setDeptLoading(false);showToast("Sync failed")})}} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Refresh from Linear + Asana</button>}
       </div>
 
       {/* COMPANY GANTT */}
-      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)"}}>{STS.map(st=>{const items=tasks.filter(t=>t.status===st);return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
+      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)"}}>{STS.map(st=>{const items=tasks.filter(t=>t.status===st&&(personFilter==="all"||t.owner===personFilter));return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
         <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
         {items.map((t,idx)=>{const cl=CL[t.dept]||"#94A3B8";
           const startStr=String(t.start_date).split('T')[0];const endStr=String(t.end_date).split('T')[0];
@@ -369,6 +375,7 @@ export default function Home(){
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Daily Standup</div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setAddModal("standup")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Update</button>
+          <button onClick={()=>{showToast("Syncing standups...");fetch('/api/digest').then(r=>r.json()).then(()=>{showToast("Standup synced");supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})}).catch(()=>showToast("Sync failed"))}} style={{background:"var(--bg3)",color:"var(--fg)",border:"1px solid var(--border)",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Sync from Linear + Asana</button>
           <a href="https://attimo-labs.slack.com/archives/daily-standup" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>Open #daily-standup</a>
         </div>
       </div>
@@ -518,5 +525,8 @@ export default function Home(){
     {addModal==="role"&&<AddModal title="Add Role" fields={[{key:"title",label:"Role Title"},{key:"status",label:"Status",type:"select",options:["Not opened","Interviewing","Blocked","Filled"]},{key:"trigger_blocker",label:"Trigger / Blocker"},{key:"target_date",label:"Target Date"}]} onSave={addRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="meeting"&&<AddModal title="Add Meeting" fields={[{key:"type",label:"Type",type:"select",options:["Weekly","Milestone","Bi-weekly","Monthly"]},{key:"name",label:"Meeting Name"},{key:"schedule",label:"When"},{key:"duration",label:"Duration"},{key:"owner",label:"Owner"},{key:"attendees",label:"Attendees"}]} onSave={addMeeting} onClose={()=>setAddModal(null)}/>}
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
+
+    {/* Toast notification */}
+    {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
   </div>;
 }
