@@ -23,6 +23,12 @@ const N2D={'Burak Çetin':'AI/Science','Talha Mubeen':'Development','Laraib Haid
 const rN=r=>{if(!r)return'Unassigned';return E2N[r.toLowerCase().trim()]||r};
 const rND=r=>{const n=rN(r);const d=N2D[n];return d?n+' ('+d+')':n};
 
+// Attimo "o" mark SVG — used for favicon + login icon
+const LogoMark=({size=30,color="currentColor"})=><svg width={size} height={size} viewBox="430 375 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="504.18" cy="393.65" r="8.03" fill={color}/><path d="M490.83,382.15c1.35,1.35,1.55,4,2.11,5.77,2.56,8.04,6.64,12.36,14.2,15.98,7.61,3.64,12.42,4.43,13.02,14.46,1.71,28.51-24.66,50.67-52.46,44.07-15.87-3.77-28.81-17-31.71-33.14-4.99-27.8,17.24-51.03,44.91-49.58,2.38.12,8.27.79,9.93,2.45ZM455.55,402.01c-18.71,20.77-.51,52.82,26.81,48.36,20.55-3.35,30.96-27.28,19.6-44.75-10.44-16.06-33.6-17.84-46.41-3.61Z" fill={color}/></svg>;
+
+// Attimo full wordmark SVG — header
+const LogoFull=({height=22,color="currentColor"})=><svg height={height} viewBox="70 350 460 120" xmlns="http://www.w3.org/2000/svg"><path fill={color} d="M75.04,420.79c0-24.26,18.11-41.17,41.17-41.17s40.99,16.23,40.99,43.56v36.38c0,2.22-1.2,3.42-3.42,3.42h-4.61c-2.22,0-3.42-1.2-3.42-3.42v-36.04c0-21.18-12.47-32.8-29.55-32.8-15.89,0-29.38,11.44-29.38,29.89,0,16.4,10.76,31.43,33.14,31.43h8.71c2.39,0,3.42,1.54,2.56,3.76l-1.54,4.44c-.68,2.05-2.05,2.73-3.76,2.73h-7.17c-24.43,0-43.73-17.08-43.73-42.19Z"/><path fill={color} d="M173.26,434.8v-69.69c0-2.22,1.2-3.42,3.42-3.42h4.61c2.22,0,3.42,1.2,3.42,3.42v16.4h23.74c2.22,0,3.42,1.2,3.42,3.42v4.1c0,2.22-1.2,3.42-3.42,3.42h-23.74v41.51c0,13.32,7,18.11,17.76,18.11h7.69c2.39,0,3.59,1.54,2.73,3.93l-1.54,4.27c-.68,1.88-2.05,2.73-3.93,2.73h-6.49c-17.94,0-27.67-10.42-27.67-28.18Z"/><path fill={color} d="M223.99,434.8v-69.69c0-2.22,1.2-3.42,3.42-3.42h4.61c2.22,0,3.42,1.2,3.42,3.42v16.4h23.74c2.22,0,3.42,1.2,3.42,3.42v4.1c0,2.22-1.2,3.42-3.42,3.42h-23.74v41.51c0,13.32,7,18.11,17.76,18.11h7.69c2.39,0,3.59,1.54,2.73,3.93l-1.54,4.27c-.68,1.88-2.05,2.73-3.93,2.73h-6.49c-17.94,0-27.67-10.42-27.67-28.18Z"/><circle fill={color} cx="281.04" cy="364.39" r="8.03"/><rect fill={color} x="275.23" y="381.51" width="11.44" height="81.48" rx="3.42" ry="3.42"/><path fill={color} d="M335.36,379.63c12.13,0,21.86,5.98,27.16,15.37,5.47-9.57,14.52-15.37,26.65-15.37,18.11,0,31.6,13.15,31.6,33.14v46.8c0,2.22-1.2,3.42-3.42,3.42h-4.61c-2.22,0-3.42-1.2-3.42-3.42v-46.29c0-13.15-7.69-22.72-20.67-22.72s-20.67,9.57-20.67,22.72v46.29c0,2.22-1.2,3.42-3.42,3.42h-4.61c-2.22,0-3.42-1.2-3.42-3.42v-46.29c0-13.15-7.86-22.72-20.67-22.72s-20.84,9.57-20.84,22.72v46.29c0,2.22-1.2,3.42-3.42,3.42h-4.61c-2.22,0-3.42-1.2-3.42-3.42v-46.8c0-20.16,13.67-33.14,31.77-33.14Z"/><circle fill={color} cx="512.21" cy="393.65" r="8.03"/><path fill={color} d="M490.83,382.15c1.35,1.35,1.55,4,2.11,5.77,2.56,8.04,6.64,12.36,14.2,15.98,7.61,3.64,12.42,4.43,13.02,14.46,1.71,28.51-24.66,50.67-52.46,44.07-15.87-3.77-28.81-17-31.71-33.14-4.99-27.8,17.24-51.03,44.91-49.58,2.38.12,8.27.79,9.93,2.45ZM455.55,402.01c-18.71,20.77-.51,52.82,26.81,48.36,20.55-3.35,30.96-27.28,19.6-44.75-10.44-16.06-33.6-17.84-46.41-3.61Z"/></svg>;
+
 const Bdg=({bg,c,children,onClick})=><span onClick={onClick} style={{background:bg,color:c,padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:700,whiteSpace:"nowrap",cursor:onClick?"pointer":"default",transition:"all .2s"}}>{children}</span>;
 
 const CSS=`
@@ -189,6 +195,19 @@ export default function Home(){
   const showToast=(msg)=>setToast(msg);
   useEffect(()=>{document.documentElement.setAttribute("data-theme",dark?"dark":"light")},[dark]);
 
+  // Generate favicon from the "o" mark
+  useEffect(()=>{
+    const cvs=document.createElement('canvas');cvs.width=64;cvs.height=64;const ctx=cvs.getContext('2d');
+    ctx.fillStyle=dark?'#1E293B':'#ffffff';ctx.fillRect(0,0,64,64);ctx.fillStyle=dark?'#F1F5F9':'#324047';
+    // Draw simplified "o" mark
+    ctx.beginPath();ctx.arc(30,36,22,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=dark?'#1E293B':'#ffffff';ctx.beginPath();ctx.arc(30,36,15,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=dark?'#F1F5F9':'#324047';ctx.beginPath();ctx.arc(48,16,7,0,Math.PI*2);ctx.fill();
+    const link=document.querySelector("link[rel='icon']")||document.createElement('link');
+    link.rel='icon';link.href=cvs.toDataURL();document.head.appendChild(link);
+    document.title='Attimo Ops Hub';
+  },[dark]);
+
   useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su]=await Promise.all([supabase.from('tasks').select('*').order('id'),supabase.from('raci').select('*').order('dept,id'),supabase.from('risks').select('*').order('id'),supabase.from('kpis').select('*').order('dept,id'),supabase.from('meetings').select('*').order('id'),supabase.from('roles').select('*').order('id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100)]);
     if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);setLoading(false)}la();
     const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).subscribe();
@@ -233,14 +252,14 @@ export default function Home(){
   const TL_START=tlBounds.s,TL_END=tlBounds.e;
   const TL_DAYS=daysB(TL_START,TL_END)||1;
 
-  if(loading)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontSize:16,color:"var(--fg2)",background:"var(--bg)"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px"}}></div>Loading Attimo...</div></div>;
+  if(loading)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontSize:16,color:"var(--fg2)",background:"var(--bg)"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px"}}></div><LogoFull height={18} color="var(--fg2)"/></div></div>;
 
   if(!authed)return <div style={{fontFamily:"'Inter',system-ui",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)"}}>
     <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
     <div className="asc" style={{background:"#1E293B",borderRadius:20,padding:40,width:"min(400px,90vw)",textAlign:"center",border:"1px solid #334155",boxShadow:"0 25px 60px rgba(0,0,0,.5)"}}>
-      <div style={{width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><span style={{color:"#fff",fontSize:24,fontWeight:800}}>A</span></div>
-      <h1 style={{color:"#F1F5F9",fontSize:22,fontWeight:800,margin:"0 0 4px"}}>Attimo</h1>
+      <div style={{width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><LogoMark size={32} color="#fff"/></div>
+      <h1 style={{color:"#F1F5F9",fontSize:22,fontWeight:800,margin:"0 0 4px"}}><LogoFull height={20} color="#F1F5F9"/></h1>
       <p style={{color:"#94A3B8",fontSize:13,margin:"0 0 24px"}}>Company Operations Hub</p>
       <input type="password" placeholder="Enter access code" value={pw} onChange={e=>{setPw(e.target.value);setPwErr(false)}} onKeyDown={e=>{if(e.key==="Enter")doLogin()}}
         style={{width:"100%",padding:"12px 16px",borderRadius:10,border:pwErr?"2px solid #EF4444":"1px solid #475569",background:"#0F172A",color:"#F1F5F9",fontSize:14,boxSizing:"border-box",outline:"none",textAlign:"center",letterSpacing:4}}/>
@@ -257,8 +276,8 @@ export default function Home(){
     {/* Header */}
     <div style={{background:"var(--hdr)",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div className="glow-btn" style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:15,fontWeight:800}}>A</span></div>
-        <span style={{fontSize:17,fontWeight:800,color:"#fff",letterSpacing:-.5}}>Attimo</span><span style={{color:"#475569"}}>|</span><span style={{fontSize:12,color:"#94A3B8"}}>Company Operations</span>
+        <div className="glow-btn" style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><LogoMark size={22} color="#fff"/></div>
+        <LogoFull height={18} color="#fff"/><span style={{color:"#475569"}}>|</span><span style={{fontSize:12,color:"#94A3B8"}}>Company Operations</span>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
         <button onClick={()=>setDark(!dark)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600}}>{dark?"Light":"Dark"}</button>
