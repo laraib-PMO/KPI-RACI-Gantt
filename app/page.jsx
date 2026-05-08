@@ -194,6 +194,9 @@ export default function Home(){
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
+  const roleRef=useRef(null);roleRef.current=role;
+  const isEditor=()=>['admin','editor'].includes(roleRef.current);
+  const isAdmin=()=>roleRef.current==='admin';
 
   // Auth: listen for session, look up role
   useEffect(()=>{
@@ -239,24 +242,24 @@ export default function Home(){
     const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).subscribe();
     return()=>supabase.removeChannel(ch)},[]);
 
-  const updateTask=useCallback(async(id,u)=>{if(!canEdit)return;notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
-  const deleteTask=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
-  const addTask=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
-  const addRaci=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}notify("added","raci",v.task);const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
-  const deleteRaci=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
-  const updateRaci=useCallback(async(id,u)=>{if(!canEdit)return;setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
-  const addRisk=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}notify("added","risks",v.description);const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
-  const updateRisk=useCallback(async(id,u)=>{if(!canEdit)return;setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
-  const deleteRisk=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
-  const addKpi=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('kpis').insert({dept:v.dept||"PMO",name:v.name||"",target:v.target||"",current_value:v.current_value||"",flag:v.flag||"yellow",review_rhythm:v.review_rhythm||"Weekly"}).select();if(data)setKpis(p=>[...p,...data]);setAddModal(null)},[]);
-  const updateKpi=useCallback(async(id,u)=>{if(!canEdit)return;notify("updated","kpis",JSON.stringify(u));setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
-  const addRole=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
-  const updateRole=useCallback(async(id,u)=>{if(!canEdit)return;setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
-  const deleteRole=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
-  const addMeeting=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
-  const deleteMeeting=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
-  const updateMeeting=useCallback(async(id,u)=>{if(!canEdit)return;setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
-  const addStandup=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
+  const updateTask=useCallback(async(id,u)=>{if(!isEditor())return;notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
+  const deleteTask=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
+  const addTask=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
+  const addRaci=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}notify("added","raci",v.task);const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
+  const deleteRaci=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
+  const updateRaci=useCallback(async(id,u)=>{if(!isEditor())return;setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
+  const addRisk=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}notify("added","risks",v.description);const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
+  const updateRisk=useCallback(async(id,u)=>{if(!isEditor())return;setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
+  const deleteRisk=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
+  const addKpi=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const{data}=await supabase.from('kpis').insert({dept:v.dept||"PMO",name:v.name||"",target:v.target||"",current_value:v.current_value||"",flag:v.flag||"yellow",review_rhythm:v.review_rhythm||"Weekly"}).select();if(data)setKpis(p=>[...p,...data]);setAddModal(null)},[]);
+  const updateKpi=useCallback(async(id,u)=>{if(!isEditor())return;notify("updated","kpis",JSON.stringify(u));setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
+  const addRole=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
+  const updateRole=useCallback(async(id,u)=>{if(!isEditor())return;setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
+  const deleteRole=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
+  const addMeeting=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
+  const deleteMeeting=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
+  const updateMeeting=useCallback(async(id,u)=>{if(!isEditor())return;setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
+  const addStandup=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
   const deleteStandup=useCallback(async id=>{setStandups(p=>p.filter(s=>s.id!==id));await supabase.from('standups').delete().eq('id',id)},[]);
   const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
 
@@ -271,27 +274,32 @@ export default function Home(){
   const deleteUserRole=useCallback(async id=>{if(role!=='admin')return;setUserRoles(p=>p.filter(r=>r.id!==id));await supabase.from('user_roles').delete().eq('id',id)},[role]);
 
   // Performance CRUD
-  const addPerf=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('performance').insert({person:v.person||'',period:v.period||'',goals:v.goals||'',status:'draft'}).select();if(data)setPerf(p=>[...data,...p]);setAddModal(null)},[]);
-  const updatePerf=useCallback(async(id,u)=>{if(!canEdit){showToast("View-only access");return}setPerf(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('performance').update({...u,updated_at:new Date().toISOString()}).eq('id',id)},[]);
-  const deletePerf=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
+  const addPerf=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const{data}=await supabase.from('performance').insert({person:v.person||'',period:v.period||'',goals:v.goals||'',status:'draft'}).select();if(data)setPerf(p=>[...data,...p]);setAddModal(null)},[]);
+  const updatePerf=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access");return}setPerf(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('performance').update({...u,updated_at:new Date().toISOString()}).eq('id',id)},[]);
+  const deletePerf=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
 
   // Leave CRUD
-  const addLeave=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const s=v.start_date;const e=v.end_date||v.start_date;const d=s&&e?Math.max(1,daysB(s,e)+1):1;const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:v.leave_type||'annual',start_date:s,end_date:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",v.leave_type+" "+s);setAddModal(null)},[user]);
-  const updateLeave=useCallback(async(id,u)=>{if(!canEdit){showToast("View-only access");return}setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status)notify("updated","leave",u.status)},[]);
-  const deleteLeave=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
+  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const s=v.start_date;const e=v.end_date||v.start_date;const d=s&&e?Math.max(1,daysB(s,e)+1):1;const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:v.leave_type||'annual',start_date:s,end_date:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",v.leave_type+" "+s);setAddModal(null)},[user]);
+  const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access");return}setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status)notify("updated","leave",u.status)},[]);
+  const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
   // Profile picture upload
-  const uploadAvatar=useCallback(async(roleId,file)=>{if(!file||role!=='admin')return;
+  const uploadAvatar=useCallback(async(roleId,file)=>{if(!file)return;
+    const me=userRoles.find(r=>r.email===user?.email);
+    const isSelf=me?.id===roleId;
+    if(!isSelf&&role!=='admin'){showToast("Can only update your own photo");return}
     const ext=file.name.split('.').pop();const path=`avatars/${roleId}.${ext}`;
     const{error}=await supabase.storage.from('avatars').upload(path,file,{upsert:true});
     if(error){showToast("Upload failed: "+error.message);return}
     const{data:{publicUrl}}=supabase.storage.from('avatars').getPublicUrl(path);
-    await updateUserRole(roleId,{avatar_url:publicUrl});showToast("Photo updated");
-  },[role]);
+    await supabase.from('user_roles').update({avatar_url:publicUrl}).eq('id',roleId);
+    setUserRoles(p=>p.map(r=>r.id===roleId?{...r,avatar_url:publicUrl}:r));
+    showToast("Photo updated");
+  },[role,user,userRoles]);
 
   // Drag reorder — swaps sort_order between two rows
   const reorder=useCallback(async(table,items,setItems,fromId,toId)=>{
-    if(!canEdit||fromId===toId)return;
+    if(!isEditor()||fromId===toId)return;
     const arr=[...items];const fi=arr.findIndex(x=>x.id===fromId);const ti=arr.findIndex(x=>x.id===toId);
     if(fi<0||ti<0)return;
     const[moved]=arr.splice(fi,1);arr.splice(ti,0,moved);
@@ -370,11 +378,16 @@ export default function Home(){
           <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
           {stats.overdue>0&&<span style={{animation:"pulse 1.5s infinite"}}><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span>}
         </div>
-        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:6,marginLeft:4}}>
-          <span style={{width:18,height:18,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:"#fff"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>
-          <span className="mob-hide">{user?.user_metadata?.full_name||user?.email?.split("@")[0]}</span>
-          <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
-        </button>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:4}}>
+          <label style={{cursor:"pointer",position:"relative"}}>
+            <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const me=userRoles.find(r=>r.email===user?.email);if(me)uploadAvatar(me.id,f);else showToast("Your email not in user roles yet")}}/>
+            {(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.avatar_url?<img src={me.avatar_url} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.2)"}}/>:<span style={{width:26,height:26,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",border:"2px solid rgba(255,255,255,.2)"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>})()}
+          </label>
+          <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
+            <span className="mob-hide">{user?.user_metadata?.full_name||user?.email?.split("@")[0]}</span>
+            <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
+          </button>
+        </div>
         {role==='admin'&&<button onClick={()=>setView("settings")} style={{background:view==="settings"?"rgba(59,130,246,.3)":"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 8px",cursor:"pointer",color:"#94A3B8",fontSize:14,lineHeight:1,marginLeft:2}} title="Settings">&#9881;</button>}
       </div>
     </div>
