@@ -179,7 +179,11 @@ function CalendarView({tasks,onSelect}){
   </div>;
 }
 
-function Tbl({headers,rows}){return <div style={{border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}} className="af"><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"var(--bg3)"}}>{headers.map(h=><th key={h} style={{padding:"10px 8px",textAlign:"left",fontWeight:600,color:"var(--fg2)",fontSize:11}}>{h}</th>)}</tr></thead><tbody>{rows.map((row,ri)=><tr key={ri} className="rh" style={{borderBottom:"1px solid var(--border)"}}>{row.map((cell,ci)=><td key={ci} style={{padding:"8px",color:"var(--fg)"}}>{cell}</td>)}</tr>)}</tbody></table></div>}
+function Tbl({headers,rows,ids,onReorder}){const[dI,setDI]=useState(null);const[oI,setOI]=useState(null);
+  return <div style={{border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}} className="af"><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"var(--bg3)"}}>{onReorder&&<th style={{width:28}}></th>}{headers.map(h=><th key={h} style={{padding:"10px 8px",textAlign:"left",fontWeight:600,color:"var(--fg2)",fontSize:11}}>{h}</th>)}</tr></thead><tbody>{rows.map((row,ri)=><tr key={ri} className="rh" style={{borderBottom:"1px solid var(--border)",background:oI===ri?"rgba(59,130,246,.1)":"transparent",cursor:onReorder?"grab":"default"}}
+    draggable={!!onReorder} onDragStart={()=>setDI(ri)} onDragOver={e=>{e.preventDefault();setOI(ri)}} onDragEnd={()=>{setOI(null)}} onDrop={()=>{setOI(null);if(dI!==null&&dI!==ri&&ids&&onReorder)onReorder(ids[dI],ids[ri])}}>
+    {onReorder&&<td style={{padding:"4px 6px",color:"var(--fg2)",cursor:"grab",fontSize:14,userSelect:"none"}}>⠿</td>}
+    {row.map((cell,ci)=><td key={ci} style={{padding:"8px",color:"var(--fg)"}}>{cell}</td>)}</tr>)}</tbody></table></div>}
 function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]||"#94A3B8")+"15",color:CL[dept],padding:"8px 12px",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+(CL[dept]||"#94A3B8")}}>{dept}</div>}
 
 export default function Home(){
@@ -230,22 +234,22 @@ export default function Home(){
     document.title='Attimo Ops Hub';
   },[dark]);
 
-  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su]=await Promise.all([supabase.from('tasks').select('*').order('id'),supabase.from('raci').select('*').order('dept,id'),supabase.from('risks').select('*').order('id'),supabase.from('kpis').select('*').order('dept,id'),supabase.from('meetings').select('*').order('id'),supabase.from('roles').select('*').order('id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100)]);
-    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);setLoading(false)}la();
+  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at')]);
+    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);setLoading(false)}la();
     const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).subscribe();
     return()=>supabase.removeChannel(ch)},[]);
 
-  const updateTask=useCallback(async(id,u)=>{setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
+  const updateTask=useCallback(async(id,u)=>{notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
   const deleteTask=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
   const addTask=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
-  const addRaci=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
+  const addRaci=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}notify("added","raci",v.task);const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteRaci=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
   const updateRaci=useCallback(async(id,u)=>{setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
-  const addRisk=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
+  const addRisk=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}notify("added","risks",v.description);const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
   const updateRisk=useCallback(async(id,u)=>{setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
   const deleteRisk=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
   const addKpi=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('kpis').insert({dept:v.dept||"PMO",name:v.name||"",target:v.target||"",current_value:v.current_value||"",flag:v.flag||"yellow",review_rhythm:v.review_rhythm||"Weekly"}).select();if(data)setKpis(p=>[...p,...data]);setAddModal(null)},[]);
-  const updateKpi=useCallback(async(id,u)=>{setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
+  const updateKpi=useCallback(async(id,u)=>{notify("updated","kpis",JSON.stringify(u));setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
   const addRole=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
   const updateRole=useCallback(async(id,u)=>{setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
   const deleteRole=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
@@ -256,11 +260,31 @@ export default function Home(){
   const deleteStandup=useCallback(async id=>{setStandups(p=>p.filter(s=>s.id!==id));await supabase.from('standups').delete().eq('id',id)},[]);
   const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
 
+  // Slack edit notification — fires on any editor action
+  const notify=useCallback(async(action,table,detail)=>{
+    try{await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:user?.user_metadata?.full_name||user?.email,action,table,detail})})}catch{}
+  },[user]);
+
+  // User roles CRUD (admin only)
+  const addUserRole=useCallback(async v=>{if(role!=='admin')return;const{data}=await supabase.from('user_roles').insert({email:v.email||'',name:v.name||'',role:v.role||'viewer',dept:v.dept||'Team'}).select();if(data)setUserRoles(p=>[...p,...data]);setAddModal(null)},[role]);
+  const updateUserRole=useCallback(async(id,u)=>{if(role!=='admin')return;setUserRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('user_roles').update(u).eq('id',id)},[role]);
+  const deleteUserRole=useCallback(async id=>{if(role!=='admin')return;setUserRoles(p=>p.filter(r=>r.id!==id));await supabase.from('user_roles').delete().eq('id',id)},[role]);
+
+  // Drag reorder — swaps sort_order between two rows
+  const reorder=useCallback(async(table,items,setItems,fromId,toId)=>{
+    if(!canEdit||fromId===toId)return;
+    const arr=[...items];const fi=arr.findIndex(x=>x.id===fromId);const ti=arr.findIndex(x=>x.id===toId);
+    if(fi<0||ti<0)return;
+    const[moved]=arr.splice(fi,1);arr.splice(ti,0,moved);
+    const updated=arr.map((item,i)=>({...item,sort_order:i}));setItems(updated);
+    for(const item of updated){await supabase.from(table).update({sort_order:item.sort_order}).eq('id',item.id)}
+  },[canEdit]);
+
   const doSync=async()=>{setSyncing(true);showToast("Syncing...");try{const res=await fetch('/api/sync',{method:'POST'});await res.json();const now=new Date().toLocaleString('en-GB',{timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'});setLastSync(now);localStorage.setItem('attimo_last_sync',now);showToast("Sync complete — "+now);if(deptTasks)fetch('/api/linear-tasks').then(r=>r.json()).then(d=>setDeptTasks(d)).catch(()=>{})}catch(e){showToast("Sync failed")}setSyncing(false)};
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"}];
+  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"},...(role==='admin'?[{id:"settings",l:"Settings"}]:[])];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -431,14 +455,16 @@ export default function Home(){
                     // No date: spread evenly across timeline based on index
                     leftPct=(idx/Math.max(items.length,1))*70+5;widthPct=8;dateLabel="no date";
                   }
-                  return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>t.url&&window.open(t.url,'_blank')}>
+                  const noDate=!hasDue&&t.status!=="Done";
+                  return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")+(noDate?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>t.url&&window.open(t.url,'_blank')}>
                     <div style={{width:"clamp(120px,25vw,220px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                      <div style={{width:20,height:20,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{dn?.[0]}</span></div>
-                      <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.title}</span>
+                      <div style={{width:20,height:20,borderRadius:"50%",background:noDate?"#EF4444":cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{dn?.[0]}</span></div>
+                      <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:noDate?"#EF4444":"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.title}</span>
+                      {noDate&&<span style={{fontSize:7,color:"#EF4444",background:"#FEE2E2",padding:"1px 4px",borderRadius:3,flexShrink:0,fontWeight:700}}>NO DATE</span>}
                       {t.identifier&&<span style={{fontSize:7,color:"var(--fg2)",background:"var(--bg3)",padding:"1px 3px",borderRadius:3,flexShrink:0,fontFamily:"monospace"}}>{t.identifier}</span>}
                     </div>
                     <div style={{flex:1,height:26,background:"var(--bg3)",borderRadius:6,position:"relative",overflow:"hidden"}}>
-                      <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:od?"linear-gradient(90deg,#EF4444,#F87171)":t.status==="Done"?"linear-gradient(90deg,#10B981,#34D399)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:hasDue?(t.status==="Done"?.3:.9):(t.status==="Done"?.15:.4),display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
+                      <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:noDate?"linear-gradient(90deg,#EF4444,#F87171)":od?"linear-gradient(90deg,#EF4444,#F87171)":t.status==="Done"?"linear-gradient(90deg,#10B981,#34D399)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:hasDue?(t.status==="Done"?.3:.9):(t.status==="Done"?.15:.6),display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
                         <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden"}}>{dateLabel}</span>
                       </div>
                     </div>
@@ -569,13 +595,13 @@ export default function Home(){
     {/* ═══ RISKS ═══ */}
     {view==="risk"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Risk Register</div><button onClick={()=>setAddModal("risk")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Risk</button></div>
-      <Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation","Linked To",""]} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>deleteRisk(r.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>
+      <Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation","Linked To",""]} ids={risks.map(r=>r.id)} onReorder={(a,b)=>reorder("risks",risks,setRisks,a,b)} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>deleteRisk(r.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>
     </div>}
 
     {/* ═══ OPEN ROLES (dynamic from DB) ═══ */}
     {view==="roles"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Open Hiring Positions</div><button onClick={()=>setAddModal("role")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Role</button></div>
-      <Tbl headers={["Role","Status","Trigger / Blocker","Target",""]} rows={roles.map(r=>[
+      <Tbl headers={["Role","Status","Trigger / Blocker","Target",""]} ids={roles.map(r=>r.id)} onReorder={(a,b)=>reorder("roles",roles,setRoles,a,b)} rows={roles.map(r=>[
         <InEdit value={r.title} onChange={v=>updateRole(r.id,{title:v})}/>,
         <InEdit value={r.status} onChange={v=>updateRole(r.id,{status:v})} type="select" options={["Not opened","Interviewing","Blocked","Filled"]}/>,
         <InEdit value={r.trigger_blocker} onChange={v=>updateRole(r.id,{trigger_blocker:v})}/>,
@@ -633,6 +659,27 @@ export default function Home(){
       </div>}
     </div>}
 
+    {/* Settings — Admin Only */}
+    {view==="settings"&&role==="admin"&&<div className="af">
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div><button className="act-add" onClick={()=>setAddModal("userrole")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add User</button></div>
+      <p style={{fontSize:11,color:"var(--fg2)",marginBottom:12}}>Controls who can view, edit, or delete data. Changes take effect on next login.</p>
+      <Tbl headers={["Email","Name","Role","Department",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
+        <InEdit value={r.email} onChange={v=>updateUserRole(r.id,{email:v})}/>,
+        <InEdit value={r.name} onChange={v=>updateUserRole(r.id,{name:v})}/>,
+        <InEdit value={r.role} onChange={v=>updateUserRole(r.id,{role:v})} type="select" options={["admin","editor","viewer"]}/>,
+        <InEdit value={r.dept||""} onChange={v=>updateUserRole(r.id,{dept:v})}/>,
+        <button onClick={()=>deleteUserRole(r.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+      ])}/>
+      <div style={{marginTop:20,padding:16,background:"var(--bg3)",borderRadius:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Role Permissions</div>
+        <div style={{fontSize:11,color:"var(--fg2)",lineHeight:1.8}}>
+          <b style={{color:"#3B82F6"}}>admin</b> — Full access: view, add, edit, delete, manage users<br/>
+          <b style={{color:"#F59E0B"}}>editor</b> — Can view, add, and edit. Cannot delete. Edits trigger Slack notifications.<br/>
+          <b style={{color:"#94A3B8"}}>viewer</b> — Read-only access. No add, edit, or delete buttons visible.
+        </div>
+      </div>
+    </div>}
+
     </div>
     <TicketPopup task={sel} tasks={tasks} onClose={()=>setSel(null)} onUpdate={updateTask} onDelete={deleteTask}/>
     {addModal==="task"&&<AddModal title="Add Task" fields={[{key:"name",label:"Task Name",placeholder:"e.g. Landing page"},{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"owner",label:"Owner"},{key:"start_date",label:"Start",type:"date"},{key:"end_date",label:"End",type:"date"},{key:"priority",label:"Priority",type:"select",options:PRI_OPT}]} onSave={addTask} onClose={()=>setAddModal(null)}/>}
@@ -642,6 +689,7 @@ export default function Home(){
     {addModal==="role"&&<AddModal title="Add Role" fields={[{key:"title",label:"Role Title"},{key:"status",label:"Status",type:"select",options:["Not opened","Interviewing","Blocked","Filled"]},{key:"trigger_blocker",label:"Trigger / Blocker"},{key:"target_date",label:"Target Date"}]} onSave={addRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="meeting"&&<AddModal title="Add Meeting" fields={[{key:"type",label:"Type",type:"select",options:["Weekly","Milestone","Bi-weekly","Monthly"]},{key:"name",label:"Meeting Name"},{key:"schedule",label:"When"},{key:"duration",label:"Duration"},{key:"owner",label:"Owner"},{key:"attendees",label:"Attendees"}]} onSave={addMeeting} onClose={()=>setAddModal(null)}/>}
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
+    {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
 
     {/* Toast notification */}
     {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
