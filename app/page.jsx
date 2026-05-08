@@ -187,7 +187,7 @@ function Tbl({headers,rows,ids,onReorder}){const[dI,setDI]=useState(null);const[
 function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]||"#94A3B8")+"15",color:CL[dept],padding:"8px 12px",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+(CL[dept]||"#94A3B8")}}>{dept}</div>}
 
 export default function Home(){
-  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);
+  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
@@ -234,28 +234,28 @@ export default function Home(){
     document.title='Attimo Ops Hub';
   },[dark]);
 
-  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at')]);
-    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);setLoading(false)}la();
+  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur,pf,lv]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at'),supabase.from('performance').select('*').order('created_at',{ascending:false}),supabase.from('leaves').select('*').order('start_date',{ascending:false})]);
+    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);if(pf.data)setPerf(pf.data);if(lv.data)setLeaves(lv.data);setLoading(false)}la();
     const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).subscribe();
     return()=>supabase.removeChannel(ch)},[]);
 
-  const updateTask=useCallback(async(id,u)=>{notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
+  const updateTask=useCallback(async(id,u)=>{if(!canEdit)return;notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
   const deleteTask=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
   const addTask=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
   const addRaci=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}notify("added","raci",v.task);const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteRaci=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
-  const updateRaci=useCallback(async(id,u)=>{setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
+  const updateRaci=useCallback(async(id,u)=>{if(!canEdit)return;setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
   const addRisk=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}notify("added","risks",v.description);const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
-  const updateRisk=useCallback(async(id,u)=>{setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
+  const updateRisk=useCallback(async(id,u)=>{if(!canEdit)return;setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
   const deleteRisk=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
   const addKpi=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('kpis').insert({dept:v.dept||"PMO",name:v.name||"",target:v.target||"",current_value:v.current_value||"",flag:v.flag||"yellow",review_rhythm:v.review_rhythm||"Weekly"}).select();if(data)setKpis(p=>[...p,...data]);setAddModal(null)},[]);
-  const updateKpi=useCallback(async(id,u)=>{notify("updated","kpis",JSON.stringify(u));setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
+  const updateKpi=useCallback(async(id,u)=>{if(!canEdit)return;notify("updated","kpis",JSON.stringify(u));setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
   const addRole=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
-  const updateRole=useCallback(async(id,u)=>{setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
+  const updateRole=useCallback(async(id,u)=>{if(!canEdit)return;setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
   const deleteRole=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
   const addMeeting=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteMeeting=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
-  const updateMeeting=useCallback(async(id,u)=>{setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
+  const updateMeeting=useCallback(async(id,u)=>{if(!canEdit)return;setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
   const addStandup=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
   const deleteStandup=useCallback(async id=>{setStandups(p=>p.filter(s=>s.id!==id));await supabase.from('standups').delete().eq('id',id)},[]);
   const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
@@ -269,6 +269,25 @@ export default function Home(){
   const addUserRole=useCallback(async v=>{if(role!=='admin')return;const{data}=await supabase.from('user_roles').insert({email:v.email||'',name:v.name||'',role:v.role||'viewer',dept:v.dept||'Team'}).select();if(data)setUserRoles(p=>[...p,...data]);setAddModal(null)},[role]);
   const updateUserRole=useCallback(async(id,u)=>{if(role!=='admin')return;setUserRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('user_roles').update(u).eq('id',id)},[role]);
   const deleteUserRole=useCallback(async id=>{if(role!=='admin')return;setUserRoles(p=>p.filter(r=>r.id!==id));await supabase.from('user_roles').delete().eq('id',id)},[role]);
+
+  // Performance CRUD
+  const addPerf=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('performance').insert({person:v.person||'',period:v.period||'',goals:v.goals||'',status:'draft'}).select();if(data)setPerf(p=>[...data,...p]);setAddModal(null)},[]);
+  const updatePerf=useCallback(async(id,u)=>{if(!canEdit){showToast("View-only access");return}setPerf(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('performance').update({...u,updated_at:new Date().toISOString()}).eq('id',id)},[]);
+  const deletePerf=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
+
+  // Leave CRUD
+  const addLeave=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const s=v.start_date;const e=v.end_date||v.start_date;const d=s&&e?Math.max(1,daysB(s,e)+1):1;const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:v.leave_type||'annual',start_date:s,end_date:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",v.leave_type+" "+s);setAddModal(null)},[user]);
+  const updateLeave=useCallback(async(id,u)=>{if(!canEdit){showToast("View-only access");return}setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status)notify("updated","leave",u.status)},[]);
+  const deleteLeave=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
+
+  // Profile picture upload
+  const uploadAvatar=useCallback(async(roleId,file)=>{if(!file||role!=='admin')return;
+    const ext=file.name.split('.').pop();const path=`avatars/${roleId}.${ext}`;
+    const{error}=await supabase.storage.from('avatars').upload(path,file,{upsert:true});
+    if(error){showToast("Upload failed: "+error.message);return}
+    const{data:{publicUrl}}=supabase.storage.from('avatars').getPublicUrl(path);
+    await updateUserRole(roleId,{avatar_url:publicUrl});showToast("Photo updated");
+  },[role]);
 
   // Drag reorder — swaps sort_order between two rows
   const reorder=useCallback(async(table,items,setItems,fromId,toId)=>{
@@ -284,7 +303,7 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"},...(role==='admin'?[{id:"settings",l:"Settings"}]:[])];
+  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"},{id:"perf",l:"Performance"},{id:"leave",l:"Leave"}];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -356,6 +375,7 @@ export default function Home(){
           <span className="mob-hide">{user?.user_metadata?.full_name||user?.email?.split("@")[0]}</span>
           <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
         </button>
+        {role==='admin'&&<button onClick={()=>setView("settings")} style={{background:view==="settings"?"rgba(59,130,246,.3)":"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 8px",cursor:"pointer",color:"#94A3B8",fontSize:14,lineHeight:1,marginLeft:2}} title="Settings">&#9881;</button>}
       </div>
     </div>
 
@@ -659,11 +679,57 @@ export default function Home(){
       </div>}
     </div>}
 
+    {/* ═══ PERFORMANCE ═══ */}
+    {view==="perf"&&<div className="af">
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Performance Reviews</div>{canEdit&&<button className="act-add" onClick={()=>setAddModal("perf")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Review</button>}</div>
+      {perf.length===0?<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No performance reviews yet. Click + Add Review to start.</div>:
+      perf.map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*30+"ms"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:"50%",background:CL[N2D[p.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:12,fontWeight:700}}>{p.person?.[0]}</span></div>
+            <div><InEdit value={p.person} onChange={v=>updatePerf(p.id,{person:v})}/><div style={{fontSize:10,color:"var(--fg2)"}}>{p.period}</div></div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <InEdit value={p.rating} onChange={v=>updatePerf(p.id,{rating:v})} type="select" options={["pending","exceeds","meets","developing"]}/>
+            <InEdit value={p.status} onChange={v=>updatePerf(p.id,{status:v})} type="select" options={["draft","submitted","reviewed","closed"]}/>
+            <button onClick={()=>deletePerf(p.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Goals</div><InEdit value={p.goals||""} onChange={v=>updatePerf(p.id,{goals:v})}/></div>
+          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Self Review</div><InEdit value={p.self_review||""} onChange={v=>updatePerf(p.id,{self_review:v})}/></div>
+          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Manager Review</div><InEdit value={p.manager_review||""} onChange={v=>updatePerf(p.id,{manager_review:v})}/></div>
+          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Reviewer</div><InEdit value={p.reviewer||""} onChange={v=>updatePerf(p.id,{reviewer:v})}/></div>
+        </div>
+      </div>)}
+    </div>}
+
+    {/* ═══ LEAVE ═══ */}
+    {view==="leave"&&<div className="af">
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Leave Management</div><button className="act-add" onClick={()=>setAddModal("leave")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Request Leave</button></div>
+      <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+        {["pending","approved","rejected"].map(s=>{const c=leaves.filter(l=>l.status===s).length;return <div key={s} style={{padding:"8px 16px",borderRadius:8,background:s==="pending"?"#FEF3C7":s==="approved"?"#DCFCE7":"#FEE2E2",color:s==="pending"?"#92400E":s==="approved"?"#166534":"#991B1B",fontWeight:700,fontSize:12}}>{c} {s}</div>})}
+      </div>
+      <Tbl headers={["Person","Type","From","To","Days","Reason","Status","Approved By",""]} rows={leaves.map(l=>[
+        <span style={{fontWeight:600}}>{l.person}</span>,
+        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:l.leave_type==="sick"?"#FEE2E2":l.leave_type==="annual"?"#DBEAFE":l.leave_type==="wfh"?"#F3E8FF":"#F1F5F9",color:l.leave_type==="sick"?"#991B1B":l.leave_type==="annual"?"#1D4ED8":l.leave_type==="wfh"?"#7C3AED":"#475569"}}>{l.leave_type}</span>,
+        fD(l.start_date),fD(l.end_date),<b>{l.days}</b>,
+        <span style={{fontSize:11}}>{l.reason}</span>,
+        canEdit?<InEdit value={l.status} onChange={v=>{updateLeave(l.id,{status:v,approved_by:v==="approved"||v==="rejected"?user?.user_metadata?.full_name||user?.email:""})}} type="select" options={["pending","approved","rejected","cancelled"]}/>:<Bdg bg={l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7"} c={l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E"}>{l.status}</Bdg>,
+        <span style={{fontSize:10,color:"var(--fg2)"}}>{l.approved_by}</span>,
+        <button onClick={()=>deleteLeave(l.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+      ])}/>
+    </div>}
+
     {/* Settings — Admin Only */}
     {view==="settings"&&role==="admin"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div><button className="act-add" onClick={()=>setAddModal("userrole")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add User</button></div>
       <p style={{fontSize:11,color:"var(--fg2)",marginBottom:12}}>Controls who can view, edit, or delete data. Changes take effect on next login.</p>
-      <Tbl headers={["Email","Name","Role","Department",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
+      <Tbl headers={["","Email","Name","Role","Department",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          {r.avatar_url?<img src={r.avatar_url} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:28,height:28,borderRadius:"50%",background:CL[r.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{r.name?.[0]}</span></div>}
+          <label style={{cursor:"pointer",fontSize:9,color:"#3B82F6"}}><input type="file" accept="image/*" style={{display:"none"}} onChange={e=>uploadAvatar(r.id,e.target.files?.[0])}/>edit</label>
+        </div>,
         <InEdit value={r.email} onChange={v=>updateUserRole(r.id,{email:v})}/>,
         <InEdit value={r.name} onChange={v=>updateUserRole(r.id,{name:v})}/>,
         <InEdit value={r.role} onChange={v=>updateUserRole(r.id,{role:v})} type="select" options={["admin","editor","viewer"]}/>,
@@ -690,6 +756,8 @@ export default function Home(){
     {addModal==="meeting"&&<AddModal title="Add Meeting" fields={[{key:"type",label:"Type",type:"select",options:["Weekly","Milestone","Bi-weekly","Monthly"]},{key:"name",label:"Meeting Name"},{key:"schedule",label:"When"},{key:"duration",label:"Duration"},{key:"owner",label:"Owner"},{key:"attendees",label:"Attendees"}]} onSave={addMeeting} onClose={()=>setAddModal(null)}/>}
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
     {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
+    {addModal==="perf"&&<AddModal title="Add Performance Review" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha Mubeen"},{key:"period",label:"Period",placeholder:"e.g. Q2 2026"},{key:"goals",label:"Goals",placeholder:"Key objectives..."}]} onSave={addPerf} onClose={()=>setAddModal(null)}/>}
+    {addModal==="leave"&&<AddModal title="Request Leave" fields={[{key:"person",label:"Your Name",placeholder:user?.user_metadata?.full_name||""},{key:"leave_type",label:"Type",type:"select",options:["annual","sick","personal","wfh","unpaid","other"]},{key:"start_date",label:"From",type:"date"},{key:"end_date",label:"To",type:"date"},{key:"reason",label:"Reason",placeholder:"Optional"}]} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
 
     {/* Toast notification */}
     {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
