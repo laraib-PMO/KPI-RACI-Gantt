@@ -289,9 +289,9 @@ export default function Home(){
     const isSelf=me?.id===roleId;
     if(!isSelf&&role!=='admin'){showToast("Can only update your own photo");return}
     const ext=file.name.split('.').pop();const path=`avatars/${roleId}.${ext}`;
-    const{error}=await supabase.storage.from('avatars').upload(path,file,{upsert:true});
+    const{error}=await supabase.storage.from('Avatar').upload(path,file,{upsert:true});
     if(error){showToast("Upload failed: "+error.message);return}
-    const{data:{publicUrl}}=supabase.storage.from('avatars').getPublicUrl(path);
+    const{data:{publicUrl}}=supabase.storage.from('Avatar').getPublicUrl(path);
     await supabase.from('user_roles').update({avatar_url:publicUrl}).eq('id',roleId);
     setUserRoles(p=>p.map(r=>r.id===roleId?{...r,avatar_url:publicUrl}:r));
     showToast("Photo updated");
