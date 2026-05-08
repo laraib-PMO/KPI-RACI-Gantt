@@ -53,6 +53,9 @@ const CSS=`
 .pulse-dot{animation:pulse 1.5s infinite}
 [data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)}
 [data-theme="light"]{--bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;--fg:#1E293B;--fg2:#64748B;--border:#E8ECEF;--hover:#F8FAFC;--card:#FFFFFF;--hdr:linear-gradient(135deg,#0D1B2A,#1B3A5C)}
+[data-role="viewer"] .act-add,[data-role="viewer"] .act-del,[data-role="viewer"] .act-edit{display:none!important}
+[data-role="editor"] .act-del{display:none!important}
+[data-role="viewer"] td input,[data-role="viewer"] td select{pointer-events:none;opacity:.7}
 body{background:var(--bg);color:var(--fg);transition:background .3s,color .3s}
 *{box-sizing:border-box}
 @media(max-width:768px){
@@ -183,17 +186,36 @@ export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
-  const[authed,setAuthed]=useState(false);const[pw,setPw]=useState("");const[pwErr,setPwErr]=useState(false);
+  const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");
-  const PASS=process.env.NEXT_PUBLIC_DASHBOARD_PASS||"11223344";
+  const canEdit=role==='admin'||role==='editor';
+  const canDelete=role==='admin';
 
-  useEffect(()=>{if(typeof window!=='undefined'){if(localStorage.getItem('attimo_auth')==='true')setAuthed(true);const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
-  const doLogin=()=>{if(pw===PASS){setAuthed(true);localStorage.setItem('attimo_auth','true');setPwErr(false)}else{setPwErr(true)}};
-  const doLogout=()=>{setAuthed(false);localStorage.removeItem('attimo_auth')};
+  // Auth: listen for session, look up role
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      if(session?.user){setUser(session.user);lookupRole(session.user.email)}
+      else setAuthLoading(false)
+    });
+    const{data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{
+      if(session?.user){setUser(session.user);lookupRole(session.user.email)}
+      else{setUser(null);setRole(null);setAuthLoading(false)}
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+  const lookupRole=async(email)=>{
+    const{data}=await supabase.from('user_roles').select('role').eq('email',email).single();
+    setRole(data?.role||null);setAuthLoading(false);
+  };
+  const doLogin=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
+  const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
+
+  useEffect(()=>{if(typeof window!=='undefined'){const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
 
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
   const showToast=(msg)=>setToast(msg);
   useEffect(()=>{document.documentElement.setAttribute("data-theme",dark?"dark":"light")},[dark]);
+  useEffect(()=>{if(role)document.documentElement.setAttribute("data-role",role)},[role]);
 
   // Generate favicon from the "o" mark
   useEffect(()=>{
@@ -214,23 +236,23 @@ export default function Home(){
     return()=>supabase.removeChannel(ch)},[]);
 
   const updateTask=useCallback(async(id,u)=>{setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
-  const deleteTask=useCallback(async id=>{setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
-  const addTask=useCallback(async v=>{const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
-  const addRaci=useCallback(async v=>{const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
-  const deleteRaci=useCallback(async id=>{setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
+  const deleteTask=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
+  const addTask=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
+  const addRaci=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
+  const deleteRaci=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
   const updateRaci=useCallback(async(id,u)=>{setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
-  const addRisk=useCallback(async v=>{const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
+  const addRisk=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
   const updateRisk=useCallback(async(id,u)=>{setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
-  const deleteRisk=useCallback(async id=>{setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
-  const addKpi=useCallback(async v=>{const{data}=await supabase.from('kpis').insert({dept:v.dept||"PMO",name:v.name||"",target:v.target||"",current_value:v.current_value||"",flag:v.flag||"yellow",review_rhythm:v.review_rhythm||"Weekly"}).select();if(data)setKpis(p=>[...p,...data]);setAddModal(null)},[]);
+  const deleteRisk=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
+  const addKpi=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('kpis').insert({dept:v.dept||"PMO",name:v.name||"",target:v.target||"",current_value:v.current_value||"",flag:v.flag||"yellow",review_rhythm:v.review_rhythm||"Weekly"}).select();if(data)setKpis(p=>[...p,...data]);setAddModal(null)},[]);
   const updateKpi=useCallback(async(id,u)=>{setKpis(p=>p.map(k=>k.id===id?{...k,...u}:k));await supabase.from('kpis').update(u).eq('id',id)},[]);
-  const addRole=useCallback(async v=>{const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
+  const addRole=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
   const updateRole=useCallback(async(id,u)=>{setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
-  const deleteRole=useCallback(async id=>{setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
-  const addMeeting=useCallback(async v=>{const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
-  const deleteMeeting=useCallback(async id=>{setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
+  const deleteRole=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
+  const addMeeting=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
+  const deleteMeeting=useCallback(async id=>{if(!canDelete){showToast("Admin only");return}setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
   const updateMeeting=useCallback(async(id,u)=>{setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
-  const addStandup=useCallback(async v=>{const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
+  const addStandup=useCallback(async v=>{if(!canEdit){showToast("View-only access");return}const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
   const deleteStandup=useCallback(async id=>{setStandups(p=>p.filter(s=>s.id!==id));await supabase.from('standups').delete().eq('id',id)},[]);
   const onDrop=useCallback(ns=>{if(dragId){updateTask(dragId,{status:ns});setDragId(null)}},[dragId,updateTask]);
 
@@ -254,18 +276,36 @@ export default function Home(){
 
   if(loading)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontSize:16,color:"var(--fg2)",background:"var(--bg)"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid var(--border)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px"}}></div><LogoFull height={18} color="var(--fg2)"/></div></div>;
 
-  if(!authed)return <div style={{fontFamily:"'Inter',system-ui",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)"}}>
+  if(authLoading)return <div style={{fontFamily:"'Inter',system-ui",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)"}}>
+    <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid #334155",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px"}}></div><LogoFull height={18} color="#64748B"/></div>
+  </div>;
+
+  if(!user)return <div style={{fontFamily:"'Inter',system-ui",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)"}}>
     <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
     <div className="asc" style={{background:"#1E293B",borderRadius:20,padding:40,width:"min(400px,90vw)",textAlign:"center",border:"1px solid #334155",boxShadow:"0 25px 60px rgba(0,0,0,.5)"}}>
       <div style={{width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><LogoMark size={32} color="#fff"/></div>
       <h1 style={{color:"#F1F5F9",fontSize:22,fontWeight:800,margin:"0 0 4px"}}><LogoFull height={20} color="#F1F5F9"/></h1>
       <p style={{color:"#94A3B8",fontSize:13,margin:"0 0 24px"}}>Company Operations Hub</p>
-      <input type="password" placeholder="Enter access code" value={pw} onChange={e=>{setPw(e.target.value);setPwErr(false)}} onKeyDown={e=>{if(e.key==="Enter")doLogin()}}
-        style={{width:"100%",padding:"12px 16px",borderRadius:10,border:pwErr?"2px solid #EF4444":"1px solid #475569",background:"#0F172A",color:"#F1F5F9",fontSize:14,boxSizing:"border-box",outline:"none",textAlign:"center",letterSpacing:4}}/>
-      {pwErr&&<div style={{color:"#EF4444",fontSize:12,marginTop:8,fontWeight:600}}>Incorrect code. Try again.</div>}
-      <button onClick={doLogin} style={{width:"100%",padding:"12px",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",marginTop:16,transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.02)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}>Enter</button>
+      <button onClick={doLogin} style={{width:"100%",padding:"12px",background:"#fff",color:"#1E293B",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.02)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}>
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Sign in with Google
+      </button>
       <p style={{color:"#475569",fontSize:10,marginTop:16}}>Access restricted to Attimo team members</p>
+    </div>
+  </div>;
+
+  if(!role)return <div style={{fontFamily:"'Inter',system-ui",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)"}}>
+    <style dangerouslySetInnerHTML={{__html:CSS}}/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <div className="asc" style={{background:"#1E293B",borderRadius:20,padding:40,width:"min(400px,90vw)",textAlign:"center",border:"1px solid #334155"}}>
+      <div style={{fontSize:40,marginBottom:12}}>x</div>
+      <h2 style={{color:"#F1F5F9",fontSize:18,fontWeight:700,margin:"0 0 8px"}}>Access Denied</h2>
+      <p style={{color:"#94A3B8",fontSize:13,margin:"0 0 8px"}}>{user.email} is not in the team roster.</p>
+      <p style={{color:"#64748B",fontSize:11,margin:"0 0 20px"}}>Ask an admin to add your email in User Roles.</p>
+      <button onClick={doLogout} style={{padding:"8px 20px",background:"#334155",color:"#F1F5F9",border:"none",borderRadius:8,fontWeight:600,fontSize:12,cursor:"pointer"}}>Sign out</button>
     </div>
   </div>;
 
@@ -287,7 +327,11 @@ export default function Home(){
           <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
           {stats.overdue>0&&<span style={{animation:"pulse 1.5s infinite"}}><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span>}
         </div>
-        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:600,marginLeft:4}}>Logout</button>
+        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:6,marginLeft:4}}>
+          <span style={{width:18,height:18,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:"#fff"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>
+          <span className="mob-hide">{user?.user_metadata?.full_name||user?.email?.split("@")[0]}</span>
+          <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
+        </button>
       </div>
     </div>
 
@@ -316,7 +360,7 @@ export default function Home(){
               :null}
           </select>
         </div>
-        {ganttMode==="company"&&<button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button>}
+        {ganttMode==="company"&&<button onClick={()=>setAddModal("task")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button>}
         {ganttMode==="department"&&<button onClick={()=>{setDeptLoading(true);fetch('/api/linear-tasks').then(r=>r.json()).then(d=>{setDeptTasks(d);setDeptLoading(false);showToast("Synced from Linear + Asana")}).catch(()=>{setDeptLoading(false);showToast("Sync failed")})}} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Refresh from Linear + Asana</button>}
       </div>
 
@@ -426,7 +470,7 @@ export default function Home(){
 
     {/* ═══ BOARD ═══ */}
     {view==="board"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Board</div><button onClick={()=>setAddModal("task")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button></div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Board</div><button onClick={()=>setAddModal("task")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button></div>
       <div className="mob-col1" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>{STS.map(st=><div key={st} onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(st)}
         style={{background:"var(--bg2)",borderRadius:10,padding:12,minHeight:200,border:dragId?"2px dashed #3B82F6":"2px solid transparent",transition:"all .2s"}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontWeight:700,fontSize:14,color:"var(--fg)"}}>{st}</span><span style={{background:"var(--bg3)",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,color:"var(--fg2)"}}>{tasks.filter(t=>t.status===st).length}</span></div>
@@ -447,7 +491,7 @@ export default function Home(){
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Daily Standup</div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setAddModal("standup")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Update</button>
+          <button onClick={()=>setAddModal("standup")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Update</button>
           <button onClick={()=>{showToast("Syncing standups...");fetch('/api/digest').then(r=>r.json()).then(()=>{showToast("Standup synced");supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})}).catch(()=>showToast("Sync failed"))}} style={{background:"var(--bg3)",color:"var(--fg)",border:"1px solid var(--border)",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Sync from Linear + Asana</button>
           <a href="https://attimo-labs.slack.com/archives/daily-standup" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>Open #daily-standup</a>
         </div>
@@ -472,7 +516,7 @@ export default function Home(){
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
                   <span style={{fontSize:9,color:"var(--fg2)",background:"var(--bg3)",padding:"2px 6px",borderRadius:99}}>{s.source==="slack"?"via Slack":"manual"}</span>
-                  <button onClick={()=>deleteStandup(s.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
+                  <button onClick={()=>deleteStandup(s.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
                 </div>
               </div>
               <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
@@ -495,7 +539,7 @@ export default function Home(){
 
     {/* ═══ RACI ═══ */}
     {view==="raci"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><button onClick={()=>setAddModal("raci")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add</button></div>
+      <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><button onClick={()=>setAddModal("raci")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add</button></div>
       <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)"}}><b>R</b>=Responsible <b>A</b>=Accountable <b>C</b>=Consulted <b>I</b>=Informed <span style={{color:"#3B82F6"}}>[Suggest]</span>=PMO suggestion</div>
       {Object.entries(raciByDept).map(([dept,rows])=><div key={dept}><DeptHdr dept={dept}/><Tbl headers={["Task","R","A","C","I","Notes",""]} rows={rows.map(r=>[
         <InEdit value={r.task} onChange={v=>updateRaci(r.id,{task:v})}/>,
@@ -504,13 +548,13 @@ export default function Home(){
         <InEdit value={r.consulted} onChange={v=>updateRaci(r.id,{consulted:v})}/>,
         <InEdit value={r.informed} onChange={v=>updateRaci(r.id,{informed:v})}/>,
         <InEdit value={r.notes} onChange={v=>updateRaci(r.id,{notes:v})}/>,
-        <button onClick={()=>deleteRaci(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        <button onClick={()=>deleteRaci(r.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/></div>)}
     </div>}
 
     {/* ═══ KPIs ═══ */}
     {view==="kpi"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto"}}>
-      <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>KPIs</div><button onClick={()=>setAddModal("kpi")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add KPI</button></div>
+      <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>KPIs</div><button onClick={()=>setAddModal("kpi")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add KPI</button></div>
       <KpiChart kpis={kpis}/>
       {Object.entries(kpiByDept).map(([dept,items])=><div key={dept} className="asl"><DeptHdr dept={dept}/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,padding:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 8px 8px"}}>{items.map(k=><div key={k.id} className="ch" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:14,background:"var(--bg2)"}}>
@@ -524,19 +568,19 @@ export default function Home(){
 
     {/* ═══ RISKS ═══ */}
     {view==="risk"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Risk Register</div><button onClick={()=>setAddModal("risk")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Risk</button></div>
-      <Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation","Linked To",""]} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>deleteRisk(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Risk Register</div><button onClick={()=>setAddModal("risk")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Risk</button></div>
+      <Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation","Linked To",""]} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>deleteRisk(r.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>
     </div>}
 
     {/* ═══ OPEN ROLES (dynamic from DB) ═══ */}
     {view==="roles"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Open Hiring Positions</div><button onClick={()=>setAddModal("role")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Role</button></div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Open Hiring Positions</div><button onClick={()=>setAddModal("role")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Role</button></div>
       <Tbl headers={["Role","Status","Trigger / Blocker","Target",""]} rows={roles.map(r=>[
         <InEdit value={r.title} onChange={v=>updateRole(r.id,{title:v})}/>,
         <InEdit value={r.status} onChange={v=>updateRole(r.id,{status:v})} type="select" options={["Not opened","Interviewing","Blocked","Filled"]}/>,
         <InEdit value={r.trigger_blocker} onChange={v=>updateRole(r.id,{trigger_blocker:v})}/>,
         <InEdit value={r.target_date} onChange={v=>updateRole(r.id,{target_date:v})}/>,
-        <button onClick={()=>deleteRole(r.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        <button onClick={()=>deleteRole(r.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
     </div>}
 
@@ -545,7 +589,7 @@ export default function Home(){
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Meeting Cadence</div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setAddModal("meeting")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Meeting</button>
+          <button onClick={()=>setAddModal("meeting")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Meeting</button>
           <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>+ Google Calendar</a>
         </div>
       </div>
@@ -571,7 +615,7 @@ export default function Home(){
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
-          <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+          <button onClick={()=>deleteMeeting(m.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
       {/* Milestone section */}
@@ -584,7 +628,7 @@ export default function Home(){
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
-          <button onClick={()=>deleteMeeting(m.id)} style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+          <button onClick={()=>deleteMeeting(m.id)} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
     </div>}
