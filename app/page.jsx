@@ -191,7 +191,7 @@ export default function Home(){
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
-  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");
+  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
   const roleRef=useRef(null);roleRef.current=role;
@@ -284,6 +284,15 @@ export default function Home(){
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
   // Profile picture upload
+  // Self profile — any user can update own name + photo
+  const updateMyName=useCallback(async(newName)=>{
+    if(!newName?.trim())return;
+    const me=userRoles.find(r=>r.email===user?.email);if(!me)return;
+    await supabase.from('user_roles').update({name:newName.trim()}).eq('id',me.id);
+    setUserRoles(p=>p.map(r=>r.id===me.id?{...r,name:newName.trim()}:r));
+    setEditMyName(false);showToast("Name updated");
+  },[user,userRoles]);
+
   const uploadAvatar=useCallback(async(roleId,file)=>{if(!file)return;
     const me=userRoles.find(r=>r.email===user?.email);
     const isSelf=me?.id===roleId;
@@ -384,7 +393,8 @@ export default function Home(){
             {(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.avatar_url?<img src={me.avatar_url} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.2)"}}/>:<span style={{width:26,height:26,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",border:"2px solid rgba(255,255,255,.2)"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>})()}
           </label>
           <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
-            <span className="mob-hide">{user?.user_metadata?.full_name||user?.email?.split("@")[0]}</span>
+            {editMyName?<input autoFocus value={myNameVal} onChange={e=>setMyNameVal(e.target.value)} onBlur={()=>updateMyName(myNameVal)} onKeyDown={e=>{if(e.key==="Enter")updateMyName(myNameVal);if(e.key==="Escape")setEditMyName(false)}} onClick={e=>e.stopPropagation()} style={{background:"transparent",border:"1px solid #475569",borderRadius:4,color:"#F1F5F9",fontSize:11,padding:"2px 6px",width:120,outline:"none"}}/>
+            :<span className="mob-hide" onClick={e=>{e.stopPropagation();const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true)}} style={{cursor:"text"}} title="Click to edit name">{(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.name||user?.user_metadata?.full_name||user?.email?.split("@")[0]})()}</span>}
             <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
           </button>
         </div>
