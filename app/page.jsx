@@ -45,10 +45,10 @@ const CSS=`
 .rh{transition:all .15s ease}.rh:hover{background:var(--hover)!important}
 .bar-g{transform-origin:left;animation:barGrow .5s ease-out both}
 .glow-btn{animation:glow 2s infinite}
-.overdue-row{border-left:3px solid #EF4444!important;background:linear-gradient(90deg,#FEF2F2,transparent)!important}
-.ontrack-row:hover{border-left:3px solid #10B981!important;background:linear-gradient(90deg,#F0FFF4,transparent)!important}
-.atrisk-row:hover{border-left:3px solid #F59E0B!important;background:linear-gradient(90deg,#FFFBEB,transparent)!important}
-.offtrack-row:hover{border-left:3px solid #EF4444!important;background:linear-gradient(90deg,#FEF2F2,transparent)!important}
+.overdue-row{border-left:3px solid #EF4444!important;background:rgba(239,68,68,.08)!important}
+.ontrack-row:hover{border-left:3px solid #10B981!important;background:rgba(16,185,129,.08)!important}
+.atrisk-row:hover{border-left:3px solid #F59E0B!important;background:rgba(245,158,11,.08)!important}
+.offtrack-row:hover{border-left:3px solid #EF4444!important;background:rgba(239,68,68,.08)!important}
 .done-row{opacity:.6}.done-row:hover{opacity:1}
 .pulse-dot{animation:pulse 1.5s infinite}
 [data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)}
