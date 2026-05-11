@@ -191,7 +191,7 @@ export default function Home(){
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
-  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);
+  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
 
   // Fetch Slack availability
   const fetchSlackStatus=useCallback(async()=>{
@@ -807,7 +807,7 @@ export default function Home(){
             const slkEmoji=slk?.status_emoji||"";
             const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
             const avatarSrc=ur.avatar_url||(slk?.avatar)||null;
-            return <div key={ur.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
+            return <div key={ur.id} onClick={()=>setProfileCard({ur,slk})} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"all .15s"}} className="rh">
               <div style={{position:"relative"}}>
                 {avatarSrc?<img src={avatarSrc} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:32,height:32,borderRadius:"50%",background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:11,fontWeight:700}}>{ur.name?.[0]}</span></div>}
                 <div style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:stC,border:"2px solid var(--card)"}}/>
@@ -975,6 +975,68 @@ export default function Home(){
             <button onClick={()=>proposeHours(hoursForm.tz,hoursForm.start,hoursForm.end)} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>Submit for Approval</button>
           </div>
         </div>
+      </div>
+    </div>}
+
+    {/* Profile Card Modal */}
+    {profileCard&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setProfileCard(null)}>
+      <div onClick={e=>e.stopPropagation()} className="asc" style={{background:"var(--card)",borderRadius:20,width:"min(420px,92vw)",overflow:"hidden",border:"1px solid var(--border)",boxShadow:"0 25px 60px rgba(0,0,0,.3)"}}>
+        {(()=>{const{ur,slk}=profileCard;const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
+          const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
+          const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
+          const avatar=slk?.avatar_lg||slk?.avatar||ur.avatar_url;
+          let localTime="";try{localTime=new Date().toLocaleString('en-GB',{timeZone:ur.timezone||"UTC",weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false})}catch{}
+          const usedLeave=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(String(new Date().getFullYear()))).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+          return <>
+          {/* Header with gradient */}
+          <div style={{background:"linear-gradient(135deg,"+stC+"40,"+stC+"15)",padding:"24px 24px 16px",position:"relative"}}>
+            <button onClick={()=>setProfileCard(null)} style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,.2)",border:"none",color:"#fff",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:14}}>✕</button>
+            <div style={{display:"flex",gap:16,alignItems:"flex-end"}}>
+              <div style={{position:"relative"}}>
+                {avatar?<img src={avatar} style={{width:80,height:80,borderRadius:16,objectFit:"cover",border:"3px solid var(--card)"}}/>
+                :<div style={{width:80,height:80,borderRadius:16,background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center",border:"3px solid var(--card)"}}><span style={{color:"#fff",fontSize:28,fontWeight:700}}>{ur.name?.[0]}</span></div>}
+                <div style={{position:"absolute",bottom:2,right:2,width:16,height:16,borderRadius:"50%",background:stC,border:"3px solid var(--card)"}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:18,fontWeight:800,color:"var(--fg)"}}>{ur.name}</div>
+                <div style={{fontSize:12,color:"var(--fg2)"}}>{slk?.title||ur.dept||"Team"}</div>
+                {slk?.display_name&&slk.display_name!==ur.name&&<div style={{fontSize:11,color:"var(--fg2)"}}>@{slk.display_name}</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* Status bar */}
+          <div style={{padding:"10px 24px",background:stC+"15",display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:stC}}/>
+            <span style={{fontSize:12,fontWeight:600,color:stC,textTransform:"capitalize"}}>{onLeave?"On Leave":st}</span>
+            {slk?.status_text&&<span style={{fontSize:11,color:"var(--fg2)"}}>{slk.status_emoji} {slk.status_text}</span>}
+          </div>
+
+          {/* Info grid */}
+          <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Department</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.dept||"Team"}</div></div>
+              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Role</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.role}</div></div>
+              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Local Time</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{localTime}</div></div>
+              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Timezone</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{(slk?.tz_label||ur.timezone||"").replace("_"," ")}</div></div>
+              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Working Hours</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.work_start||"09:00"} – {ur.work_end||"18:00"}</div></div>
+              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Leave Balance</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{(ur.annual_leave_quota||20)-usedLeave} of {ur.annual_leave_quota||20} days left</div></div>
+            </div>
+
+            {/* Contact */}
+            <div style={{borderTop:"1px solid var(--border)",paddingTop:12}}>
+              <div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Contact</div>
+              {(slk?.email||ur.email)&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:11,color:"var(--fg2)"}}>Email</span><a href={"mailto:"+(slk?.email||ur.email)} style={{fontSize:12,color:"#3B82F6",textDecoration:"none"}}>{slk?.email||ur.email}</a></div>}
+              {slk?.phone&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:11,color:"var(--fg2)"}}>Phone</span><a href={"tel:"+slk.phone} style={{fontSize:12,color:"#3B82F6",textDecoration:"none"}}>{slk.phone}</a></div>}
+            </div>
+
+            {/* Start date */}
+            {slk?.start_date&&<div style={{borderTop:"1px solid var(--border)",paddingTop:12}}>
+              <div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Start Date</div>
+              <div style={{fontSize:12,color:"var(--fg)"}}>{slk.start_date}</div>
+            </div>}
+          </div>
+        </>})()}
       </div>
     </div>}
 
