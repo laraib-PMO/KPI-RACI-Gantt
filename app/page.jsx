@@ -802,7 +802,6 @@ export default function Home(){
             const inHours=localH>=ws&&localH<we;
             const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
             // Slack status takes priority > manual status > working hours
-            const slk=slackStatus._match?slackStatus._match(ur):null;
             const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
             const slkText=slk?.status_text||"";
             const slkEmoji=slk?.status_emoji||"";
