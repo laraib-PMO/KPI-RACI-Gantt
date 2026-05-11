@@ -841,12 +841,12 @@ export default function Home(){
               <div style={{width:18,height:40,borderRadius:4,background:count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6",opacity:count===0?.3:0.3+pct*0.7,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:2}}>
                 <span style={{fontSize:7,color:"#fff",fontWeight:700}}>{count||""}</span>
               </div>
-              <span style={{fontSize:7,color:"var(--fg2)"}}>{h}h</span>
+              <span style={{fontSize:7,color:"var(--fg2)"}}>{h===0?"12AM":h<12?h+"AM":h===12?"12PM":(h-12)+"PM"}</span>
             </div>
           })}
         </div>
         <div style={{display:"flex",gap:12,marginTop:6,fontSize:9,color:"var(--fg2)"}}>
-          <span>Green = most team online</span><span>Yellow = partial overlap</span><span>Blue = few people</span><span>Times in UTC</span>
+          <span>Green = most team online</span><span>Yellow = partial overlap</span><span>Blue = few people</span><span>Times in UTC (12hr)</span>
         </div>
       </div>
 
