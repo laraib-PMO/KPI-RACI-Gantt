@@ -197,7 +197,25 @@ export default function Home(){
   const fetchSlackStatus=useCallback(async()=>{
     setSlackLoading(true);
     try{const r=await fetch('/api/availability');const d=await r.json();
-      const map={};(d.users||[]).forEach(u=>{const key=(u.email||'').toLowerCase();if(key)map[key]=u});
+      const users=d.users||[];
+      // Normalize: strip Turkish chars for fuzzy matching
+      const norm=s=>(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ö/g,'o').replace(/ü/g,'u');
+      const map={};
+      users.forEach(u=>{
+        const email=(u.email||'').toLowerCase();
+        const name=norm(u.name);
+        const first=name.split(' ')[0];
+        if(email)map['e:'+email]=u;
+        if(name)map['n:'+name]=u;
+        if(first)map['f:'+first]=u;
+      });
+      // Match function: tries email, normalized full name, normalized first name
+      map._match=(ur)=>{
+        const email=(ur.email||'').toLowerCase();
+        const name=norm(ur.name);
+        const first=name.split(' ')[0];
+        return map['e:'+email]||map['n:'+name]||map['f:'+first]||null;
+      };
       setSlackStatus(map);showToast("Slack status refreshed")
     }catch{}setSlackLoading(false);
   },[]);
@@ -226,6 +244,7 @@ export default function Home(){
   const doLogin=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
   const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
 
+  useEffect(()=>{if(view==="leave"&&Object.keys(slackStatus).length===0)fetchSlackStatus()},[view]);
   useEffect(()=>{if(typeof window!=='undefined'){const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
 
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
@@ -782,7 +801,7 @@ export default function Home(){
             const inHours=localH>=ws&&localH<we;
             const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
             // Slack status takes priority > manual status > working hours
-            const slk=slackStatus[(ur.email||'').toLowerCase()];
+            const slk=slackStatus._match?slackStatus._match(ur):null;
             const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
             const slkText=slk?.status_text||"";
             const slkEmoji=slk?.status_emoji||"";
