@@ -51,6 +51,16 @@ const CSS=`
 .offtrack-row:hover{border-left:3px solid #EF4444!important;background:rgba(239,68,68,.08)!important}
 .done-row{opacity:.6}.done-row:hover{opacity:1}
 .pulse-dot{animation:pulse 1.5s infinite}
+.sidebar{width:56px;transition:width .25s ease;overflow:hidden;white-space:nowrap;flex-shrink:0;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border);z-index:50}
+.sidebar:hover{width:200px}
+.sidebar:hover .sb-label{opacity:1}
+.sb-label{opacity:0;transition:opacity .2s ease;margin-left:10px;font-size:12px;font-weight:500}
+.sb-item{display:flex;align-items:center;padding:10px 16px;cursor:pointer;border-left:3px solid transparent;transition:all .15s;gap:0}
+.sb-item:hover{background:var(--hover)}
+.sb-item.active{border-left-color:#3B82F6;background:rgba(59,130,246,.08)}
+.sb-item.active .sb-icon{color:#3B82F6}
+.sb-item.active .sb-label{color:#3B82F6;font-weight:700}
+.sb-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:var(--fg2)}
 [data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)}
 [data-theme="light"]{--bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;--fg:#1E293B;--fg2:#64748B;--border:#E8ECEF;--hover:#F8FAFC;--card:#FFFFFF;--hdr:linear-gradient(135deg,#0D1B2A,#1B3A5C)}
 [data-role="viewer"] .act-add,[data-role="viewer"] .act-del,[data-role="viewer"] .act-edit{display:none!important}
@@ -373,7 +383,7 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"timeline",l:"Timeline"},{id:"board",l:"Board"},{id:"calendar",l:"Calendar"},{id:"standup",l:"Daily Standup"},{id:"raci",l:"RACI"},{id:"kpi",l:"KPIs"},{id:"risk",l:"Risks"},{id:"roles",l:"Open Roles"},{id:"meet",l:"Meetings"},{id:"perf",l:"Performance"},{id:"leave",l:"Leave"}];
+  const TABS=[{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"♨"}];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -422,47 +432,57 @@ export default function Home(){
     </div>
   </div>;
 
-  return <div style={{fontFamily:"'Inter',system-ui",background:"var(--bg)",minHeight:"100vh",transition:"all .3s"}}>
+  return <div style={{fontFamily:"'Inter',system-ui",background:"var(--bg)",minHeight:"100vh",transition:"all .3s",display:"flex"}}>
     <style dangerouslySetInnerHTML={{__html:CSS+"@keyframes spin{to{transform:rotate(360deg)}}"}}/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 
-    {/* Header */}
-    <div style={{background:"var(--hdr)",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div className="glow-btn" style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><LogoMark size={22} color="#fff"/></div>
-        <LogoFull height={18} color="#fff"/><span style={{color:"#475569"}}>|</span><span style={{fontSize:12,color:"#94A3B8"}}>Company Operations</span>
+    {/* ═══ SIDEBAR ═══ */}
+    <div className="sidebar">
+      <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid var(--border)"}}>
+        <div style={{width:24,height:24,flexShrink:0}}><LogoMark size={24} color="var(--fg)"/></div>
+        <span className="sb-label" style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Attimo</span>
       </div>
+      <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
+        {TABS.map(t=><div key={t.id} className={"sb-item"+(view===t.id?" active":"")} onClick={()=>setView(t.id)}>
+          <div className="sb-icon">{t.icon}</div>
+          <span className="sb-label" style={{color:view===t.id?"#3B82F6":"var(--fg2)"}}>{t.l}</span>
+        </div>)}
+      </div>
+      <div style={{borderTop:"1px solid var(--border)",padding:"8px 0"}}>
+        {role==='admin'&&<div className={"sb-item"+(view==="settings"?" active":"")} onClick={()=>setView("settings")}><div className="sb-icon">&#9881;</div><span className="sb-label">Settings</span></div>}
+        <div className="sb-item" onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setHoursForm({tz:me?.timezone||"Europe/Istanbul",start:me?.work_start||"09:00",end:me?.work_end||"18:00"});setShowHoursModal(true)}}><div className="sb-icon">&#9203;</div><span className="sb-label">Working Hours</span></div>
+        <div className="sb-item" onClick={()=>setDark(!dark)}><div className="sb-icon">{dark?"☀":"◑"}</div><span className="sb-label">{dark?"Light Mode":"Dark Mode"}</span></div>
+      </div>
+    </div>
+
+    {/* ═══ MAIN AREA ═══ */}
+    <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden"}}>
+
+    {/* Header — compact */}
+    <div style={{background:"var(--hdr)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <button onClick={()=>setDark(!dark)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,color:"#fff",fontWeight:600}}>{dark?"Light":"Dark"}</button>
         <button onClick={doSync} disabled={syncing} style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
-        {lastSync&&<span className="mob-hide" style={{fontSize:9,color:"#64748B"}}>Last: {lastSync}</span>}
+        {lastSync&&<span style={{fontSize:9,color:"#64748B"}}>Last: {lastSync}</span>}
         <div className="mob-hide" style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
           <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
           {stats.overdue>0&&<span style={{animation:"pulse 1.5s infinite"}}><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span>}
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:4}}>
-          <label style={{cursor:"pointer",position:"relative"}}>
-            <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const me=userRoles.find(r=>r.email===user?.email);if(me)uploadAvatar(me.id,f);else showToast("Your email not in user roles yet")}}/>
-            {(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.avatar_url?<img src={me.avatar_url} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.2)"}}/>:<span style={{width:26,height:26,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",border:"2px solid rgba(255,255,255,.2)"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>})()}
-          </label>
-          <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
-            {editMyName?<input autoFocus value={myNameVal} onChange={e=>setMyNameVal(e.target.value)} onBlur={()=>updateMyName(myNameVal)} onKeyDown={e=>{if(e.key==="Enter")updateMyName(myNameVal);if(e.key==="Escape")setEditMyName(false)}} onClick={e=>e.stopPropagation()} style={{background:"transparent",border:"1px solid #475569",borderRadius:4,color:"#F1F5F9",fontSize:11,padding:"2px 6px",width:120,outline:"none"}}/>
-            :<span className="mob-hide" onClick={e=>{e.stopPropagation();const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true)}} style={{cursor:"text"}} title="Click to edit name">{(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.name||user?.user_metadata?.full_name||user?.email?.split("@")[0]})()}</span>}
-            <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
-          </button>
-        </div>
-        {role==='admin'&&<button onClick={()=>setView("settings")} style={{background:view==="settings"?"rgba(59,130,246,.3)":"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 8px",cursor:"pointer",color:"#94A3B8",fontSize:14,lineHeight:1,marginLeft:2}} title="Settings">&#9881;</button>}
-        <button onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setHoursForm({tz:me?.timezone||"Europe/Istanbul",start:me?.work_start||"09:00",end:me?.work_end||"18:00"});setShowHoursModal(true)}} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 8px",cursor:"pointer",color:"#94A3B8",fontSize:10,lineHeight:1,marginLeft:2}} title="Set Working Hours">&#9203;</button>
+        <div className="mob-hide" style={{display:"flex",alignItems:"center",gap:6}}>{ANCH.map((a,i)=><span key={i} style={{fontSize:9,color:a.c,fontWeight:700,padding:"2px 6px",background:a.c+"12",borderRadius:99}}>{a.l} {fD(a.d)}</span>)}</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <label style={{cursor:"pointer",position:"relative"}}>
+          <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const me=userRoles.find(r=>r.email===user?.email);if(me)uploadAvatar(me.id,f);else showToast("Your email not in user roles yet")}}/>
+          {(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.avatar_url?<img src={me.avatar_url} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.2)"}}/>:<span style={{width:26,height:26,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",border:"2px solid rgba(255,255,255,.2)"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>})()}
+        </label>
+        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
+          {editMyName?<input autoFocus value={myNameVal} onChange={e=>setMyNameVal(e.target.value)} onBlur={()=>updateMyName(myNameVal)} onKeyDown={e=>{if(e.key==="Enter")updateMyName(myNameVal);if(e.key==="Escape")setEditMyName(false)}} onClick={e=>e.stopPropagation()} style={{background:"transparent",border:"1px solid #475569",borderRadius:4,color:"#F1F5F9",fontSize:11,padding:"2px 6px",width:120,outline:"none"}}/>
+          :<span className="mob-hide" onClick={e=>{e.stopPropagation();const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true)}} style={{cursor:"text"}} title="Click to edit name">{(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.name||user?.user_metadata?.full_name||user?.email?.split("@")[0]})()}</span>}
+          <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
+        </button>
       </div>
     </div>
 
-    {/* Tabs */}
-    <div style={{borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",flexWrap:"nowrap",background:"var(--card)",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-      {TABS.map(t=><button key={t.id} onClick={()=>setView(t.id)} style={{padding:"10px 14px",border:"none",background:"none",fontWeight:600,fontSize:13,cursor:"pointer",color:view===t.id?"var(--fg)":"var(--fg2)",borderBottom:view===t.id?"2px solid #3B82F6":"2px solid transparent",transition:"all .15s",whiteSpace:"nowrap"}}>{t.l}</button>)}
-      <div className="mob-hide" style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>{ANCH.map((a,i)=><span key={i} style={{fontSize:9,color:a.c,fontWeight:700,padding:"2px 6px",background:a.c+"12",borderRadius:99}}>{a.l} {fD(a.d)}</span>)}</div>
-    </div>
-
-    <div style={{padding:20}}>
+    <div style={{padding:20,flex:1,overflowY:"auto"}}>
 
     {/* ═══ TIMELINE ═══ */}
     {view==="timeline"&&<div className="af">
@@ -1045,5 +1065,6 @@ export default function Home(){
 
     {/* Toast notification */}
     {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
+    </div>{/* close main area */}
   </div>;
 }
