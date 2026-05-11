@@ -191,7 +191,16 @@ export default function Home(){
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
-  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});
+  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);
+
+  // Fetch Slack availability
+  const fetchSlackStatus=useCallback(async()=>{
+    setSlackLoading(true);
+    try{const r=await fetch('/api/availability');const d=await r.json();
+      const map={};(d.users||[]).forEach(u=>{const key=(u.email||'').toLowerCase();if(key)map[key]=u});
+      setSlackStatus(map);showToast("Slack status refreshed")
+    }catch{}setSlackLoading(false);
+  },[]);
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
   const roleRef=useRef(null);roleRef.current=role;
@@ -758,7 +767,7 @@ export default function Home(){
       {/* ─── STATUS BAR + WHO'S AVAILABLE ─── */}
       <div style={{marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Team Availability</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Team Availability</div><button onClick={fetchSlackStatus} disabled={slackLoading} style={{padding:"4px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg3)",color:"var(--fg2)",fontSize:10,fontWeight:600,cursor:"pointer",opacity:slackLoading?.5:1}}>{slackLoading?"Syncing...":"Refresh from Slack"}</button></div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             <span style={{fontSize:10,color:"var(--fg2)"}}>My status:</span>
             {["working","break","meeting","off"].map(s=>{const me=userRoles.find(r=>r.email===user?.email);const active=me?.current_status===s;return <button key={s} onClick={()=>{const me2=userRoles.find(r=>r.email===user?.email);if(me2){supabase.from('user_roles').update({current_status:s}).eq('id',me2.id);setUserRoles(p=>p.map(r=>r.id===me2.id?{...r,current_status:s}:r))}}} style={{padding:"4px 10px",borderRadius:6,border:active?"2px solid":"1px solid var(--border)",borderColor:active?s==="working"?"#10B981":s==="break"?"#F59E0B":s==="meeting"?"#3B82F6":"#64748B":"var(--border)",background:active?(s==="working"?"#DCFCE7":s==="break"?"#FEF3C7":s==="meeting"?"#DBEAFE":"#F1F5F9"):"transparent",color:active?(s==="working"?"#166534":s==="break"?"#92400E":s==="meeting"?"#1D4ED8":"#475569"):"var(--fg2)",fontSize:10,fontWeight:active?700:500,cursor:"pointer"}}>{s}</button>})}
@@ -772,17 +781,23 @@ export default function Home(){
             let localH=0;try{localH=parseInt(new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}))}catch{}
             const inHours=localH>=ws&&localH<we;
             const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
-            const st=onLeave?"off":(ur.current_status||"offline");
+            // Slack status takes priority > manual status > working hours
+            const slk=slackStatus[(ur.email||'').toLowerCase()];
+            const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
+            const slkText=slk?.status_text||"";
+            const slkEmoji=slk?.status_emoji||"";
             const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
+            const avatarSrc=ur.avatar_url||(slk?.avatar)||null;
             return <div key={ur.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
               <div style={{position:"relative"}}>
-                {ur.avatar_url?<img src={ur.avatar_url} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:32,height:32,borderRadius:"50%",background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:11,fontWeight:700}}>{ur.name?.[0]}</span></div>}
+                {avatarSrc?<img src={avatarSrc} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:32,height:32,borderRadius:"50%",background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:11,fontWeight:700}}>{ur.name?.[0]}</span></div>}
                 <div style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:stC,border:"2px solid var(--card)"}}/>
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ur.name}</div>
                 <div style={{fontSize:9,color:"var(--fg2)"}}>{localTime} {tz.split("/").pop().replace("_"," ")}</div>
                 <div style={{fontSize:8,color:stC,fontWeight:700,textTransform:"uppercase"}}>{onLeave?"ON LEAVE":st}{inHours&&st!=="off"&&!onLeave?" (in hours)":""}</div>
+                {slkText&&<div style={{fontSize:8,color:"var(--fg2)",marginTop:1}}>{slkEmoji} {slkText}</div>}
                 {ur.hours_status==="pending"&&<div style={{fontSize:7,color:"#F59E0B",fontWeight:700}}>HOURS PENDING APPROVAL</div>}
               </div>
             </div>})}
