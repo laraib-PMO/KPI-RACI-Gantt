@@ -794,7 +794,8 @@ export default function Home(){
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
           {userRoles.map(ur=>{
-            const tz=ur.timezone||"Europe/Istanbul";
+            const slk=slackStatus._match?slackStatus._match(ur):null;
+            const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
             let localTime="";try{localTime=new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false})}catch{localTime="--:--"}
             const ws=parseInt((ur.work_start||"09:00").split(":")[0]);const we=parseInt((ur.work_end||"18:00").split(":")[0]);
             let localH=0;try{localH=parseInt(new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}))}catch{}
@@ -814,7 +815,7 @@ export default function Home(){
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ur.name}</div>
-                <div style={{fontSize:9,color:"var(--fg2)"}}>{localTime} {tz.split("/").pop().replace("_"," ")}</div>
+                <div style={{fontSize:9,color:"var(--fg2)"}}>{localTime} {slk?.tz_label||tz.split("/").pop().replace("_"," ")}</div>
                 <div style={{fontSize:8,color:stC,fontWeight:700,textTransform:"uppercase"}}>{onLeave?"ON LEAVE":st}{inHours&&st!=="off"&&!onLeave?" (in hours)":""}</div>
                 {slkText&&<div style={{fontSize:8,color:"var(--fg2)",marginTop:1}}>{slkEmoji} {slkText}</div>}
                 {ur.hours_status==="pending"&&<div style={{fontSize:7,color:"#F59E0B",fontWeight:700}}>HOURS PENDING APPROVAL</div>}
@@ -829,7 +830,10 @@ export default function Home(){
         <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
           {Array.from({length:24},(_,h)=>{
             const count=userRoles.filter(ur=>{
-              const tz=ur.timezone||"Europe/Istanbul";const ws=parseInt((ur.work_start||"09:00").split(":")[0]);const we=parseInt((ur.work_end||"18:00").split(":")[0]);
+              const slk=slackStatus._match?slackStatus._match(ur):null;
+              const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
+              const ws=parseInt((ur.work_start||"09:00").split(":")[0]);
+              const we=parseInt((ur.work_end||"18:00").split(":")[0]);
               try{const d=new Date();d.setUTCHours(h,0,0,0);const localH=parseInt(d.toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}));return localH>=ws&&localH<we}catch{return false}
             }).length;
             const pct=count/Math.max(userRoles.length,1);
