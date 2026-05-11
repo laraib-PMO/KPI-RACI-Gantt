@@ -191,7 +191,7 @@ export default function Home(){
   const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
-  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");
+  const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
   const roleRef=useRef(null);roleRef.current=role;
@@ -279,7 +279,7 @@ export default function Home(){
   const deletePerf=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
 
   // Leave CRUD
-  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const s=v.start_date;const e=v.end_date||v.start_date;const d=s&&e?Math.max(1,daysB(s,e)+1):1;const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:v.leave_type||'annual',start_date:s,end_date:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",v.leave_type+" "+s);setAddModal(null)},[user]);
+  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:v.leave_type||'annual',half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",v.leave_type+" "+s+(hd?" (half day)":""));setAddModal(null)},[user]);
   const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access");return}setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status)notify("updated","leave",u.status)},[]);
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
@@ -292,6 +292,31 @@ export default function Home(){
     setUserRoles(p=>p.map(r=>r.id===me.id?{...r,name:newName.trim()}:r));
     setEditMyName(false);showToast("Name updated");
   },[user,userRoles]);
+
+  // Propose working hours — any user
+  const proposeHours=useCallback(async(tz,start,end)=>{
+    if(!tz||!start||!end)return;
+    const me=userRoles.find(r=>r.email===user?.email);if(!me)return;
+    await supabase.from('user_roles').update({proposed_tz:tz,proposed_start:start,proposed_end:end,hours_status:'pending'}).eq('id',me.id);
+    setUserRoles(p=>p.map(r=>r.id===me.id?{...r,proposed_tz:tz,proposed_start:start,proposed_end:end,hours_status:'pending'}:r));
+    notify("requested","working hours",start+" - "+end+" "+tz);
+    setShowHoursModal(false);showToast("Working hours submitted for approval");
+  },[user,userRoles]);
+
+  // Approve/reject hours — admin only
+  const handleHoursApproval=useCallback(async(id,approve)=>{
+    if(!isAdmin())return;
+    const ur=userRoles.find(r=>r.id===id);if(!ur)return;
+    if(approve){
+      await supabase.from('user_roles').update({timezone:ur.proposed_tz,work_start:ur.proposed_start,work_end:ur.proposed_end,hours_status:'approved',proposed_tz:null,proposed_start:null,proposed_end:null}).eq('id',id);
+      setUserRoles(p=>p.map(r=>r.id===id?{...r,timezone:ur.proposed_tz,work_start:ur.proposed_start,work_end:ur.proposed_end,hours_status:'approved',proposed_tz:null,proposed_start:null,proposed_end:null}:r));
+      showToast("Hours approved for "+ur.name);
+    }else{
+      await supabase.from('user_roles').update({hours_status:'rejected',proposed_tz:null,proposed_start:null,proposed_end:null}).eq('id',id);
+      setUserRoles(p=>p.map(r=>r.id===id?{...r,hours_status:'rejected',proposed_tz:null,proposed_start:null,proposed_end:null}:r));
+      showToast("Hours rejected for "+ur.name);
+    }
+  },[userRoles]);
 
   const uploadAvatar=useCallback(async(roleId,file)=>{if(!file)return;
     const me=userRoles.find(r=>r.email===user?.email);
@@ -399,6 +424,7 @@ export default function Home(){
           </button>
         </div>
         {role==='admin'&&<button onClick={()=>setView("settings")} style={{background:view==="settings"?"rgba(59,130,246,.3)":"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 8px",cursor:"pointer",color:"#94A3B8",fontSize:14,lineHeight:1,marginLeft:2}} title="Settings">&#9881;</button>}
+        <button onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setHoursForm({tz:me?.timezone||"Europe/Istanbul",start:me?.work_start||"09:00",end:me?.work_end||"18:00"});setShowHoursModal(true)}} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 8px",cursor:"pointer",color:"#94A3B8",fontSize:10,lineHeight:1,marginLeft:2}} title="Set Working Hours">&#9203;</button>
       </div>
     </div>
 
@@ -729,14 +755,112 @@ export default function Home(){
 
     {/* ═══ LEAVE ═══ */}
     {view==="leave"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Leave Management</div><button className="act-add" onClick={()=>setAddModal("leave")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Request Leave</button></div>
-      <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
-        {["pending","approved","rejected"].map(s=>{const c=leaves.filter(l=>l.status===s).length;return <div key={s} style={{padding:"8px 16px",borderRadius:8,background:s==="pending"?"#FEF3C7":s==="approved"?"#DCFCE7":"#FEE2E2",color:s==="pending"?"#92400E":s==="approved"?"#166534":"#991B1B",fontWeight:700,fontSize:12}}>{c} {s}</div>})}
+      {/* ─── STATUS BAR + WHO'S AVAILABLE ─── */}
+      <div style={{marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Team Availability</div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:10,color:"var(--fg2)"}}>My status:</span>
+            {["working","break","meeting","off"].map(s=>{const me=userRoles.find(r=>r.email===user?.email);const active=me?.current_status===s;return <button key={s} onClick={()=>{const me2=userRoles.find(r=>r.email===user?.email);if(me2){supabase.from('user_roles').update({current_status:s}).eq('id',me2.id);setUserRoles(p=>p.map(r=>r.id===me2.id?{...r,current_status:s}:r))}}} style={{padding:"4px 10px",borderRadius:6,border:active?"2px solid":"1px solid var(--border)",borderColor:active?s==="working"?"#10B981":s==="break"?"#F59E0B":s==="meeting"?"#3B82F6":"#64748B":"var(--border)",background:active?(s==="working"?"#DCFCE7":s==="break"?"#FEF3C7":s==="meeting"?"#DBEAFE":"#F1F5F9"):"transparent",color:active?(s==="working"?"#166534":s==="break"?"#92400E":s==="meeting"?"#1D4ED8":"#475569"):"var(--fg2)",fontSize:10,fontWeight:active?700:500,cursor:"pointer"}}>{s}</button>})}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
+          {userRoles.map(ur=>{
+            const tz=ur.timezone||"Europe/Istanbul";
+            let localTime="";try{localTime=new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false})}catch{localTime="--:--"}
+            const ws=parseInt((ur.work_start||"09:00").split(":")[0]);const we=parseInt((ur.work_end||"18:00").split(":")[0]);
+            let localH=0;try{localH=parseInt(new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}))}catch{}
+            const inHours=localH>=ws&&localH<we;
+            const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
+            const st=onLeave?"off":(ur.current_status||"offline");
+            const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
+            return <div key={ur.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
+              <div style={{position:"relative"}}>
+                {ur.avatar_url?<img src={ur.avatar_url} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:32,height:32,borderRadius:"50%",background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:11,fontWeight:700}}>{ur.name?.[0]}</span></div>}
+                <div style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:stC,border:"2px solid var(--card)"}}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ur.name}</div>
+                <div style={{fontSize:9,color:"var(--fg2)"}}>{localTime} {tz.split("/").pop().replace("_"," ")}</div>
+                <div style={{fontSize:8,color:stC,fontWeight:700,textTransform:"uppercase"}}>{onLeave?"ON LEAVE":st}{inHours&&st!=="off"&&!onLeave?" (in hours)":""}</div>
+                {ur.hours_status==="pending"&&<div style={{fontSize:7,color:"#F59E0B",fontWeight:700}}>HOURS PENDING APPROVAL</div>}
+              </div>
+            </div>})}
+        </div>
       </div>
-      <Tbl headers={["Person","Type","From","To","Days","Reason","Status","Approved By",""]} rows={leaves.map(l=>[
+
+      {/* ─── OVERLAP FINDER ─── */}
+      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:14,marginBottom:20}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Team Overlap Hours (shared working window)</div>
+        <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+          {Array.from({length:24},(_,h)=>{
+            const count=userRoles.filter(ur=>{
+              const tz=ur.timezone||"Europe/Istanbul";const ws=parseInt((ur.work_start||"09:00").split(":")[0]);const we=parseInt((ur.work_end||"18:00").split(":")[0]);
+              try{const d=new Date();d.setUTCHours(h,0,0,0);const localH=parseInt(d.toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}));return localH>=ws&&localH<we}catch{return false}
+            }).length;
+            const pct=count/Math.max(userRoles.length,1);
+            return <div key={h} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <div style={{width:18,height:40,borderRadius:4,background:count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6",opacity:count===0?.3:0.3+pct*0.7,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:2}}>
+                <span style={{fontSize:7,color:"#fff",fontWeight:700}}>{count||""}</span>
+              </div>
+              <span style={{fontSize:7,color:"var(--fg2)"}}>{h}h</span>
+            </div>
+          })}
+        </div>
+        <div style={{display:"flex",gap:12,marginTop:6,fontSize:9,color:"var(--fg2)"}}>
+          <span>Green = most team online</span><span>Yellow = partial overlap</span><span>Blue = few people</span><span>Times in UTC</span>
+        </div>
+      </div>
+
+      {/* ─── LEAVE BALANCES ─── */}
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Leave Balances ({new Date().getFullYear()})</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
+          {userRoles.map(ur=>{
+            const used=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(String(new Date().getFullYear()))).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+            const quota=ur.annual_leave_quota||20;const rem=quota-used;const pct=Math.min(used/quota*100,100);
+            return <div key={ur.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:8,padding:"10px 12px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{ur.name?.split(" ")[0]}</span><span style={{fontSize:10,color:rem<=3?"#EF4444":"var(--fg2)",fontWeight:rem<=3?700:400}}>{rem} left</span></div>
+              <div style={{height:6,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",borderRadius:3,background:pct>80?"#EF4444":pct>50?"#F59E0B":"#10B981",transition:"width .3s"}}/></div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:"var(--fg2)"}}><span>{used} used</span><span>{quota} total</span></div>
+            </div>})}
+        </div>
+      </div>
+
+      {/* ─── LEAVE CALENDAR (this month) ─── */}
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Leave Calendar — {new Date().toLocaleString('en-GB',{month:'long',year:'numeric'})}</div>
+        {(()=>{const now=new Date();const y=now.getFullYear();const mo=now.getMonth();const dim=new Date(y,mo+1,0).getDate();
+          const monthLeaves=leaves.filter(l=>l.status==="approved"&&l.start_date&&l.end_date&&(l.start_date.slice(0,7)===`${y}-${String(mo+1).padStart(2,'0')}`||l.end_date.slice(0,7)===`${y}-${String(mo+1).padStart(2,'0')}`));
+          if(!monthLeaves.length)return <div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No approved leaves this month</div>;
+          return <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
+            <div style={{display:"flex",padding:"8px 12px",borderBottom:"1px solid var(--border)",background:"var(--bg3)"}}>
+              <div style={{width:100,fontSize:10,fontWeight:600,color:"var(--fg2)",flexShrink:0}}>Person</div>
+              <div style={{flex:1,display:"flex"}}>{Array.from({length:dim},(_,i)=><div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:"var(--fg2)"}}>{i+1}</div>)}</div>
+            </div>
+            {monthLeaves.map((l,idx)=>{const sd=parseInt(l.start_date.split("-")[2]);const ed=parseInt(l.end_date.split("-")[2]);
+              return <div key={idx} style={{display:"flex",padding:"6px 12px",borderBottom:"1px solid var(--border)",alignItems:"center"}}>
+                <div style={{width:100,fontSize:10,fontWeight:500,color:"var(--fg)",flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.person?.split(" ")[0]}</div>
+                <div style={{flex:1,display:"flex",height:16}}>{Array.from({length:dim},(_,i)=>{const d=i+1;const inRange=d>=sd&&d<=ed;
+                  return <div key={i} style={{flex:1,margin:"0 1px",borderRadius:2,background:inRange?(l.leave_type==="sick"?"#EF4444":l.leave_type==="wfh"?"#8B5CF6":"#3B82F6"):"transparent",opacity:inRange?.8:.1}}/>})}</div>
+              </div>})}
+          </div>})()}
+      </div>
+
+      {/* ─── STATUS BADGES + REQUEST BUTTON ─── */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {["pending","approved","rejected"].map(s=>{const c=leaves.filter(l=>l.status===s).length;return <div key={s} style={{padding:"6px 14px",borderRadius:8,background:s==="pending"?"#FEF3C7":s==="approved"?"#DCFCE7":"#FEE2E2",color:s==="pending"?"#92400E":s==="approved"?"#166534":"#991B1B",fontWeight:700,fontSize:11}}>{c} {s}</div>})}
+        </div>
+        <button className="act-add" onClick={()=>setAddModal("leave")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Request Leave</button>
+      </div>
+
+      {/* ─── LEAVE TABLE ─── */}
+      <Tbl headers={["Person","Type","Half Day","From","To","Days","Reason","Status","Approved By",""]} rows={leaves.map(l=>[
         <span style={{fontWeight:600}}>{l.person}</span>,
         <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:l.leave_type==="sick"?"#FEE2E2":l.leave_type==="annual"?"#DBEAFE":l.leave_type==="wfh"?"#F3E8FF":"#F1F5F9",color:l.leave_type==="sick"?"#991B1B":l.leave_type==="annual"?"#1D4ED8":l.leave_type==="wfh"?"#7C3AED":"#475569"}}>{l.leave_type}</span>,
-        fD(l.start_date),fD(l.end_date),<b>{l.days}</b>,
+        <span style={{fontSize:10,color:l.half_day?"#F59E0B":"var(--fg2)"}}>{l.half_day?"Yes":"No"}</span>,
+        fD(l.start_date),fD(l.end_date),<b>{l.half_day?"0.5":l.days}</b>,
         <span style={{fontSize:11}}>{l.reason}</span>,
         canEdit?<InEdit value={l.status} onChange={v=>{updateLeave(l.id,{status:v,approved_by:v==="approved"||v==="rejected"?user?.user_metadata?.full_name||user?.email:""})}} type="select" options={["pending","approved","rejected","cancelled"]}/>:<Bdg bg={l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7"} c={l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E"}>{l.status}</Bdg>,
         <span style={{fontSize:10,color:"var(--fg2)"}}>{l.approved_by}</span>,
@@ -748,6 +872,20 @@ export default function Home(){
     {view==="settings"&&role==="admin"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div><button className="act-add" onClick={()=>setAddModal("userrole")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add User</button></div>
       <p style={{fontSize:11,color:"var(--fg2)",marginBottom:12}}>Controls who can view, edit, or delete data. Changes take effect on next login.</p>
+
+      {/* Pending Hours Requests */}
+      {(()=>{const pending=userRoles.filter(r=>r.hours_status==="pending"&&r.proposed_start);
+        if(!pending.length)return null;
+        return <div style={{background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:10,padding:14,marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#92400E",marginBottom:8}}>Pending Working Hours Requests ({pending.length})</div>
+          {pending.map(r=><div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #FDE68A"}}>
+            <div><span style={{fontWeight:600,color:"#92400E"}}>{r.name}</span><span style={{color:"#B45309",fontSize:11}}> wants {r.proposed_start} – {r.proposed_end} ({r.proposed_tz?.split("/").pop().replace("_"," ")})</span></div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>handleHoursApproval(r.id,true)} style={{padding:"4px 12px",borderRadius:6,border:"none",background:"#10B981",color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer"}}>Approve</button>
+              <button onClick={()=>handleHoursApproval(r.id,false)} style={{padding:"4px 12px",borderRadius:6,border:"none",background:"#EF4444",color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer"}}>Reject</button>
+            </div>
+          </div>)}
+        </div>})()}
       <Tbl headers={["","Email","Name","Role","Department",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
         <div style={{display:"flex",alignItems:"center",gap:4}}>
           {r.avatar_url?<img src={r.avatar_url} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:28,height:28,borderRadius:"50%",background:CL[r.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{r.name?.[0]}</span></div>}
@@ -780,7 +918,31 @@ export default function Home(){
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
     {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="perf"&&<AddModal title="Add Performance Review" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha Mubeen"},{key:"period",label:"Period",placeholder:"e.g. Q2 2026"},{key:"goals",label:"Goals",placeholder:"Key objectives..."}]} onSave={addPerf} onClose={()=>setAddModal(null)}/>}
-    {addModal==="leave"&&<AddModal title="Request Leave" fields={[{key:"person",label:"Your Name",placeholder:user?.user_metadata?.full_name||""},{key:"leave_type",label:"Type",type:"select",options:["annual","sick","personal","wfh","unpaid","other"]},{key:"start_date",label:"From",type:"date"},{key:"end_date",label:"To",type:"date"},{key:"reason",label:"Reason",placeholder:"Optional"}]} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
+    {addModal==="leave"&&<AddModal title="Request Leave" fields={[{key:"person",label:"Your Name",placeholder:user?.user_metadata?.full_name||""},{key:"leave_type",label:"Type",type:"select",options:["annual","sick","personal","wfh","unpaid","other"]},{key:"half_day",label:"Half Day?",type:"select",options:["No","Yes"]},{key:"start_date",label:"From",type:"date"},{key:"end_date",label:"To",type:"date"},{key:"reason",label:"Reason",placeholder:"Optional"}]} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
+
+    {/* Working Hours Modal */}
+    {showHoursModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowHoursModal(false)}>
+      <div onClick={e=>e.stopPropagation()} className="asc" style={{background:"var(--card)",borderRadius:16,padding:24,width:"min(400px,90vw)",border:"1px solid var(--border)"}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)",marginBottom:16}}>Set Working Hours</div>
+        <p style={{fontSize:11,color:"var(--fg2)",marginBottom:16}}>Your request will be sent to admin for approval.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Timezone</label>
+            <select value={hoursForm.tz} onChange={e=>setHoursForm(p=>({...p,tz:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg)",fontSize:12}}>
+              {["Asia/Karachi","Europe/Istanbul","Europe/London","Asia/Kuala_Lumpur","America/New_York","Europe/Berlin","Asia/Dubai","UTC"].map(tz=><option key={tz} value={tz}>{tz.replace("_"," ")}</option>)}
+            </select></div>
+          <div style={{display:"flex",gap:12}}>
+            <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Start Time</label>
+              <input type="time" value={hoursForm.start} onChange={e=>setHoursForm(p=>({...p,start:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg)",fontSize:12}}/></div>
+            <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>End Time</label>
+              <input type="time" value={hoursForm.end} onChange={e=>setHoursForm(p=>({...p,end:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg)",fontSize:12}}/></div>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+            <button onClick={()=>setShowHoursModal(false)} style={{padding:"8px 16px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--fg2)",fontSize:12,cursor:"pointer"}}>Cancel</button>
+            <button onClick={()=>proposeHours(hoursForm.tz,hoursForm.start,hoursForm.end)} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>Submit for Approval</button>
+          </div>
+        </div>
+      </div>
+    </div>}
 
     {/* Toast notification */}
     {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
