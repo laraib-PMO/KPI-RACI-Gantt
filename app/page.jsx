@@ -616,11 +616,11 @@ export default function Home(){
             <span style={{fontSize:8,transition:"transform .2s",transform:userMenu?"rotate(180deg)":"rotate(0)"}}>▾</span>
           </button>
           {userMenu&&<div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:6,minWidth:180,boxShadow:"0 12px 40px rgba(0,0,0,.25)",zIndex:100}}>
-            <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);if(me){const slk=slackStatus._match?slackStatus._match(me):null;setProfileCard({ur:me,slk})}setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8,transition:"background .15s"}} className="rh">>{I.user(14)} My Profile</div>
-            <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">>{I.edit(14)} Edit Name</div>
-            <div onClick={()=>{setShowHoursModal(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">>{I.clock(14)} Working Hours</div>
+            <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);if(me){const slk=slackStatus._match?slackStatus._match(me):null;setProfileCard({ur:me,slk})}setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8,transition:"background .15s"}} className="rh">{ I.user(14)} My Profile</div>
+            <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">{ I.edit(14)} Edit Name</div>
+            <div onClick={()=>{setShowHoursModal(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">{ I.clock(14)} Working Hours</div>
             <div style={{height:1,background:"var(--border)",margin:"4px 0"}}/>
-            <div onClick={()=>{doLogout();setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"#EF4444",fontWeight:600,display:"flex",alignItems:"center",gap:8}} className="rh">>{I.logout(14)} Sign Out</div>
+            <div onClick={()=>{doLogout();setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"#EF4444",fontWeight:600,display:"flex",alignItems:"center",gap:8}} className="rh">{ I.logout(14)} Sign Out</div>
           </div>}
         </div>
       </div>
@@ -654,7 +654,7 @@ export default function Home(){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}} className="mob-col1">
         {/* Phase Progress */}
         <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"100ms"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>>{I.chart(14)} Phase Progress</div>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{ I.chart(14)} Phase Progress</div>
           {[{name:"Phase 0 — Trusted Context Navigator",pct:30,color:"#14B8A6",owner:"Talha"},{name:"Phase 1 — Accepted State",pct:0,color:"#10B981",owner:"Blocked"},{name:"Phase 2 — Channel Capture",pct:0,color:"#3B82F6",owner:"Queued"},{name:"Phase 3 — Obligation Orchestrator",pct:0,color:"#8B5CF6",owner:"Queued"},{name:"Phase 4 — Evidence Ledger",pct:0,color:"#EC4899",owner:"Queued"}].map((p,i)=><div key={i} style={{marginBottom:10}}>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginBottom:3}}>
               <span style={{fontWeight:600,color:"var(--fg)"}}>{p.name}</span>
@@ -669,7 +669,7 @@ export default function Home(){
 
         {/* Upcoming Deadlines */}
         <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"150ms"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>>{I.calendar(14)} Upcoming Deadlines</div>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{ I.calendar(14)} Upcoming Deadlines</div>
           {tasks.filter(t=>t.status!=="Done"&&t.end_date).sort((a,b)=>String(a.end_date).localeCompare(String(b.end_date))).slice(0,8).map((t,i)=>{const od=isOverdue(t);return <div key={t.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,animationDelay:i*40+"ms"}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:od?"#EF4444":CL[t.dept]||"#94A3B8",flexShrink:0}}/>
             <span style={{fontSize:11,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:od?"#EF4444":"var(--fg)"}}>{t.name}</span>
@@ -683,7 +683,7 @@ export default function Home(){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}} className="mob-col1">
         {/* KPI Health */}
         <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"200ms"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>>{I.target(14)} KPI Health</div>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{ I.target(14)} KPI Health</div>
           {kpis.length>0?<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,textAlign:"center"}}>
             <div style={{background:"#DCFCE720",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#10B981"}}>{kpis.filter(k=>k.flag==="green").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>On Track</div></div>
             <div style={{background:"#FEF3C720",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#F59E0B"}}>{kpis.filter(k=>k.flag==="yellow").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>Attention</div></div>
@@ -693,7 +693,7 @@ export default function Home(){
 
         {/* Risk Summary */}
         <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"250ms"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>>{I.shield(14)} Risk Summary</div>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{ I.shield(14)} Risk Summary</div>
           {risks.length>0?<div>
             {risks.filter(r=>r.status==="ACTIVE").slice(0,5).map((r,i)=><div key={r.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,borderLeft:"3px solid "+(r.impact==="CRITICAL"?"#EF4444":r.impact==="HIGH"?"#F97316":"#F59E0B"),marginBottom:4,animationDelay:i*40+"ms"}}>
               <span style={{fontSize:10,flex:1,color:"var(--fg)"}}>{r.description}</span>
