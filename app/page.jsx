@@ -32,41 +32,68 @@ const LogoFull=({height=22,color="currentColor"})=><svg height={height} viewBox=
 const Bdg=({bg,c,children,onClick})=><span onClick={onClick} style={{background:bg,color:c,padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:700,whiteSpace:"nowrap",cursor:onClick?"pointer":"default",transition:"all .2s"}}>{children}</span>;
 
 const CSS=`
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-@keyframes slideR{from{opacity:0;transform:translateX(-15px)}to{opacity:1;transform:translateX(0)}}
-@keyframes scaleIn{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideR{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideL{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+@keyframes scaleIn{from{transform:scale(.88);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-@keyframes glow{0%,100%{box-shadow:0 0 5px rgba(59,130,246,.2)}50%{box-shadow:0 0 15px rgba(59,130,246,.4)}}
-@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes glow{0%,100%{box-shadow:0 0 5px rgba(59,130,246,.2)}50%{box-shadow:0 0 18px rgba(59,130,246,.45)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-@keyframes bounceIn{0%{transform:scale(.3);opacity:0}50%{transform:scale(1.05)}70%{transform:scale(.9)}100%{transform:scale(1);opacity:1}}
-@keyframes ripple{0%{box-shadow:0 0 0 0 rgba(59,130,246,.3)}100%{box-shadow:0 0 0 12px transparent}}
-.af{animation:fadeUp .35s ease-out both}.asl{animation:slideR .35s ease-out both}.asc{animation:scaleIn .25s ease-out both}
-.ch{transition:all .2s ease}.ch:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.08)!important}
-.rh{transition:all .15s ease}.rh:hover{background:var(--hover)!important}
-.bar-g{transform-origin:left;animation:barGrow .5s ease-out both}
+@keyframes bounceIn{0%{transform:scale(.3);opacity:0}50%{transform:scale(1.06)}70%{transform:scale(.95)}100%{transform:scale(1);opacity:1}}
+@keyframes ripple{0%{box-shadow:0 0 0 0 rgba(59,130,246,.3)}100%{box-shadow:0 0 0 14px transparent}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes wiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-2deg)}75%{transform:rotate(2deg)}}
+@keyframes countUp{from{opacity:0;transform:translateY(8px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes borderGlow{0%,100%{border-color:rgba(59,130,246,.2)}50%{border-color:rgba(59,130,246,.6)}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+@keyframes popIn{0%{transform:scale(0);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+@keyframes gradientShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.af{animation:fadeUp .4s cubic-bezier(.22,1,.36,1) both}
+.asl{animation:slideR .4s cubic-bezier(.22,1,.36,1) both}
+.asr{animation:slideL .4s cubic-bezier(.22,1,.36,1) both}
+.asc{animation:scaleIn .3s cubic-bezier(.22,1,.36,1) both}
+.asd{animation:slideDown .35s cubic-bezier(.22,1,.36,1) both}
+.abn{animation:bounceIn .5s cubic-bezier(.22,1,.36,1) both}
+.apop{animation:popIn .3s cubic-bezier(.22,1,.36,1) both}
+.acount{animation:countUp .4s cubic-bezier(.22,1,.36,1) both}
+.ch{transition:all .25s cubic-bezier(.22,1,.36,1)}.ch:hover{transform:translateY(-3px);box-shadow:0 8px 25px rgba(0,0,0,.1)!important}
+.rh{transition:all .2s ease}.rh:hover{background:var(--hover)!important}
+.bar-g{transform-origin:left;animation:barGrow .6s cubic-bezier(.22,1,.36,1) both}
 .glow-btn{animation:glow 2s infinite}
+.float-anim{animation:float 3s ease-in-out infinite}
+.breathe-anim{animation:breathe 4s ease-in-out infinite}
+.gradient-btn{background-size:200% 200%;animation:gradientShift 3s ease infinite}
 .overdue-row{border-left:3px solid #EF4444!important;background:rgba(239,68,68,.08)!important}
 .ontrack-row:hover{border-left:3px solid #10B981!important;background:rgba(16,185,129,.08)!important}
 .atrisk-row:hover{border-left:3px solid #F59E0B!important;background:rgba(245,158,11,.08)!important}
 .offtrack-row:hover{border-left:3px solid #EF4444!important;background:rgba(239,68,68,.08)!important}
-.done-row{opacity:.6}.done-row:hover{opacity:1}
+.done-row{opacity:.6;transition:opacity .3s}.done-row:hover{opacity:1}
 .pulse-dot{animation:pulse 1.5s infinite}
-.sb-item{display:flex;align-items:center;padding:10px 16px;cursor:pointer;border-left:3px solid transparent;transition:all .15s;gap:0;position:relative}
-.sb-item:hover{background:var(--hover)}
-.sb-item.active{border-left-color:#3B82F6;background:rgba(59,130,246,.08)}
-.sb-item.active .sb-icon{color:#3B82F6}
+.btn-pop{transition:all .2s cubic-bezier(.22,1,.36,1)}.btn-pop:hover{transform:scale(1.04);box-shadow:0 4px 15px rgba(59,130,246,.3)}.btn-pop:active{transform:scale(.97)}
+.card-enter{animation:slideUp .5s cubic-bezier(.22,1,.36,1) both}
+.stat-card{transition:all .3s cubic-bezier(.22,1,.36,1)}.stat-card:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 12px 30px rgba(0,0,0,.12)!important}
+.tab-btn{transition:all .2s}.tab-btn:hover{transform:translateY(-1px)}
+.sb-item{display:flex;align-items:center;padding:10px 16px;cursor:pointer;border-left:3px solid transparent;transition:all .2s cubic-bezier(.22,1,.36,1);gap:0;position:relative}
+.sb-item:hover{background:var(--hover);padding-left:20px}
+.sb-item.active{border-left-color:#3B82F6;background:rgba(59,130,246,.08);animation:borderGlow 2s infinite}
+.sb-item.active .sb-icon{color:#3B82F6;animation:float 3s ease-in-out infinite}
 .sb-item.active .sb-label{color:#3B82F6;font-weight:700}
-.sb-item[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:100%;top:50%;transform:translateY(-50%);background:var(--fg);color:var(--bg);padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;white-space:nowrap;z-index:100;pointer-events:none;animation:fadeIn .15s ease-out}
-.sidebar{width:56px;transition:width .25s ease;overflow:hidden;white-space:nowrap;flex-shrink:0;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border);z-index:50}
+.sb-item[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:100%;top:50%;transform:translateY(-50%);background:var(--fg);color:var(--bg);padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;white-space:nowrap;z-index:100;pointer-events:none;animation:fadeIn .15s ease-out;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.sidebar{width:56px;transition:width .3s cubic-bezier(.22,1,.36,1);overflow:hidden;white-space:nowrap;flex-shrink:0;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border);z-index:50}
 .sidebar:hover{width:200px}
-.sidebar:hover .sb-label{opacity:1}
+.sidebar:hover .sb-label{opacity:1;transform:translateX(0)}
 .sidebar:hover .sb-item[data-tip]:hover::after{display:none}
-.sb-label{opacity:0;transition:opacity .2s ease;margin-left:10px;font-size:12px;font-weight:500}
-.sb-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:var(--fg2)}
+.sb-label{opacity:0;transition:all .25s cubic-bezier(.22,1,.36,1);margin-left:10px;font-size:12px;font-weight:500;transform:translateX(-8px)}
+.sb-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:var(--fg2);transition:all .2s}
+.sb-item:hover .sb-icon{transform:scale(1.15)}
+.modal-overlay{animation:fadeIn .2s ease-out;backdrop-filter:blur(6px)}
+.profile-tab{transition:all .2s}.profile-tab:hover{background:var(--hover)!important}
+.profile-tab.active{border-bottom:2px solid #3B82F6;color:#3B82F6!important;font-weight:700!important}
+.info-row{animation:slideR .3s cubic-bezier(.22,1,.36,1) both;transition:background .15s}.info-row:hover{background:var(--hover);border-radius:6px}
 [data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)}
 [data-theme="light"]{--bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;--fg:#1E293B;--fg2:#64748B;--border:#E8ECEF;--hover:#F8FAFC;--card:#FFFFFF;--hdr:linear-gradient(135deg,#0D1B2A,#1B3A5C)}
 [data-role="viewer"] .act-add,[data-role="viewer"] .act-del,[data-role="viewer"] .act-edit{display:none!important}
@@ -103,7 +130,7 @@ function InEdit({value,onChange,type="text",options}){
 
 function AddModal({title,fields,onSave,onClose}){
   const[vals,setVals]=useState({});
-  return <div className="af" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
+  return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
     <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(440px,95vw)",padding:20,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>{title}</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
       {fields.map(f=><div key={f.key} style={{marginBottom:12}}>
@@ -111,7 +138,7 @@ function AddModal({title,fields,onSave,onClose}){
         {f.type==="select"?<select value={vals[f.key]||""} onChange={e=>setVals(p=>({...p,[f.key]:e.target.value}))} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)"}}><option value="">Select...</option>{f.options.map(o=><option key={o}>{o}</option>)}</select>
         :<input type={f.type||"text"} placeholder={f.placeholder} value={vals[f.key]||""} onChange={e=>setVals(p=>({...p,[f.key]:e.target.value}))} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)"}}/>}
       </div>)}
-      <button onClick={()=>onSave(vals)} style={{width:"100%",padding:10,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",marginTop:8,transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.02)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}>Save</button>
+      <button onClick={()=>onSave(vals)} className="btn-pop" style={{width:"100%",padding:10,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",marginTop:8}}>Save</button>
     </div>
   </div>;
 }
@@ -121,7 +148,7 @@ function TicketPopup({task,tasks,onClose,onUpdate,onDelete}){
   const depN=(task.deps||[]).map(id=>tasks.find(t=>t.id===id)?.name||id);
   const blocks=tasks.filter(t=>(t.deps||[]).includes(task.id)).map(t=>t.name);
   const od=isOverdue(task);
-  return <div className="af" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
+  return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
     <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(500px,95vw)",maxHeight:"85vh",overflow:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
       <div style={{borderBottom:"4px solid "+cl,padding:"20px 24px 16px",background:od?"linear-gradient(135deg,#FEE2E2,#FEF2F2)":"transparent",borderRadius:"16px 16px 0 0"}}>
         <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:10,color:"var(--fg2)",fontWeight:600}}>TASK-{task.id} / {task.dept}{od?" — OVERDUE":""}</span><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
@@ -205,7 +232,7 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
 
@@ -418,7 +445,7 @@ export default function Home(){
       <div style={{width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><LogoMark size={32} color="#fff"/></div>
       <h1 style={{color:"#F1F5F9",fontSize:22,fontWeight:800,margin:"0 0 4px"}}><LogoFull height={20} color="#F1F5F9"/></h1>
       <p style={{color:"#94A3B8",fontSize:13,margin:"0 0 24px"}}>Company Operations Hub</p>
-      <button onClick={doLogin} style={{width:"100%",padding:"12px",background:"#fff",color:"#1E293B",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,transition:"transform .15s"}} onMouseEnter={e=>e.target.style.transform="scale(1.02)"} onMouseLeave={e=>e.target.style.transform="scale(1)"}>
+      <button onClick={doLogin} className="btn-pop" style={{width:"100%",padding:"12px",background:"#fff",color:"#1E293B",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
         Sign in with Google
       </button>
@@ -467,7 +494,7 @@ export default function Home(){
     {/* Header — compact */}
     <div style={{background:"var(--hdr)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <button onClick={doSync} disabled={syncing} style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
+        <button onClick={doSync} disabled={syncing} className="btn-pop" style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
         {lastSync&&<span style={{fontSize:9,color:"#64748B"}}>Last: {lastSync}</span>}
         <div className="mob-hide" style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
           <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
@@ -512,7 +539,7 @@ export default function Home(){
           {label:"Overdue",val:stats.overdue,color:"#EF4444",icon:"🔥"},
           {label:"At Risk",val:stats.risk,color:"#F97316",icon:"⚠️"},
           {label:"Team Size",val:userRoles.length,color:"#8B5CF6",icon:"👥"},
-        ].map((m,i)=><div key={i} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,borderLeft:"4px solid "+m.color,animationDelay:i*60+"ms"}}>
+        ].map((m,i)=><div key={i} className="stat-card asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,borderLeft:"4px solid "+m.color,animationDelay:i*80+"ms"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <span style={{fontSize:20}}>{m.icon}</span>
             <span style={{fontSize:24,fontWeight:800,color:m.color}}>{m.val}</span>
@@ -717,8 +744,8 @@ export default function Home(){
     {/* ═══ BOARD ═══ */}
     {view==="board"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Board</div><button onClick={()=>setAddModal("task")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Task</button></div>
-      <div className="mob-col1" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>{STS.map(st=><div key={st} onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(st)}
-        style={{background:"var(--bg2)",borderRadius:10,padding:12,minHeight:200,border:dragId?"2px dashed #3B82F6":"2px solid transparent",transition:"all .2s"}}>
+      <div className="mob-col1" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>{STS.map((st,si)=><div key={st} onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(st)}
+        className="af" style={{background:"var(--bg2)",borderRadius:10,padding:12,minHeight:200,border:dragId?"2px dashed #3B82F6":"2px solid transparent",transition:"all .2s",animationDelay:si*100+"ms"}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontWeight:700,fontSize:14,color:"var(--fg)"}}>{st}</span><span style={{background:"var(--bg3)",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,color:"var(--fg2)"}}>{tasks.filter(t=>t.status===st).length}</span></div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>{tasks.filter(t=>t.status===st).map((t,idx)=>{const rc=RC[t.risk];const pc=PC[t.priority];const od=isOverdue(t);
           return <div key={t.id} className="ch asl" draggable onDragStart={()=>setDragId(t.id)} onDragEnd={()=>setDragId(null)}
@@ -754,7 +781,7 @@ export default function Home(){
             <span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:10,color:"var(--fg2)"}}>{byDate[date].length} updates</span>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
-            {byDate[date].map(s=><div key={s.id} className="ch" style={{background:"var(--card)",borderRadius:10,padding:14,border:"1px solid var(--border)",borderLeft:"4px solid "+(CL[s.person]||"#3B82F6")}}>
+            {byDate[date].map((s,si)=><div key={s.id} className="ch asl" style={{background:"var(--card)",borderRadius:10,padding:14,border:"1px solid var(--border)",borderLeft:"4px solid "+(CL[s.person]||"#3B82F6"),animationDelay:si*50+"ms"}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <div style={{width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{s.person?.[0]}</span></div>
@@ -803,7 +830,7 @@ export default function Home(){
       <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>KPIs</div><button onClick={()=>setAddModal("kpi")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add KPI</button></div>
       <KpiChart kpis={kpis}/>
       {Object.entries(kpiByDept).map(([dept,items])=><div key={dept} className="asl"><DeptHdr dept={dept}/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,padding:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 8px 8px"}}>{items.map(k=><div key={k.id} className="ch" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:14,background:"var(--bg2)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,padding:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 8px 8px"}}>{items.map((k,ki)=><div key={k.id} className="ch asl" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:14,background:"var(--bg2)",animationDelay:ki*50+"ms"}}>
           <div style={{fontSize:12,fontWeight:700,marginBottom:4,color:"var(--fg)"}}><InEdit value={k.name} onChange={v=>updateKpi(k.id,{name:v})}/></div>
           <div style={{fontSize:10,color:"var(--fg2)"}}>Target: <InEdit value={k.target} onChange={v=>updateKpi(k.id,{target:v})}/></div>
           <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><div style={{width:8,height:8,borderRadius:"50%",background:FC[k.flag]}}/><span style={{fontSize:11,fontWeight:700,color:FC[k.flag]}}><InEdit value={k.current_value} onChange={v=>updateKpi(k.id,{current_value:v})}/></span></div>
@@ -883,7 +910,7 @@ export default function Home(){
     {view==="perf"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Performance Reviews</div>{canEdit&&<button className="act-add" onClick={()=>setAddModal("perf")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Review</button>}</div>
       {perf.length===0?<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No performance reviews yet. Click + Add Review to start.</div>:
-      perf.map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*30+"ms"}}>
+      perf.map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*60+"ms"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:CL[N2D[p.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:12,fontWeight:700}}>{p.person?.[0]}</span></div>
@@ -1129,26 +1156,33 @@ export default function Home(){
       </div>
     </div>}
 
-    {/* Profile Card Modal */}
-    {profileCard&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setProfileCard(null)}>
-      <div onClick={e=>e.stopPropagation()} className="asc" style={{background:"var(--card)",borderRadius:20,width:"min(420px,92vw)",overflow:"hidden",border:"1px solid var(--border)",boxShadow:"0 25px 60px rgba(0,0,0,.3)"}}>
+    {/* Profile Card Modal — Enhanced */}
+    {profileCard&&<div className="modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>{setProfileCard(null);setProfileTab("overview")}}>
+      <div onClick={e=>e.stopPropagation()} className="asc" style={{background:"var(--card)",borderRadius:20,width:"min(500px,94vw)",maxHeight:"88vh",overflow:"hidden",border:"1px solid var(--border)",boxShadow:"0 25px 60px rgba(0,0,0,.35)",display:"flex",flexDirection:"column"}}>
         {(()=>{const{ur,slk}=profileCard;const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
           const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
           const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
           const avatar=slk?.avatar_lg||slk?.avatar||ur.avatar_url;
           let localTime="";try{localTime=new Date().toLocaleString('en-GB',{timeZone:ur.timezone||"UTC",weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false})}catch{}
-          const usedLeave=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(String(new Date().getFullYear()))).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+          const yearStr=String(new Date().getFullYear());
+          const usedLeave=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(yearStr)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+          const personKpis=kpis.filter(k=>k.dept===ur.dept);
+          const personLeaves=leaves.filter(l=>l.person===ur.name).slice(0,5);
+          const personStandups=standups.filter(s=>s.person===ur.name).slice(0,3);
+          const personPerf=perf.filter(p=>p.person===ur.name).slice(0,2);
+          const isSelf=ur.email===user?.email;
+          const isViewerRole=role==='viewer';
           return <>
           {/* Header with gradient */}
-          <div style={{background:"linear-gradient(135deg,"+stC+"40,"+stC+"15)",padding:"24px 24px 16px",position:"relative"}}>
-            <button onClick={()=>setProfileCard(null)} style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,.2)",border:"none",color:"#fff",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:14}}>✕</button>
+          <div style={{background:"linear-gradient(135deg,"+stC+"40,"+stC+"15)",padding:"24px 24px 16px",position:"relative",flexShrink:0}}>
+            <button onClick={()=>{setProfileCard(null);setProfileTab("overview")}} style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,.2)",border:"none",color:"#fff",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:14,transition:"all .2s"}} onMouseEnter={e=>e.target.style.transform="rotate(90deg)"} onMouseLeave={e=>e.target.style.transform="rotate(0)"}>✕</button>
             <div style={{display:"flex",gap:16,alignItems:"flex-end"}}>
-              <div style={{position:"relative"}}>
+              <div style={{position:"relative"}} className="abn">
                 {avatar?<img src={avatar} style={{width:80,height:80,borderRadius:16,objectFit:"cover",border:"3px solid var(--card)"}}/>
                 :<div style={{width:80,height:80,borderRadius:16,background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center",border:"3px solid var(--card)"}}><span style={{color:"#fff",fontSize:28,fontWeight:700}}>{ur.name?.[0]}</span></div>}
-                <div style={{position:"absolute",bottom:2,right:2,width:16,height:16,borderRadius:"50%",background:stC,border:"3px solid var(--card)"}}/>
+                <div className="pulse-dot" style={{position:"absolute",bottom:2,right:2,width:16,height:16,borderRadius:"50%",background:stC,border:"3px solid var(--card)"}}/>
               </div>
-              <div style={{flex:1}}>
+              <div style={{flex:1}} className="asl">
                 <div style={{fontSize:18,fontWeight:800,color:"var(--fg)"}}>{ur.name}</div>
                 <div style={{fontSize:12,color:"var(--fg2)"}}>{slk?.title||ur.dept||"Team"}</div>
                 {slk?.display_name&&slk.display_name!==ur.name&&<div style={{fontSize:11,color:"var(--fg2)"}}>@{slk.display_name}</div>}
@@ -1157,35 +1191,121 @@ export default function Home(){
           </div>
 
           {/* Status bar */}
-          <div style={{padding:"10px 24px",background:stC+"15",display:"flex",alignItems:"center",gap:8}}>
+          <div className="asl" style={{padding:"10px 24px",background:stC+"15",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:stC}}/>
             <span style={{fontSize:12,fontWeight:600,color:stC,textTransform:"capitalize"}}>{onLeave?"On Leave":st}</span>
             {slk?.status_text&&<span style={{fontSize:11,color:"var(--fg2)"}}>{slk.status_emoji} {slk.status_text}</span>}
           </div>
 
-          {/* Info grid */}
-          <div style={{padding:"16px 24px",display:"flex",flexDirection:"column",gap:12}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Department</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.dept||"Team"}</div></div>
-              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Role</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.role}</div></div>
-              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Local Time</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{localTime}</div></div>
-              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Timezone</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{(slk?.tz_label||ur.timezone||"").replace("_"," ")}</div></div>
-              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Working Hours</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.work_start||"09:00"} – {ur.work_end||"18:00"}</div></div>
-              <div><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Leave Balance</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{(ur.annual_leave_quota||20)-usedLeave} of {ur.annual_leave_quota||20} days left</div></div>
-            </div>
+          {/* Tabs */}
+          <div style={{display:"flex",borderBottom:"1px solid var(--border)",padding:"0 24px",flexShrink:0}}>
+            {[{id:"overview",l:"Overview"},{id:"kpis",l:"KPIs"},{id:"activity",l:"Activity"},{id:"details",l:role==="admin"?"Admin Details":"Details"}].map(t=>
+              <div key={t.id} onClick={()=>setProfileTab(t.id)} className={"profile-tab"+(profileTab===t.id?" active":"")} style={{padding:"10px 16px",cursor:"pointer",fontSize:11,fontWeight:500,color:"var(--fg2)",borderBottom:"2px solid transparent",transition:"all .2s"}}>{t.l}</div>
+            )}
+          </div>
 
-            {/* Contact */}
+          {/* Tab Content — scrollable */}
+          <div style={{flex:1,overflowY:"auto",padding:"16px 24px"}}>
+
+          {/* OVERVIEW TAB */}
+          {profileTab==="overview"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {[{l:"Department",v:ur.dept||"Team"},{l:"Role",v:ur.role},{l:"Local Time",v:localTime},{l:"Timezone",v:(slk?.tz_label||ur.timezone||"").replace("_"," ")},{l:"Working Hours",v:(ur.work_start||"09:00")+" – "+(ur.work_end||"18:00")},{l:"Leave Balance",v:(ur.annual_leave_quota||14)-usedLeave+" of "+(ur.annual_leave_quota||14)+" days"}].map((f,i)=>
+                <div key={i} className="info-row" style={{padding:"6px 8px",animationDelay:i*50+"ms"}}>
+                  <div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>{f.l}</div>
+                  <div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{f.v}</div>
+                </div>
+              )}
+            </div>
             <div style={{borderTop:"1px solid var(--border)",paddingTop:12}}>
               <div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Contact</div>
-              {(slk?.email||ur.email)&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:11,color:"var(--fg2)"}}>Email</span><a href={"mailto:"+(slk?.email||ur.email)} style={{fontSize:12,color:"#3B82F6",textDecoration:"none"}}>{slk?.email||ur.email}</a></div>}
-              {slk?.phone&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:11,color:"var(--fg2)"}}>Phone</span><a href={"tel:"+slk.phone} style={{fontSize:12,color:"#3B82F6",textDecoration:"none"}}>{slk.phone}</a></div>}
+              {(slk?.email||ur.email)&&<div className="info-row" style={{display:"flex",alignItems:"center",gap:8,padding:"4px 8px"}}><span style={{fontSize:11,color:"var(--fg2)",width:50}}>Email</span><a href={"mailto:"+(slk?.email||ur.email)} style={{fontSize:12,color:"#3B82F6",textDecoration:"none"}}>{slk?.email||ur.email}</a></div>}
+              {slk?.phone&&<div className="info-row" style={{display:"flex",alignItems:"center",gap:8,padding:"4px 8px"}}><span style={{fontSize:11,color:"var(--fg2)",width:50}}>Phone</span><a href={"tel:"+slk.phone} style={{fontSize:12,color:"#3B82F6",textDecoration:"none"}}>{slk.phone}</a></div>}
             </div>
-
-            {/* Start date */}
             {slk?.start_date&&<div style={{borderTop:"1px solid var(--border)",paddingTop:12}}>
               <div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Start Date</div>
               <div style={{fontSize:12,color:"var(--fg)"}}>{slk.start_date}</div>
             </div>}
+          </div>}
+
+          {/* KPIS TAB */}
+          {profileTab==="kpis"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{fontSize:10,color:"var(--fg2)",marginBottom:4}}>KPIs for {ur.dept} department</div>
+            {personKpis.length>0?personKpis.map((k,i)=><div key={k.id} className="ch asl" style={{borderLeft:"3px solid "+FC[k.flag],borderRadius:8,padding:12,background:"var(--bg2)",animationDelay:i*60+"ms"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:12,fontWeight:700,color:"var(--fg)"}}>{k.name}</span>
+                <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:"50%",background:FC[k.flag]}}/><span style={{fontSize:11,fontWeight:700,color:FC[k.flag]}}>{k.current_value}</span></div>
+              </div>
+              <div style={{fontSize:10,color:"var(--fg2)",marginTop:4}}>Target: {k.target}</div>
+            </div>):<div style={{textAlign:"center",padding:24,color:"var(--fg2)",fontSize:11}}>No KPIs configured for {ur.dept}</div>}
+          </div>}
+
+          {/* ACTIVITY TAB */}
+          {profileTab==="activity"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {/* Performance Reviews */}
+            {personPerf.length>0&&<div>
+              <div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Performance Reviews</div>
+              {personPerf.map((p,i)=><div key={p.id} className="asl" style={{padding:"8px 10px",borderRadius:8,background:"var(--bg2)",marginBottom:6,borderLeft:"3px solid "+(p.rating==="exceeds"?"#10B981":p.rating==="meets"?"#3B82F6":p.rating==="developing"?"#F59E0B":"#94A3B8"),animationDelay:i*60+"ms"}}>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{p.period}</span>
+                  <Bdg bg={p.rating==="exceeds"?"#DCFCE7":p.rating==="meets"?"#DBEAFE":"#FEF3C7"} c={p.rating==="exceeds"?"#166534":p.rating==="meets"?"#1D4ED8":"#92400E"}>{p.rating}</Bdg>
+                </div>
+                {p.goals&&<div style={{fontSize:10,color:"var(--fg2)",marginTop:4}}>{p.goals}</div>}
+              </div>)}
+            </div>}
+
+            {/* Recent Leaves */}
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Recent Leave</div>
+              {personLeaves.length>0?personLeaves.map((l,i)=><div key={l.id} className="asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:6,background:"var(--bg2)",marginBottom:4,animationDelay:i*50+"ms"}}>
+                <Bdg bg={l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7"} c={l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E"}>{l.status}</Bdg>
+                <span style={{fontSize:10,color:"var(--fg)"}}>{l.leave_type} · {fD(l.start_date)}–{fD(l.end_date)}</span>
+                <span style={{fontSize:9,color:"var(--fg2)",marginLeft:"auto"}}>{l.days}d</span>
+              </div>):<div style={{fontSize:11,color:"var(--fg2)",padding:8}}>No leave records</div>}
+            </div>
+
+            {/* Recent Standups */}
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Recent Updates</div>
+              {personStandups.length>0?personStandups.map((s,i)=><div key={s.id} className="asl" style={{padding:"8px 10px",borderRadius:8,background:"var(--bg2)",marginBottom:4,borderLeft:"3px solid #3B82F6",animationDelay:i*50+"ms"}}>
+                <div style={{fontSize:9,color:"var(--fg2)",marginBottom:4}}>{fD(s.standup_date)}</div>
+                <div style={{fontSize:10,color:"var(--fg)"}}>{(s.completed||"").slice(0,120)}{(s.completed||"").length>120?"...":""}</div>
+              </div>):<div style={{fontSize:11,color:"var(--fg2)",padding:8}}>No standup updates</div>}
+            </div>
+          </div>}
+
+          {/* DETAILS TAB */}
+          {profileTab==="details"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {role==="admin"?<>
+              {/* Admin sees everything */}
+              <div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1}}>Admin-Only Information</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div className="info-row" style={{padding:"6px 8px"}}><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>System Role</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.role}</div></div>
+                <div className="info-row" style={{padding:"6px 8px"}}><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Email</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.email}</div></div>
+                <div className="info-row" style={{padding:"6px 8px"}}><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Leave Quota</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.annual_leave_quota||14} days/yr</div></div>
+                <div className="info-row" style={{padding:"6px 8px"}}><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Hours Status</div><div style={{fontSize:13,color:ur.hours_status==="pending"?"#F59E0B":"var(--fg)",fontWeight:500}}>{ur.hours_status||"approved"}</div></div>
+              </div>
+              <div style={{background:"var(--bg2)",borderRadius:8,padding:12,borderLeft:"3px solid #3B82F6"}}>
+                <div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Job Description</div>
+                <div style={{fontSize:11,color:"var(--fg)",lineHeight:1.5}}>{N2D[ur.name]?N2D[ur.name]+" team member":"Team member"} at Attimo — building Panovia, governed AEC coordination layer.</div>
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:4}}>
+                <button onClick={()=>{setProfileCard(null);setProfileTab("overview");setView("settings")}} className="btn-pop" style={{padding:"8px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer"}}>Edit in Settings</button>
+                <button onClick={()=>{setProfileCard(null);setProfileTab("overview");setView("perf")}} style={{padding:"8px 16px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--fg2)",fontSize:11,cursor:"pointer"}}>View Performance</button>
+              </div>
+            </>:<>
+              {/* Non-admin sees limited info + request edit */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div className="info-row" style={{padding:"6px 8px"}}><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Department</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.dept}</div></div>
+                <div className="info-row" style={{padding:"6px 8px"}}><div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Role</div><div style={{fontSize:13,color:"var(--fg)",fontWeight:500}}>{ur.role}</div></div>
+              </div>
+              {isSelf&&<div style={{background:"#FEF3C720",borderRadius:8,padding:12,border:"1px solid #FDE68A50"}}>
+                <div style={{fontSize:11,color:"var(--fg)",marginBottom:8}}>Want to update your details? Submit a request to your admin.</div>
+                <button onClick={()=>{notify("requested","profile edit","Profile update for "+ur.name);showToast("Edit request sent to admin");setProfileCard(null);setProfileTab("overview")}} className="btn-pop" style={{padding:"8px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#F59E0B,#F97316)",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer"}}>Request Profile Edit</button>
+              </div>}
+              {!isSelf&&<div style={{textAlign:"center",padding:16,color:"var(--fg2)",fontSize:11}}>Additional details are visible to admins only.</div>}
+            </>}
+          </div>}
           </div>
         </>})()}
       </div>
@@ -1207,7 +1327,7 @@ export default function Home(){
     {userMenu&&<div style={{position:"fixed",inset:0,zIndex:90}} onClick={()=>setUserMenu(false)}/>}
 
     {/* Toast notification */}
-    {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
+    {toast&&<div className="asd" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.25)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:14}}>✓</span>{toast}</div>}
     </div>{/* close main area */}
   </div>;
 }
