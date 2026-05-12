@@ -51,6 +51,36 @@ export async function POST(req) {
         body: JSON.stringify({ channel: ADMIN_SLACK_ID, text: dmText, unfurl_links: false })
       }).catch(() => {});
 
+      // DM the EMPLOYEE when their leave is approved or rejected
+      if (action === 'approved' || action === 'rejected') {
+        try {
+          // detail contains "PersonName — approved/rejected"
+          const personName = (detail || '').split(' — ')[0].trim();
+          if (personName) {
+            // Look up employee's Slack ID by name
+            const listRes = await fetch('https://slack.com/api/users.list?limit=100', {
+              headers: { 'Authorization': `Bearer ${botToken}` }
+            });
+            const listData = await listRes.json();
+            const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u');
+            const member = (listData.members || []).find(m => {
+              const rn = norm(m.real_name || '');
+              const pn = norm(personName);
+              return rn === pn || rn.includes(pn) || pn.includes(rn);
+            });
+            if (member) {
+              const emoji = action === 'approved' ? '✅' : '❌';
+              const empMsg = `${emoji} Your leave request has been *${action}* by ${user}.\n\n<https://attimo-ops.vercel.app|View in Dashboard>`;
+              await fetch('https://slack.com/api/chat.postMessage', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${botToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel: member.id, text: empMsg, unfurl_links: false })
+              }).catch(() => {});
+            }
+          }
+        } catch {}
+      }
+
       // DM Laraib and Nil too (uncomment when IDs are set):
       // for (const id of [LARAIB_SLACK_ID, NIL_SLACK_ID].filter(Boolean)) {
       //   await fetch('https://slack.com/api/chat.postMessage', {
