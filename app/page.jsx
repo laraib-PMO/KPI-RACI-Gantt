@@ -263,7 +263,7 @@ function AddModal({title,fields,onSave,onClose}){
   </div>;
 }
 
-function TicketPopup({task,tasks,onClose,onUpdate,onDelete}){
+function TicketPopup({task,tasks,onClose,onUpdate,onDelete,setConfirmDlg}){
   if(!task)return null;const cl=CL[task.dept]||"#94A3B8";const rc=RC[task.risk];const pc=PC[task.priority];
   const depN=(task.deps||[]).map(id=>tasks.find(t=>t.id===id)?.name||id);
   const blocks=tasks.filter(t=>(t.deps||[]).includes(task.id)).map(t=>t.name);
@@ -287,7 +287,7 @@ function TicketPopup({task,tasks,onClose,onUpdate,onDelete}){
       <div style={{padding:"0 24px 16px"}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg2)",marginBottom:4}}>Risk</div><div style={{display:"flex",gap:6}}>{RSK_OPT.map(r=>{const rc2=RC[r];return <button key={r} onClick={()=>onUpdate(task.id,{risk:r})} style={{padding:"4px 12px",borderRadius:99,border:task.risk===r?"2px solid "+rc2.c:"1px solid var(--border)",background:rc2.bg,color:rc2.c,fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>{r}</button>})}</div></div>
       {depN.length>0&&<div style={{padding:"0 24px 12px"}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg2)"}}>Depends On</div>{depN.map((n,i)=><div key={i} style={{fontSize:12,color:"#6366F1",padding:"2px 0"}}>→ {n}</div>)}</div>}
       {blocks.length>0&&<div style={{padding:"0 24px 12px"}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg2)"}}>Blocks</div>{blocks.map((n,i)=><div key={i} style={{fontSize:12,color:"#DC2626",padding:"2px 0"}}>← {n}</div>)}</div>}
-      <div style={{padding:"0 24px 20px"}}><button onClick={()=>{if(window.confirm("Delete this task? This cannot be undone.")){onDelete(task.id);onClose()}}} style={{background:"#FEE2E2",color:"#DC2626",border:"none",padding:"6px 14px",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all .2s"}} className="btn-pop">{I.trash(12)} Delete Task</button></div>
+      <div style={{padding:"0 24px 20px"}}><button onClick={()=>setConfirmDlg({msg:"Delete this task? This cannot be undone.",fn:()=>{onDelete(task.id);onClose()}})} style={{background:"#FEE2E2",color:"#DC2626",border:"none",padding:"6px 14px",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all .2s"}} className="btn-pop">{I.trash(12)} Delete Task</button></div>
     </div>
   </div>;
 }
@@ -912,7 +912,7 @@ export default function Home(){
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
                   <span style={{fontSize:9,color:"var(--fg2)",background:"var(--bg3)",padding:"2px 6px",borderRadius:99}}>{s.source==="slack"?"via Slack":"manual"}</span>
-                  <button onClick={()=>{if(window.confirm("Delete this standup entry?"))deleteStandup(s.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
+                  <button onClick={()=>setConfirmDlg({msg:"Delete this standup entry?",fn:()=>deleteStandup(s.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
                 </div>
               </div>
               <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
@@ -949,7 +949,7 @@ export default function Home(){
         <InEdit value={r.consulted} onChange={v=>updateRaci(r.id,{consulted:v})}/>,
         <InEdit value={r.informed} onChange={v=>updateRaci(r.id,{informed:v})}/>,
         <InEdit value={r.notes} onChange={v=>updateRaci(r.id,{notes:v})}/>,
-        <button onClick={()=>{if(window.confirm("Delete this RACI entry?"))deleteRaci(r.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        <button onClick={()=>setConfirmDlg({msg:"Delete this RACI entry?",fn:()=>deleteRaci(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/></div>)}
     </div>}
 
@@ -971,7 +971,7 @@ export default function Home(){
     {view==="risk"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Risk Register</div><button onClick={()=>setAddModal("risk")} className="act-add btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Risk</button></div>
       {risks.length===0?<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}><div style={{color:"var(--fg2)",marginBottom:4}}>{I.shield(24)}</div><div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No risks logged</div><div style={{fontSize:11,color:"var(--fg2)"}}>Click "+ Add Risk" to start tracking project risks.</div></div>
-      :<Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation","Linked To",""]} ids={risks.map(r=>r.id)} onReorder={(a,b)=>reorder("risks",risks,setRisks,a,b)} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>{if(window.confirm("Delete this risk?"))deleteRisk(r.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>}
+      :<Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation","Linked To",""]} ids={risks.map(r=>r.id)} onReorder={(a,b)=>reorder("risks",risks,setRisks,a,b)} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>setConfirmDlg({msg:"Delete this risk?",fn:()=>deleteRisk(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>}
     </div>}
 
     {/* ═══ OPEN ROLES (dynamic from DB) ═══ */}
@@ -982,7 +982,7 @@ export default function Home(){
         <InEdit value={r.status} onChange={v=>updateRole(r.id,{status:v})} type="select" options={["Not opened","Interviewing","Blocked","Filled"]}/>,
         <InEdit value={r.trigger_blocker} onChange={v=>updateRole(r.id,{trigger_blocker:v})}/>,
         <InEdit value={r.target_date} onChange={v=>updateRole(r.id,{target_date:v})}/>,
-        <button onClick={()=>{if(window.confirm("Delete this role?"))deleteRole(r.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        <button onClick={()=>setConfirmDlg({msg:"Delete this role?",fn:()=>deleteRole(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
     </div>}
 
@@ -1018,7 +1018,7 @@ export default function Home(){
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
           (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
-          <button onClick={()=>{if(window.confirm("Delete this meeting?"))deleteMeeting(m.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+          <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
       {/* Milestone section */}
@@ -1032,7 +1032,7 @@ export default function Home(){
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
           (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
-          <button onClick={()=>{if(window.confirm("Delete this meeting?"))deleteMeeting(m.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+          <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
     </div>}
@@ -1112,7 +1112,7 @@ export default function Home(){
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <InEdit value={p.rating} onChange={v=>updatePerf(p.id,{rating:v})} type="select" options={["pending","exceeds","meets","developing"]}/>
             <InEdit value={p.status} onChange={v=>updatePerf(p.id,{status:v})} type="select" options={["draft","submitted","reviewed","closed"]}/>
-            <button onClick={()=>{if(window.confirm("Delete this review?"))deletePerf(p.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+            <button onClick={()=>setConfirmDlg({msg:"Delete this review?",fn:()=>deletePerf(p.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -1221,7 +1221,12 @@ export default function Home(){
       <div style={{marginBottom:20}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Leave Balances ({new Date().getFullYear()})</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-          {userRoles.filter(ur=>ur.name!=="Efehan Maleri").map((ur,idx)=>{
+          {userRoles.filter(ur=>{
+            if(ur.name==="Efehan Maleri")return false;
+            if(role==="admin")return true;
+            const me=userRoles.find(r=>r.email===user?.email);
+            return me?.name===ur.name;
+          }).map((ur,idx)=>{
             const yearStr=String(new Date().getFullYear());
             const approvedLeaves=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(yearStr));
             const annualUsed=approvedLeaves.filter(l=>l.leave_type==="annual").reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
@@ -1282,7 +1287,7 @@ export default function Home(){
         <span style={{fontSize:11}}>{l.reason}</span>,
         canEdit?<InEdit value={l.status} onChange={v=>{updateLeave(l.id,{status:v,approved_by:v==="approved"||v==="rejected"?user?.user_metadata?.full_name||user?.email:""})}} type="select" options={["pending","approved","rejected","cancelled"]}/>:<Bdg bg={l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7"} c={l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E"}>{l.status}</Bdg>,
         <span style={{fontSize:10,color:"var(--fg2)"}}>{l.approved_by}</span>,
-        <button onClick={()=>{if(window.confirm("Delete this leave record?"))deleteLeave(l.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        <button onClick={()=>setConfirmDlg({msg:"Delete this leave record?",fn:()=>deleteLeave(l.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
     </div>}
 
@@ -1313,7 +1318,7 @@ export default function Home(){
         <InEdit value={r.name} onChange={v=>updateUserRole(r.id,{name:v})}/>,
         <InEdit value={r.role} onChange={v=>updateUserRole(r.id,{role:v})} type="select" options={["admin","editor","viewer"]}/>,
         <InEdit value={r.dept||""} onChange={v=>updateUserRole(r.id,{dept:v})}/>,
-        <button onClick={()=>{if(window.confirm("Remove "+r.name+" from team?"))deleteUserRole(r.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
+        <button onClick={()=>setConfirmDlg({msg:"Remove "+r.name+" from team?",fn:()=>deleteUserRole(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
       <div style={{marginTop:20,padding:16,background:"var(--bg3)",borderRadius:10}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Role Permissions</div>
@@ -1326,7 +1331,7 @@ export default function Home(){
     </div>}
 
     </div>
-    <TicketPopup task={sel} tasks={tasks} onClose={()=>setSel(null)} onUpdate={updateTask} onDelete={deleteTask}/>
+    <TicketPopup task={sel} tasks={tasks} onClose={()=>setSel(null)} onUpdate={updateTask} onDelete={deleteTask} setConfirmDlg={setConfirmDlg}/>
     {addModal==="task"&&<AddModal title="Add Task" fields={[{key:"name",label:"Task Name",placeholder:"e.g. Landing page"},{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"owner",label:"Owner"},{key:"start_date",label:"Start",type:"date"},{key:"end_date",label:"End",type:"date"},{key:"priority",label:"Priority",type:"select",options:PRI_OPT}]} onSave={addTask} onClose={()=>setAddModal(null)}/>}
     {addModal==="raci"&&<AddModal title="Add RACI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"task",label:"Task"},{key:"responsible",label:"R"},{key:"accountable",label:"A"},{key:"consulted",label:"C"},{key:"informed",label:"I"},{key:"notes",label:"Notes"},{key:"is_suggestion",label:"PMO Suggestion?",type:"select",options:["false","true"]}]} onSave={addRaci} onClose={()=>setAddModal(null)}/>}
     {addModal==="risk"&&<AddModal title="Add Risk" fields={[{key:"description",label:"Risk"},{key:"impact",label:"Impact",type:"select",options:IMP_OPT},{key:"owner",label:"Owner"},{key:"mitigation",label:"Mitigation"},{key:"linked_to",label:"Linked Task (name or ID)"}]} onSave={addRisk} onClose={()=>setAddModal(null)}/>}
@@ -1528,6 +1533,9 @@ export default function Home(){
         </div>
       </div>
     </div>}
+
+    {/* Confirm Dialog Modal */}
+    {confirmDlg&&<ConfirmDialog message={confirmDlg.msg} onConfirm={()=>{confirmDlg.fn();setConfirmDlg(null)}} onCancel={()=>setConfirmDlg(null)}/>}
 
     {/* Close user menu on outside click */}
     {userMenu&&<div style={{position:"fixed",inset:0,zIndex:90}} onClick={()=>setUserMenu(false)}/>}
