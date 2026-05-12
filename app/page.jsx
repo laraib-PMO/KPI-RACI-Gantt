@@ -40,6 +40,10 @@ const CSS=`
 @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 @keyframes glow{0%,100%{box-shadow:0 0 5px rgba(59,130,246,.2)}50%{box-shadow:0 0 15px rgba(59,130,246,.4)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes bounceIn{0%{transform:scale(.3);opacity:0}50%{transform:scale(1.05)}70%{transform:scale(.9)}100%{transform:scale(1);opacity:1}}
+@keyframes ripple{0%{box-shadow:0 0 0 0 rgba(59,130,246,.3)}100%{box-shadow:0 0 0 12px transparent}}
 .af{animation:fadeUp .35s ease-out both}.asl{animation:slideR .35s ease-out both}.asc{animation:scaleIn .25s ease-out both}
 .ch{transition:all .2s ease}.ch:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.08)!important}
 .rh{transition:all .15s ease}.rh:hover{background:var(--hover)!important}
@@ -51,15 +55,17 @@ const CSS=`
 .offtrack-row:hover{border-left:3px solid #EF4444!important;background:rgba(239,68,68,.08)!important}
 .done-row{opacity:.6}.done-row:hover{opacity:1}
 .pulse-dot{animation:pulse 1.5s infinite}
-.sidebar{width:56px;transition:width .25s ease;overflow:hidden;white-space:nowrap;flex-shrink:0;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border);z-index:50}
-.sidebar:hover{width:200px}
-.sidebar:hover .sb-label{opacity:1}
-.sb-label{opacity:0;transition:opacity .2s ease;margin-left:10px;font-size:12px;font-weight:500}
-.sb-item{display:flex;align-items:center;padding:10px 16px;cursor:pointer;border-left:3px solid transparent;transition:all .15s;gap:0}
+.sb-item{display:flex;align-items:center;padding:10px 16px;cursor:pointer;border-left:3px solid transparent;transition:all .15s;gap:0;position:relative}
 .sb-item:hover{background:var(--hover)}
 .sb-item.active{border-left-color:#3B82F6;background:rgba(59,130,246,.08)}
 .sb-item.active .sb-icon{color:#3B82F6}
 .sb-item.active .sb-label{color:#3B82F6;font-weight:700}
+.sb-item[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:100%;top:50%;transform:translateY(-50%);background:var(--fg);color:var(--bg);padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;white-space:nowrap;z-index:100;pointer-events:none;animation:fadeIn .15s ease-out}
+.sidebar{width:56px;transition:width .25s ease;overflow:hidden;white-space:nowrap;flex-shrink:0;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border);z-index:50}
+.sidebar:hover{width:200px}
+.sidebar:hover .sb-label{opacity:1}
+.sidebar:hover .sb-item[data-tip]:hover::after{display:none}
+.sb-label{opacity:0;transition:opacity .2s ease;margin-left:10px;font-size:12px;font-weight:500}
 .sb-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:var(--fg2)}
 [data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)}
 [data-theme="light"]{--bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;--fg:#1E293B;--fg2:#64748B;--border:#E8ECEF;--hover:#F8FAFC;--card:#FFFFFF;--hdr:linear-gradient(135deg,#0D1B2A,#1B3A5C)}
@@ -198,8 +204,8 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);
-  const[view,setView]=useState("timeline");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);
+  const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
 
@@ -254,7 +260,7 @@ export default function Home(){
   const doLogin=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
   const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
 
-  useEffect(()=>{if(view==="leave"&&Object.keys(slackStatus).length===0)fetchSlackStatus()},[view]);
+  useEffect(()=>{if((view==="leave"||view==="dashboard")&&Object.keys(slackStatus).length===0)fetchSlackStatus()},[view]);
   useEffect(()=>{if(typeof window!=='undefined'){const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
 
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
@@ -317,7 +323,7 @@ export default function Home(){
   const deletePerf=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
 
   // Leave CRUD
-  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:v.leave_type||'annual',half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",v.leave_type+" "+s+(hd?" (half day)":""));setAddModal(null)},[user]);
+  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access");return}const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",(v.leave_type||"annual")+" "+s+(hd?" (half day)":""));setAddModal(null)},[user,userRoles]);
   const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access");return}setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status)notify("updated","leave",u.status)},[]);
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
@@ -383,7 +389,7 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"♨"}];
+  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave & Availability",icon:"🌴"}];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -443,14 +449,14 @@ export default function Home(){
         <span className="sb-label" style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Attimo</span>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
-        {TABS.map(t=><div key={t.id} className={"sb-item"+(view===t.id?" active":"")} onClick={()=>setView(t.id)}>
+        {TABS.map(t=><div key={t.id} className={"sb-item"+(view===t.id?" active":"")} onClick={()=>setView(t.id)} data-tip={t.l}>
           <div className="sb-icon">{t.icon}</div>
           <span className="sb-label" style={{color:view===t.id?"#3B82F6":"var(--fg2)"}}>{t.l}</span>
         </div>)}
       </div>
       <div style={{borderTop:"1px solid var(--border)",padding:"8px 0"}}>
         {role==='admin'&&<div className={"sb-item"+(view==="settings"?" active":"")} onClick={()=>setView("settings")}><div className="sb-icon">&#9881;</div><span className="sb-label">Settings</span></div>}
-        <div className="sb-item" onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setHoursForm({tz:me?.timezone||"Europe/Istanbul",start:me?.work_start||"09:00",end:me?.work_end||"18:00"});setShowHoursModal(true)}}><div className="sb-icon">&#9203;</div><span className="sb-label">Working Hours</span></div>
+        <div className="sb-item" onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setHoursForm({tz:me?.timezone||"Europe/Istanbul",start:me?.work_start||"09:00",end:me?.work_end||"18:00"});setShowHoursModal(true)}}><div className="sb-icon">🕐</div><span className="sb-label">Working Hours</span></div>
         <div className="sb-item" onClick={()=>setDark(!dark)}><div className="sb-icon">{dark?"☀":"◑"}</div><span className="sb-label">{dark?"Light Mode":"Dark Mode"}</span></div>
       </div>
     </div>
@@ -474,15 +480,112 @@ export default function Home(){
           <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const me=userRoles.find(r=>r.email===user?.email);if(me)uploadAvatar(me.id,f);else showToast("Your email not in user roles yet")}}/>
           {(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.avatar_url?<img src={me.avatar_url} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.2)"}}/>:<span style={{width:26,height:26,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",border:"2px solid rgba(255,255,255,.2)"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>})()}
         </label>
-        <button onClick={doLogout} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
-          {editMyName?<input autoFocus value={myNameVal} onChange={e=>setMyNameVal(e.target.value)} onBlur={()=>updateMyName(myNameVal)} onKeyDown={e=>{if(e.key==="Enter")updateMyName(myNameVal);if(e.key==="Escape")setEditMyName(false)}} onClick={e=>e.stopPropagation()} style={{background:"transparent",border:"1px solid #475569",borderRadius:4,color:"#F1F5F9",fontSize:11,padding:"2px 6px",width:120,outline:"none"}}/>
-          :<span className="mob-hide" onClick={e=>{e.stopPropagation();const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true)}} style={{cursor:"text"}} title="Click to edit name">{(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.name||user?.user_metadata?.full_name||user?.email?.split("@")[0]})()}</span>}
-          <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
-        </button>
+        <div style={{position:"relative"}}>
+          <button onClick={()=>setUserMenu(!userMenu)} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,color:"#94A3B8",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
+            <span className="mob-hide">{(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.name||user?.user_metadata?.full_name||user?.email?.split("@")[0]})()}</span>
+            <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
+            <span style={{fontSize:8,transition:"transform .2s",transform:userMenu?"rotate(180deg)":"rotate(0)"}}>▾</span>
+          </button>
+          {userMenu&&<div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:6,minWidth:180,boxShadow:"0 12px 40px rgba(0,0,0,.25)",zIndex:100}}>
+            <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);if(me){const slk=slackStatus._match?slackStatus._match(me):null;setProfileCard({ur:me,slk})}setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8,transition:"background .15s"}} className="rh">👤 My Profile</div>
+            <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">✏️ Edit Name</div>
+            <div onClick={()=>{setShowHoursModal(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">🕐 Working Hours</div>
+            <div style={{height:1,background:"var(--border)",margin:"4px 0"}}/>
+            <div onClick={()=>{doLogout();setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"#EF4444",fontWeight:600,display:"flex",alignItems:"center",gap:8}} className="rh">⏻ Sign Out</div>
+          </div>}
+        </div>
       </div>
     </div>
 
     <div style={{padding:20,flex:1,overflowY:"auto"}}>
+
+    {/* ═══ DASHBOARD ═══ */}
+    {view==="dashboard"&&<div className="af">
+      <div style={{fontSize:16,fontWeight:800,color:"var(--fg)",marginBottom:16}}>Dashboard Overview</div>
+
+      {/* Hero Metrics Row */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:20}}>
+        {[
+          {label:"Total Tasks",val:stats.total,color:"#3B82F6",icon:"📋"},
+          {label:"In Progress",val:stats.doing,color:"#F59E0B",icon:"⚡"},
+          {label:"Completed",val:stats.done,color:"#10B981",icon:"✅"},
+          {label:"Overdue",val:stats.overdue,color:"#EF4444",icon:"🔥"},
+          {label:"At Risk",val:stats.risk,color:"#F97316",icon:"⚠️"},
+          {label:"Team Size",val:userRoles.length,color:"#8B5CF6",icon:"👥"},
+        ].map((m,i)=><div key={i} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,borderLeft:"4px solid "+m.color,animationDelay:i*60+"ms"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:20}}>{m.icon}</span>
+            <span style={{fontSize:24,fontWeight:800,color:m.color}}>{m.val}</span>
+          </div>
+          <div style={{fontSize:11,fontWeight:600,color:"var(--fg2)"}}>{m.label}</div>
+        </div>)}
+      </div>
+
+      {/* Two-column layout */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}} className="mob-col1">
+        {/* Phase Progress */}
+        <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"100ms"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>📊 Phase Progress</div>
+          {[{name:"Phase 0 — Trusted Context Navigator",pct:30,color:"#14B8A6",owner:"Talha"},{name:"Phase 1 — Accepted State",pct:0,color:"#10B981",owner:"Blocked"},{name:"Phase 2 — Channel Capture",pct:0,color:"#3B82F6",owner:"Queued"},{name:"Phase 3 — Obligation Orchestrator",pct:0,color:"#8B5CF6",owner:"Queued"},{name:"Phase 4 — Evidence Ledger",pct:0,color:"#EC4899",owner:"Queued"}].map((p,i)=><div key={i} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginBottom:3}}>
+              <span style={{fontWeight:600,color:"var(--fg)"}}>{p.name}</span>
+              <span style={{color:p.pct>0?p.color:"var(--fg2)",fontWeight:700}}>{p.pct}%</span>
+            </div>
+            <div style={{height:6,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}>
+              <div className="bar-g" style={{height:"100%",width:p.pct+"%",borderRadius:3,background:p.color,animationDelay:i*100+"ms"}}/>
+            </div>
+            <div style={{fontSize:8,color:"var(--fg2)",marginTop:2}}>{p.owner}</div>
+          </div>)}
+        </div>
+
+        {/* Upcoming Deadlines */}
+        <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"150ms"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>📅 Upcoming Deadlines</div>
+          {tasks.filter(t=>t.status!=="Done"&&t.end_date).sort((a,b)=>String(a.end_date).localeCompare(String(b.end_date))).slice(0,8).map((t,i)=>{const od=isOverdue(t);return <div key={t.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,animationDelay:i*40+"ms"}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:od?"#EF4444":CL[t.dept]||"#94A3B8",flexShrink:0}}/>
+            <span style={{fontSize:11,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:od?"#EF4444":"var(--fg)"}}>{t.name}</span>
+            <span style={{fontSize:9,color:od?"#EF4444":"var(--fg2)",fontWeight:od?700:400,flexShrink:0}}>{fD(t.end_date)}</span>
+          </div>})}
+          {tasks.filter(t=>t.status!=="Done"&&t.end_date).length===0&&<div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No upcoming deadlines</div>}
+        </div>
+      </div>
+
+      {/* Second row */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}} className="mob-col1">
+        {/* KPI Health */}
+        <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"200ms"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>🎯 KPI Health</div>
+          {kpis.length>0?<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,textAlign:"center"}}>
+            <div style={{background:"#DCFCE720",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#10B981"}}>{kpis.filter(k=>k.flag==="green").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>On Track</div></div>
+            <div style={{background:"#FEF3C720",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#F59E0B"}}>{kpis.filter(k=>k.flag==="yellow").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>Attention</div></div>
+            <div style={{background:"#FEE2E220",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#EF4444"}}>{kpis.filter(k=>k.flag==="red").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>Critical</div></div>
+          </div>:<div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No KPIs configured yet</div>}
+        </div>
+
+        {/* Risk Summary */}
+        <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"250ms"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>⚡ Risk Summary</div>
+          {risks.length>0?<div>
+            {risks.filter(r=>r.status==="ACTIVE").slice(0,5).map((r,i)=><div key={r.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,borderLeft:"3px solid "+(r.impact==="CRITICAL"?"#EF4444":r.impact==="HIGH"?"#F97316":"#F59E0B"),marginBottom:4,animationDelay:i*40+"ms"}}>
+              <span style={{fontSize:10,flex:1,color:"var(--fg)"}}>{r.description}</span>
+              <Bdg bg={r.impact==="CRITICAL"?"#FEE2E2":"#FEF3C7"} c={r.impact==="CRITICAL"?"#DC2626":"#D97706"}>{r.impact}</Bdg>
+            </div>)}
+            {risks.filter(r=>r.status==="ACTIVE").length===0&&<div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No active risks</div>}
+          </div>:<div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No risks logged yet</div>}
+        </div>
+      </div>
+
+      {/* Quick Nav */}
+      <div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"300ms"}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12}}>Quick Navigation</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
+          {TABS.filter(t=>t.id!=="dashboard").map(t=><div key={t.id} onClick={()=>setView(t.id)} className="ch" style={{background:"var(--bg2)",borderRadius:8,padding:12,cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
+            <div style={{fontSize:18,marginBottom:4}}>{t.icon}</div>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{t.l}</div>
+          </div>)}
+        </div>
+      </div>
+    </div>}
 
     {/* ═══ TIMELINE ═══ */}
     {view==="timeline"&&<div className="af">
@@ -805,15 +908,28 @@ export default function Home(){
     {view==="leave"&&<div className="af">
       {/* ─── STATUS BAR + WHO'S AVAILABLE ─── */}
       <div style={{marginBottom:20}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Team Availability</div><button onClick={fetchSlackStatus} disabled={slackLoading} style={{padding:"4px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg3)",color:"var(--fg2)",fontSize:10,fontWeight:600,cursor:"pointer",opacity:slackLoading?.5:1}}>{slackLoading?"Syncing...":"Refresh from Slack"}</button></div>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:10,color:"var(--fg2)"}}>My status:</span>
-            {["working","break","meeting","off"].map(s=>{const me=userRoles.find(r=>r.email===user?.email);const active=me?.current_status===s;return <button key={s} onClick={()=>{const me2=userRoles.find(r=>r.email===user?.email);if(me2){supabase.from('user_roles').update({current_status:s}).eq('id',me2.id);setUserRoles(p=>p.map(r=>r.id===me2.id?{...r,current_status:s}:r))}}} style={{padding:"4px 10px",borderRadius:6,border:active?"2px solid":"1px solid var(--border)",borderColor:active?s==="working"?"#10B981":s==="break"?"#F59E0B":s==="meeting"?"#3B82F6":"#64748B":"var(--border)",background:active?(s==="working"?"#DCFCE7":s==="break"?"#FEF3C7":s==="meeting"?"#DBEAFE":"#F1F5F9"):"transparent",color:active?(s==="working"?"#166534":s==="break"?"#92400E":s==="meeting"?"#1D4ED8":"#475569"):"var(--fg2)",fontSize:10,fontWeight:active?700:500,cursor:"pointer"}}>{s}</button>})}
+            {["working","break","meeting","off"].map(s=>{const me=userRoles.find(r=>r.email===user?.email);const active=me?.current_status===s;return <button key={s} onClick={()=>{const me2=userRoles.find(r=>r.email===user?.email);if(me2){supabase.from('user_roles').update({current_status:s}).eq('id',me2.id);setUserRoles(p=>p.map(r=>r.id===me2.id?{...r,current_status:s}:r))}}} style={{padding:"4px 10px",borderRadius:6,border:active?"2px solid":"1px solid var(--border)",borderColor:active?s==="working"?"#10B981":s==="break"?"#F59E0B":s==="meeting"?"#3B82F6":"#64748B":"var(--border)",background:active?(s==="working"?"#DCFCE7":s==="break"?"#FEF3C7":s==="meeting"?"#DBEAFE":"#F1F5F9"):"transparent",color:active?(s==="working"?"#166534":s==="break"?"#92400E":s==="meeting"?"#1D4ED8":"#475569"):"var(--fg2)",fontSize:10,fontWeight:active?700:500,cursor:"pointer",transition:"all .2s"}}>{s}</button>})}
           </div>
         </div>
+
+        {/* Status Filter */}
+        <div style={{display:"flex",gap:4,marginBottom:12,background:"var(--bg3)",borderRadius:8,padding:2,width:"fit-content"}}>
+          {[{id:"all",l:"All"},{id:"working",l:"Working"},{id:"break",l:"Break"},{id:"meeting",l:"Meeting"},{id:"off",l:"Off/Offline"}].map(f=><button key={f.id} onClick={()=>setStatusFilter(f.id)} style={{padding:"5px 12px",borderRadius:6,border:"none",fontSize:10,fontWeight:600,cursor:"pointer",transition:"all .2s",background:statusFilter===f.id?"var(--fg)":"transparent",color:statusFilter===f.id?"var(--bg)":"var(--fg2)"}}>{f.l}</button>)}
+        </div>
+
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
-          {userRoles.map(ur=>{
+          {userRoles.filter(ur=>{
+            const slk=slackStatus._match?slackStatus._match(ur):null;
+            const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
+            const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
+            if(statusFilter==="all")return true;
+            if(statusFilter==="off")return st==="off"||st==="offline";
+            return st===statusFilter;
+          }).map((ur,idx)=>{
             const slk=slackStatus._match?slackStatus._match(ur):null;
             const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
             let localTime="";try{localTime=new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false})}catch{localTime="--:--"}
@@ -821,13 +937,12 @@ export default function Home(){
             let localH=0;try{localH=parseInt(new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}))}catch{}
             const inHours=localH>=ws&&localH<we;
             const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
-            // Slack status takes priority > manual status > working hours
             const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
             const slkText=slk?.status_text||"";
             const slkEmoji=slk?.status_emoji||"";
             const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
             const avatarSrc=ur.avatar_url||(slk?.avatar)||null;
-            return <div key={ur.id} onClick={()=>setProfileCard({ur,slk})} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"all .15s"}} className="rh">
+            return <div key={ur.id} onClick={()=>setProfileCard({ur,slk})} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",animationDelay:idx*30+"ms"}}>
               <div style={{position:"relative"}}>
                 {avatarSrc?<img src={avatarSrc} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:32,height:32,borderRadius:"50%",background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:11,fontWeight:700}}>{ur.name?.[0]}</span></div>}
                 <div style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:stC,border:"2px solid var(--card)"}}/>
@@ -843,10 +958,10 @@ export default function Home(){
         </div>
       </div>
 
-      {/* ─── OVERLAP FINDER ─── */}
+      {/* ─── OVERLAP FINDER (CENTERED) ─── */}
       <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:14,marginBottom:20}}>
-        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Team Overlap Hours (shared working window)</div>
-        <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8,textAlign:"center"}}>Team Overlap Hours (shared working window)</div>
+        <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
           {Array.from({length:24},(_,h)=>{
             const count=userRoles.filter(ur=>{
               const slk=slackStatus._match?slackStatus._match(ur):null;
@@ -857,29 +972,42 @@ export default function Home(){
             }).length;
             const pct=count/Math.max(userRoles.length,1);
             return <div key={h} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <div style={{width:18,height:40,borderRadius:4,background:count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6",opacity:count===0?.3:0.3+pct*0.7,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:2}}>
+              <div className="asl" style={{width:18,height:40,borderRadius:4,background:count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6",opacity:count===0?.3:0.3+pct*0.7,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:2,animationDelay:h*30+"ms",transition:"all .3s"}}>
                 <span style={{fontSize:7,color:"#fff",fontWeight:700}}>{count||""}</span>
               </div>
               <span style={{fontSize:7,color:"var(--fg2)"}}>{h===0?"12AM":h<12?h+"AM":h===12?"12PM":(h-12)+"PM"}</span>
             </div>
           })}
         </div>
-        <div style={{display:"flex",gap:12,marginTop:6,fontSize:9,color:"var(--fg2)"}}>
+        <div style={{display:"flex",gap:12,marginTop:6,fontSize:9,color:"var(--fg2)",justifyContent:"center"}}>
           <span>Green = most team online</span><span>Yellow = partial overlap</span><span>Blue = few people</span><span>Times in UTC (12hr)</span>
         </div>
       </div>
 
-      {/* ─── LEAVE BALANCES ─── */}
+      {/* ─── LEAVE BALANCES (DYNAMIC CATEGORIES) ─── */}
       <div style={{marginBottom:20}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Leave Balances ({new Date().getFullYear()})</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
-          {userRoles.map(ur=>{
-            const used=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(String(new Date().getFullYear()))).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
-            const quota=ur.annual_leave_quota||20;const rem=quota-used;const pct=Math.min(used/quota*100,100);
-            return <div key={ur.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:8,padding:"10px 12px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{ur.name?.split(" ")[0]}</span><span style={{fontSize:10,color:rem<=3?"#EF4444":"var(--fg2)",fontWeight:rem<=3?700:400}}>{rem} left</span></div>
-              <div style={{height:6,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",borderRadius:3,background:pct>80?"#EF4444":pct>50?"#F59E0B":"#10B981",transition:"width .3s"}}/></div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:"var(--fg2)"}}><span>{used} used</span><span>{quota} total</span></div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {userRoles.filter(ur=>ur.name!=="Efehan Maleri").map((ur,idx)=>{
+            const yearStr=String(new Date().getFullYear());
+            const approvedLeaves=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(yearStr));
+            const annualUsed=approvedLeaves.filter(l=>l.leave_type==="annual").reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+            const sickUsed=approvedLeaves.filter(l=>l.leave_type==="sick").reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+            const casualUsed=approvedLeaves.filter(l=>l.leave_type==="personal").reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+            const annualQuota=ur.annual_leave_quota||14;const sickQuota=8;const casualQuota=12;
+            return <div key={ur.id} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:12,animationDelay:idx*30+"ms"}}>
+              <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>{ur.name}</div>
+              {[{label:"Annual",used:annualUsed,quota:annualQuota,color:"#3B82F6"},{label:"Sick",used:sickUsed,quota:sickQuota,color:"#EF4444"},{label:"Casual",used:casualUsed,quota:casualQuota,color:"#F59E0B",note:"1/month"}].map(cat=>{
+                const rem=cat.quota-cat.used;const pct=Math.min(cat.used/cat.quota*100,100);
+                return <div key={cat.label} style={{marginBottom:6}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:9,marginBottom:2}}>
+                    <span style={{color:"var(--fg2)"}}>{cat.label}{cat.note?" ("+cat.note+")":""}</span>
+                    <span style={{color:rem<=2?"#EF4444":"var(--fg2)",fontWeight:rem<=2?700:400}}>{rem}/{cat.quota}</span>
+                  </div>
+                  <div style={{height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}>
+                    <div className="bar-g" style={{height:"100%",width:pct+"%",borderRadius:2,background:cat.color,transition:"width .3s"}}/>
+                  </div>
+                </div>})}
             </div>})}
         </div>
       </div>
@@ -915,7 +1043,7 @@ export default function Home(){
       {/* ─── LEAVE TABLE ─── */}
       <Tbl headers={["Person","Type","Half Day","From","To","Days","Reason","Status","Approved By",""]} rows={leaves.map(l=>[
         <span style={{fontWeight:600}}>{l.person}</span>,
-        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:l.leave_type==="sick"?"#FEE2E2":l.leave_type==="annual"?"#DBEAFE":l.leave_type==="wfh"?"#F3E8FF":"#F1F5F9",color:l.leave_type==="sick"?"#991B1B":l.leave_type==="annual"?"#1D4ED8":l.leave_type==="wfh"?"#7C3AED":"#475569"}}>{l.leave_type}</span>,
+        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:l.leave_type==="sick"?"#FEE2E2":l.leave_type==="annual"?"#DBEAFE":l.leave_type==="wfh"?"#F3E8FF":l.leave_type==="casual"?"#FEF3C7":"#F1F5F9",color:l.leave_type==="sick"?"#991B1B":l.leave_type==="annual"?"#1D4ED8":l.leave_type==="wfh"?"#7C3AED":l.leave_type==="casual"?"#92400E":"#475569"}}>{l.leave_type}</span>,
         <span style={{fontSize:10,color:l.half_day?"#F59E0B":"var(--fg2)"}}>{l.half_day?"Yes":"No"}</span>,
         fD(l.start_date),fD(l.end_date),<b>{l.half_day?"0.5":l.days}</b>,
         <span style={{fontSize:11}}>{l.reason}</span>,
@@ -975,7 +1103,7 @@ export default function Home(){
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
     {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="perf"&&<AddModal title="Add Performance Review" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha Mubeen"},{key:"period",label:"Period",placeholder:"e.g. Q2 2026"},{key:"goals",label:"Goals",placeholder:"Key objectives..."}]} onSave={addPerf} onClose={()=>setAddModal(null)}/>}
-    {addModal==="leave"&&<AddModal title="Request Leave" fields={[{key:"person",label:"Your Name",placeholder:user?.user_metadata?.full_name||""},{key:"leave_type",label:"Type",type:"select",options:["annual","sick","personal","wfh","unpaid","other"]},{key:"half_day",label:"Half Day?",type:"select",options:["No","Yes"]},{key:"start_date",label:"From",type:"date"},{key:"end_date",label:"To",type:"date"},{key:"reason",label:"Reason",placeholder:"Optional"}]} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
+    {addModal==="leave"&&<AddModal title="Request Leave" fields={[{key:"person",label:"Your Name",placeholder:user?.user_metadata?.full_name||""},{key:"leave_type",label:"Type",type:"select",options:["annual","sick","casual","wfh","unpaid","other"]},{key:"half_day",label:"Half Day?",type:"select",options:["No","Yes"]},{key:"start_date",label:"From",type:"date"},{key:"end_date",label:"To",type:"date"},{key:"reason",label:"Reason",placeholder:"Optional"}]} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
 
     {/* Working Hours Modal */}
     {showHoursModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowHoursModal(false)}>
@@ -1062,6 +1190,21 @@ export default function Home(){
         </>})()}
       </div>
     </div>}
+
+    {/* Edit Name Modal */}
+    {editMyName&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setEditMyName(false)}>
+      <div onClick={e=>e.stopPropagation()} className="asc" style={{background:"var(--card)",borderRadius:16,padding:24,width:"min(360px,90vw)",border:"1px solid var(--border)"}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)",marginBottom:12}}>Edit Your Name</div>
+        <input autoFocus value={myNameVal} onChange={e=>setMyNameVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")updateMyName(myNameVal)}} style={{width:"100%",padding:"10px 12px",border:"1px solid var(--border)",borderRadius:8,fontSize:13,background:"var(--bg2)",color:"var(--fg)",boxSizing:"border-box"}}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}}>
+          <button onClick={()=>setEditMyName(false)} style={{padding:"8px 16px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--fg2)",fontSize:12,cursor:"pointer"}}>Cancel</button>
+          <button onClick={()=>updateMyName(myNameVal)} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>Save</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* Close user menu on outside click */}
+    {userMenu&&<div style={{position:"fixed",inset:0,zIndex:90}} onClick={()=>setUserMenu(false)}/>}
 
     {/* Toast notification */}
     {toast&&<div className="asc" style={{position:"fixed",bottom:24,right:24,background:"var(--fg)",color:"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast}</div>}
