@@ -190,8 +190,13 @@ function LeaveRequestModal({user,onSave,onClose,isAdmin}){
   const[step,setStep]=useState(1);const[vals,setVals]=useState({duration:"full",leave_type:"",person:user?.user_metadata?.full_name||""});const[err,setErr]=useState("");
   const set=(k,v)=>setVals(p=>({...p,[k]:v}));
   const empTypes=[{id:"annual",l:"Annual",sub:"14/yr"},{id:"sick",l:"Sick",sub:"8/yr"},{id:"casual",l:"Casual",sub:"1/mo"}];
-  const adminTypes=[...empTypes,{id:"wfh",l:"WFH",sub:""},{id:"other",l:"Other",sub:""}];
-  const types=isAdmin?adminTypes:empTypes;
+  const adminExtra=[{id:"wfh",l:"WFH",sub:""},{id:"other",l:"Other",sub:""}];
+  const halfDayTypes=[{id:"annual",l:"Annual",sub:"14/yr"},{id:"casual",l:"Casual",sub:"1/mo"}];
+  const getTypes=()=>{
+    if(vals.duration==="half")return halfDayTypes;
+    return isAdmin?[...empTypes,...adminExtra]:empTypes;
+  };
+  const types=getTypes();
   const validate1=()=>{if(!vals.leave_type){setErr("Select a leave type");return false}setErr("");return true};
   const validate2=()=>{if(!vals.person?.trim()){setErr("Name is required");return false}if(!vals.start_date){setErr("Select a date");return false}if(vals.duration==="full"&&!vals.end_date){setErr("Select end date");return false}if(vals.duration==="full"&&vals.end_date<vals.start_date){setErr("End date must be after start date");return false}setErr("");return true};
   return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
@@ -347,7 +352,7 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
 
@@ -465,8 +470,8 @@ export default function Home(){
   const deletePerf=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
 
   // Leave CRUD
-  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data)setLeaves(p=>[...data,...p]);notify("requested","leave",(v.leave_type||"annual")+" "+s+(hd?" (half day)":""));setAddModal(null)},[user,userRoles]);
-  const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access","error");return}setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status)notify("updated","leave",u.status)},[]);
+  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data){setLeaves(p=>[...data,...p]);showToast("Leave request submitted — pending approval")}notify("requested","leave",(v.leave_type||"annual")+" "+s+(hd?" (half day)":""));setAddModal(null)},[user,userRoles]);
+  const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access","error");return}const leave=leaves.find(l=>l.id===id);setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status){notify(u.status,"leave",leave?.person+" — "+u.status);showToast("Leave "+u.status+" for "+(leave?.person||"employee"))}},[leaves]);
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
   // Profile picture upload
@@ -1034,9 +1039,71 @@ export default function Home(){
 
     {/* ═══ PERFORMANCE ═══ */}
     {view==="perf"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Performance Reviews</div>{canEdit&&<button className="act-add" onClick={()=>setAddModal("perf")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Review</button>}</div>
-      {perf.length===0?<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No performance reviews yet. Click + Add Review to start.</div>:
-      perf.map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*60+"ms"}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Performance</div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>{setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false);showToast("Performance synced from Linear + Asana")}).catch(()=>{setPerfLoading(false);showToast("Sync failed","error")})}} className="btn-pop" style={{background:"var(--bg3)",color:"var(--fg)",border:"1px solid var(--border)",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>{perfLoading?"Syncing...":"Sync from Linear + Asana"}</button>
+          {canEdit&&<button className="act-add btn-pop" onClick={()=>setAddModal("perf")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Review</button>}
+        </div>
+      </div>
+
+      {/* Auto-populated metrics */}
+      {perfMetrics&&<div className="af" style={{marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:700,color:"var(--fg)"}}>Auto-Generated — {perfMetrics.period}</div>
+          <div style={{fontSize:9,color:"var(--fg2)"}}>Last synced: {new Date(perfMetrics.timestamp).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'})}</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+          {Object.entries(perfMetrics.people||{}).sort((a,b)=>b[1].onTimeRate-a[1].onTimeRate).map(([name,d],i)=>{
+            const ratingC=d.autoRating==="exceeds"?"#10B981":d.autoRating==="meets"?"#3B82F6":d.autoRating==="developing"?"#F59E0B":"#94A3B8";
+            return <div key={name} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:14,borderLeft:"4px solid "+ratingC,animationDelay:i*50+"ms"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",background:CL[N2D[name]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{name?.[0]}</span></div>
+                  <div><div style={{fontSize:12,fontWeight:700,color:"var(--fg)"}}>{name}</div><div style={{fontSize:9,color:"var(--fg2)"}}>{N2D[name]||"Team"}</div></div>
+                </div>
+                <div style={{padding:"3px 8px",borderRadius:99,background:ratingC+"20",color:ratingC,fontSize:9,fontWeight:700,textTransform:"uppercase"}}>{d.autoRating}</div>
+              </div>
+              {/* Metrics grid */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
+                <div style={{textAlign:"center",padding:6,background:"var(--bg2)",borderRadius:6}}>
+                  <div style={{fontSize:16,fontWeight:800,color:"var(--fg)"}}>{d.assigned}</div>
+                  <div style={{fontSize:8,color:"var(--fg2)"}}>Assigned</div>
+                </div>
+                <div style={{textAlign:"center",padding:6,background:"var(--bg2)",borderRadius:6}}>
+                  <div style={{fontSize:16,fontWeight:800,color:"#10B981"}}>{d.completed}</div>
+                  <div style={{fontSize:8,color:"var(--fg2)"}}>Done</div>
+                </div>
+                <div style={{textAlign:"center",padding:6,background:d.overdue>0?"#FEE2E220":"var(--bg2)",borderRadius:6}}>
+                  <div style={{fontSize:16,fontWeight:800,color:d.overdue>0?"#EF4444":"var(--fg)"}}>{d.overdue}</div>
+                  <div style={{fontSize:8,color:"var(--fg2)"}}>Overdue</div>
+                </div>
+              </div>
+              {/* Progress bars */}
+              <div style={{marginBottom:6}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--fg2)",marginBottom:2}}><span>Completion rate</span><span style={{fontWeight:700,color:d.completionRate>=70?"#10B981":"#F59E0B"}}>{d.completionRate}%</span></div>
+                <div style={{height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}><div className="bar-g" style={{height:"100%",width:d.completionRate+"%",borderRadius:2,background:d.completionRate>=70?"#10B981":"#F59E0B"}}/></div>
+              </div>
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--fg2)",marginBottom:2}}><span>On-time rate</span><span style={{fontWeight:700,color:d.onTimeRate>=80?"#10B981":d.onTimeRate>=60?"#F59E0B":"#EF4444"}}>{d.onTimeRate}%</span></div>
+                <div style={{height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}><div className="bar-g" style={{height:"100%",width:d.onTimeRate+"%",borderRadius:2,background:d.onTimeRate>=80?"#10B981":d.onTimeRate>=60?"#F59E0B":"#EF4444"}}/></div>
+              </div>
+              <div style={{display:"flex",gap:6,marginTop:8,fontSize:8,color:"var(--fg2)"}}>
+                <span>{d.onTime} on time</span><span>{d.late} late</span><span>{d.inProgress} active</span>
+              </div>
+            </div>})}
+        </div>
+      </div>}
+      {!perfMetrics&&<div className="af" style={{background:"var(--bg2)",borderRadius:10,padding:16,marginBottom:16,textAlign:"center"}}>
+        <div style={{color:"var(--fg2)",marginBottom:4}}>{I.chart(20)}</div>
+        <div style={{fontSize:12,fontWeight:600,color:"var(--fg)",marginBottom:4}}>Click "Sync from Linear + Asana" to auto-generate performance metrics</div>
+        <div style={{fontSize:10,color:"var(--fg2)"}}>Pulls completion rates, on-time delivery, and overdue counts per person.</div>
+      </div>}
+
+      {/* Manual reviews */}
+      {perf.length>0&&<div style={{marginTop:8}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Manual Reviews</div>
+        {perf.map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*60+"ms"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:CL[N2D[p.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:12,fontWeight:700}}>{p.person?.[0]}</span></div>
@@ -1055,6 +1122,7 @@ export default function Home(){
           <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Reviewer</div><InEdit value={p.reviewer||""} onChange={v=>updatePerf(p.id,{reviewer:v})}/></div>
         </div>
       </div>)}
+      </div>}
     </div>}
 
     {/* ═══ LEAVE ═══ */}
