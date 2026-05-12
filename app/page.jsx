@@ -135,8 +135,12 @@ const CSS=`
 .avatar-open{animation:avatarFlip .5s cubic-bezier(.22,1,.36,1) both}
 @keyframes avatarFlip{0%{transform:rotate(0) scale(1)}50%{transform:rotate(90deg) scale(1.05)}100%{transform:rotate(0) scale(1)}}
 .toast-success{background:var(--fg)}.toast-error{background:#EF4444}
-[data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)}
-[data-theme="light"]{--bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;--fg:#1E293B;--fg2:#64748B;--border:#E8ECEF;--hover:#F8FAFC;--card:#FFFFFF;--hdr:linear-gradient(135deg,#0D1B2A,#1B3A5C)}
+[data-theme="dark"]{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--fg:#F1F5F9;--fg2:#94A3B8;--border:#334155;--hover:rgba(59,130,246,.08);--card:#1E293B;--hdr:linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%);--shadow:0 4px 12px rgba(0,0,0,.4);--shadow-lg:0 12px 40px rgba(0,0,0,.5)}
+[data-theme="light"]{--bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;--fg:#1E293B;--fg2:#64748B;--border:#E8ECEF;--hover:#F8FAFC;--card:#FFFFFF;--hdr:linear-gradient(135deg,#0D1B2A,#1B3A5C);--shadow:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1)}
+[data-theme="dark"] .ch:hover{box-shadow:0 8px 25px rgba(0,0,0,.35)!important}
+[data-theme="dark"] .stat-card:hover{box-shadow:0 12px 30px rgba(0,0,0,.4)!important}
+[data-theme="dark"] .toast-success{background:#F1F5F9;color:#0F172A}
+[data-theme="dark"] .modal-overlay{background:rgba(0,0,0,.7)}
 [data-role="viewer"] .act-add,[data-role="viewer"] .act-del,[data-role="viewer"] .act-edit{display:none!important}
 [data-role="editor"] .act-del{display:none!important}
 [data-role="viewer"] td input,[data-role="viewer"] td select{pointer-events:none;opacity:.7}
@@ -182,45 +186,57 @@ function ConfirmDialog({message,onConfirm,onCancel}){
   </div>;
 }
 
-function LeaveRequestModal({user,onSave,onClose}){
-  const[step,setStep]=useState(1);const[vals,setVals]=useState({duration:"full",leave_type:"annual",person:user?.user_metadata?.full_name||""});
+function LeaveRequestModal({user,onSave,onClose,isAdmin}){
+  const[step,setStep]=useState(1);const[vals,setVals]=useState({duration:"full",leave_type:"",person:user?.user_metadata?.full_name||""});const[err,setErr]=useState("");
   const set=(k,v)=>setVals(p=>({...p,[k]:v}));
+  const empTypes=[{id:"annual",l:"Annual",sub:"14/yr"},{id:"sick",l:"Sick",sub:"8/yr"},{id:"casual",l:"Casual",sub:"1/mo"}];
+  const adminTypes=[...empTypes,{id:"wfh",l:"WFH",sub:""},{id:"other",l:"Other",sub:""}];
+  const types=isAdmin?adminTypes:empTypes;
+  const validate1=()=>{if(!vals.leave_type){setErr("Select a leave type");return false}setErr("");return true};
+  const validate2=()=>{if(!vals.person?.trim()){setErr("Name is required");return false}if(!vals.start_date){setErr("Select a date");return false}if(vals.duration==="full"&&!vals.end_date){setErr("Select end date");return false}if(vals.duration==="full"&&vals.end_date<vals.start_date){setErr("End date must be after start date");return false}setErr("");return true};
   return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
     <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(440px,95vw)",padding:20,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>Request Leave</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--fg2)"}}>{I.x(16)}</button></div>
-      <div style={{display:"flex",gap:4,marginBottom:16}}>{[1,2,3].map(s=><div key={s} style={{flex:1,height:3,borderRadius:2,background:s<=step?"#3B82F6":"var(--bg3)",transition:"background .3s"}}/>)}</div>
+      <div style={{display:"flex",gap:4,marginBottom:16}}>{[1,2].map(s=><div key={s} style={{flex:1,height:3,borderRadius:2,background:s<=step?"#3B82F6":"var(--bg3)",transition:"background .3s"}}/>)}</div>
+      {err&&<div className="asd" style={{background:"#FEE2E2",color:"#DC2626",padding:"8px 12px",borderRadius:8,fontSize:11,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{I.alert(12)} {err}</div>}
 
       {step===1&&<div className="af">
-        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:8}}>Duration</label>
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:8}}>Duration <span style={{color:"#EF4444"}}>*</span></label>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-          {[{id:"full",l:"Full Day(s)"},{id:"half",l:"Half Day"}].map(d=><div key={d.id} onClick={()=>set("duration",d.id)} className="ch" style={{padding:16,borderRadius:10,border:vals.duration===d.id?"2px solid #3B82F6":"1px solid var(--border)",background:vals.duration===d.id?"rgba(59,130,246,.06)":"var(--bg2)",cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
+          {[{id:"full",l:"Full Day(s)",desc:"One or more complete days"},{id:"half",l:"Half Day",desc:"Morning or afternoon only"}].map(d=><div key={d.id} onClick={()=>{set("duration",d.id);set("leave_type","")}} className="ch" style={{padding:14,borderRadius:10,border:vals.duration===d.id?"2px solid #3B82F6":"1px solid var(--border)",background:vals.duration===d.id?"rgba(59,130,246,.06)":"var(--bg2)",cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
             <div style={{fontSize:13,fontWeight:700,color:vals.duration===d.id?"#3B82F6":"var(--fg)"}}>{d.l}</div>
+            <div style={{fontSize:9,color:"var(--fg2)",marginTop:2}}>{d.desc}</div>
           </div>)}
         </div>
-        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:8}}>Leave Type</label>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-          {[{id:"annual",l:"Annual",sub:"14/yr"},{id:"sick",l:"Sick",sub:"8/yr"},{id:"casual",l:"Casual",sub:"1/mo"},{id:"wfh",l:"WFH",sub:""},{id:"unpaid",l:"Unpaid",sub:""},{id:"other",l:"Other",sub:""}].map(t=><div key={t.id} onClick={()=>set("leave_type",t.id)} className="ch" style={{padding:10,borderRadius:8,border:vals.leave_type===t.id?"2px solid #3B82F6":"1px solid var(--border)",background:vals.leave_type===t.id?"rgba(59,130,246,.06)":"var(--bg2)",cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:8}}>Leave Type <span style={{color:"#EF4444"}}>*</span></label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+          {types.map(t=><div key={t.id} onClick={()=>set("leave_type",t.id)} className="ch" style={{padding:10,borderRadius:8,border:vals.leave_type===t.id?"2px solid #3B82F6":"1px solid var(--border)",background:vals.leave_type===t.id?"rgba(59,130,246,.06)":"var(--bg2)",cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
             <div style={{fontSize:11,fontWeight:600,color:vals.leave_type===t.id?"#3B82F6":"var(--fg)"}}>{t.l}</div>
             {t.sub&&<div style={{fontSize:8,color:"var(--fg2)"}}>{t.sub}</div>}
           </div>)}
         </div>
-        <button onClick={()=>setStep(2)} className="btn-pop" style={{width:"100%",padding:10,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",marginTop:16}}>Next</button>
+        <button onClick={()=>{if(validate1())setStep(2)}} className="btn-pop" style={{width:"100%",padding:10,background:vals.leave_type?"linear-gradient(135deg,#3B82F6,#8B5CF6)":"var(--bg3)",color:vals.leave_type?"#fff":"var(--fg2)",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:vals.leave_type?"pointer":"not-allowed",marginTop:16,transition:"all .3s"}}>Next</button>
       </div>}
 
       {step===2&&<div className="af">
-        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Your Name</label>
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Your Name <span style={{color:"#EF4444"}}>*</span></label>
         <input value={vals.person} onChange={e=>set("person",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",marginBottom:12,boxSizing:"border-box"}}/>
         <div style={{display:"flex",gap:12,marginBottom:12}}>
-          <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>{vals.duration==="half"?"Date":"From"}</label>
+          <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>{vals.duration==="half"?"Date":"From"} <span style={{color:"#EF4444"}}>*</span></label>
             <input type="date" value={vals.start_date||""} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",boxSizing:"border-box"}}/></div>
-          {vals.duration==="full"&&<div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>To</label>
+          {vals.duration==="full"&&<div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>To <span style={{color:"#EF4444"}}>*</span></label>
             <input type="date" value={vals.end_date||""} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",boxSizing:"border-box"}}/></div>}
         </div>
-        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Reason (optional)</label>
+        <div style={{background:"var(--bg2)",borderRadius:8,padding:10,marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:vals.leave_type==="annual"?"#3B82F6":vals.leave_type==="sick"?"#EF4444":"#F59E0B"}}/>
+          <span style={{fontSize:11,color:"var(--fg)",fontWeight:600,textTransform:"capitalize"}}>{vals.leave_type}</span>
+          <span style={{fontSize:10,color:"var(--fg2)"}}>· {vals.duration==="half"?"Half day":"Full day(s)"}</span>
+        </div>
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Reason</label>
         <input value={vals.reason||""} onChange={e=>set("reason",e.target.value)} placeholder="Optional" style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",marginBottom:12,boxSizing:"border-box"}}/>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setStep(1)} style={{flex:1,padding:10,border:"1px solid var(--border)",borderRadius:8,background:"transparent",color:"var(--fg2)",fontWeight:600,fontSize:12,cursor:"pointer"}}>Back</button>
-          <button onClick={()=>{onSave({...vals,half_day:vals.duration==="half"?"Yes":"No"});}} className="btn-pop" style={{flex:2,padding:10,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>Submit Request</button>
+          <button onClick={()=>{setStep(1);setErr("")}} style={{flex:1,padding:10,border:"1px solid var(--border)",borderRadius:8,background:"transparent",color:"var(--fg2)",fontWeight:600,fontSize:12,cursor:"pointer"}}>Back</button>
+          <button onClick={()=>{if(validate2())onSave({...vals,half_day:vals.duration==="half"?"Yes":"No"})}} className="btn-pop" style={{flex:2,padding:10,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>Submit Request</button>
         </div>
       </div>}
     </div>
@@ -386,7 +402,7 @@ export default function Home(){
   const doLogin=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
   const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
 
-  useEffect(()=>{if((view==="leave"||view==="dashboard")&&Object.keys(slackStatus).length===0)fetchSlackStatus()},[view]);
+  useEffect(()=>{if(Object.keys(slackStatus).length===0)fetchSlackStatus()},[]);
   useEffect(()=>{if(typeof window!=='undefined'){const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
 
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
@@ -989,26 +1005,28 @@ export default function Home(){
       {/* Recurring section */}
       {(meetFilter==="all"||meetFilter==="recurring")&&<div style={{marginBottom:16}}>
         {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/> Recurring Meetings</div>}
-        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).map(m=>[
+        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees","",""]} rows={meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).map(m=>[
           <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
           <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
           <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
+          (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
           <button onClick={()=>{if(window.confirm("Delete this meeting?"))deleteMeeting(m.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
       {/* Milestone section */}
       {(meetFilter==="all"||meetFilter==="milestone")&&<div>
         {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#F59E0B"}}/> Milestone-Gated Meetings</div>}
-        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees",""]} rows={meetings.filter(m=>m.type==="Milestone").map(m=>[
+        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees","",""]} rows={meetings.filter(m=>m.type==="Milestone").map(m=>[
           <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
           <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
           <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
+          (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
           <button onClick={()=>{if(window.confirm("Delete this meeting?"))deleteMeeting(m.id)}} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
@@ -1093,29 +1111,41 @@ export default function Home(){
         </div>
       </div>
 
-      {/* ─── OVERLAP FINDER (CENTERED) ─── */}
-      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:14,marginBottom:20}}>
-        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8,textAlign:"center"}}>Team Overlap Hours (shared working window)</div>
-        <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
+      {/* ─── OVERLAP FINDER (CENTERED, INTERACTIVE) ─── */}
+      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:4,textAlign:"center"}}>Team Overlap Hours</div>
+        <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16,textAlign:"center"}}>Shared working window across all timezones · Hover for details</div>
+        <div style={{display:"flex",gap:3,alignItems:"flex-end",justifyContent:"center",flexWrap:"wrap",minHeight:100}}>
           {Array.from({length:24},(_,h)=>{
-            const count=userRoles.filter(ur=>{
+            const onlineMembers=userRoles.filter(ur=>{
               const slk=slackStatus._match?slackStatus._match(ur):null;
               const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
               const ws=parseInt((ur.work_start||"09:00").split(":")[0]);
               const we=parseInt((ur.work_end||"18:00").split(":")[0]);
               try{const d=new Date();d.setUTCHours(h,0,0,0);const localH=parseInt(d.toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}));return localH>=ws&&localH<we}catch{return false}
-            }).length;
+            });
+            const count=onlineMembers.length;
             const pct=count/Math.max(userRoles.length,1);
-            return <div key={h} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <div className="asl" style={{width:18,height:40,borderRadius:4,background:count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6",opacity:count===0?.3:0.3+pct*0.7,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:2,animationDelay:h*30+"ms",transition:"all .3s"}}>
-                <span style={{fontSize:7,color:"#fff",fontWeight:700}}>{count||""}</span>
+            const barH=Math.max(count===0?8:20,pct*80);
+            const bg=count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6";
+            const timeLabel=h===0?"12AM":h<12?h+"AM":h===12?"12PM":(h-12)+"PM";
+            const nowUTC=new Date().getUTCHours();
+            const isNow=h===nowUTC;
+            return <div key={h} className="ch" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",cursor:count>0?"pointer":"default"}} title={count>0?onlineMembers.map(u=>u.name).join(", "):""}>
+              {isNow&&<div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444",position:"absolute",top:-8}} className="pulse-dot"/>}
+              <div className="asl" style={{width:24,height:barH,borderRadius:5,background:bg,opacity:count===0?.2:0.4+pct*0.6,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:3,animationDelay:h*30+"ms",transition:"all .3s",border:isNow?"2px solid #EF4444":"none"}}>
+                <span style={{fontSize:8,color:"#fff",fontWeight:700}}>{count||""}</span>
               </div>
-              <span style={{fontSize:7,color:"var(--fg2)"}}>{h===0?"12AM":h<12?h+"AM":h===12?"12PM":(h-12)+"PM"}</span>
+              <span style={{fontSize:8,color:isNow?"#EF4444":"var(--fg2)",fontWeight:isNow?700:400}}>{timeLabel}</span>
             </div>
           })}
         </div>
-        <div style={{display:"flex",gap:12,marginTop:6,fontSize:9,color:"var(--fg2)",justifyContent:"center"}}>
-          <span>Green = most team online</span><span>Yellow = partial overlap</span><span>Blue = few people</span><span>Times in UTC (12hr)</span>
+        <div style={{display:"flex",gap:16,marginTop:12,fontSize:9,color:"var(--fg2)",justifyContent:"center",alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#10B981"}}/> Most online</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#F59E0B"}}/> Partial</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#3B82F6"}}/> Few</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444"}}/> Current hour</span>
+          <span>Times in UTC</span>
         </div>
       </div>
 
@@ -1238,7 +1268,7 @@ export default function Home(){
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
     {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="perf"&&<AddModal title="Add Performance Review" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha Mubeen"},{key:"period",label:"Period",placeholder:"e.g. Q2 2026"},{key:"goals",label:"Goals",placeholder:"Key objectives..."}]} onSave={addPerf} onClose={()=>setAddModal(null)}/>}
-    {addModal==="leave"&&<LeaveRequestModal user={user} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
+    {addModal==="leave"&&<LeaveRequestModal user={user} isAdmin={role==="admin"} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
 
     {/* Working Hours Modal */}
     {showHoursModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowHoursModal(false)}>
