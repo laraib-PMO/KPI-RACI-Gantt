@@ -110,100 +110,119 @@ async function syncSlackStandups() {
   }
 }
 
-// ─── NEW: Sync linked project progress ───────────────────────────────────────
+// ─── NEW: Sync linked project progress + dates ──────────────────────────────
 async function syncLinkedProjects() {
   const key = process.env.LINEAR_API_KEY;
   const asanaToken = process.env.ASANA_TOKEN;
 
   // Get all tasks with linked_project
   const { data: linkedTasks } = await supabase.from('tasks').select('*').not('linked_project', 'is', null);
-  if (!linkedTasks || linkedTasks.length === 0) return { source: 'Linked Projects', status: 'ok', count: 0, detail: 'No linked tasks' };
+  if (!linkedTasks || linkedTasks.length === 0) {
+    // Fall through to check linked_task_url below
+  } else {
+    var updated = 0;
+    for (const task of linkedTasks) {
+      try {
+        if (task.linked_source === 'linear' && key) {
+          const res = await fetch('https://api.linear.app/graphql', {
+            method: 'POST',
+            headers: { 'Authorization': key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `{ project(id:"${task.linked_project}") { name startDate targetDate issues { nodes { state { type } dueDate startedAt } } } }`
+            })
+          });
+          const data = await res.json();
+          const project = data?.data?.project;
+          const issues = project?.issues?.nodes || [];
+          if (issues.length === 0) continue;
 
-  let updated = 0;
+          const total = issues.length;
+          const done = issues.filter(i => i.state?.type === 'completed').length;
+          const progress = Math.round((done / total) * 100);
+          const newStatus = progress === 100 ? 'Done' : progress > 0 ? 'Doing' : 'To Do';
 
-  for (const task of linkedTasks) {
-    try {
-      if (task.linked_source === 'linear' && key) {
-        // Fetch project issues from Linear
-        const res = await fetch('https://api.linear.app/graphql', {
-          method: 'POST',
-          headers: { 'Authorization': key, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `{ project(id:"${task.linked_project}") { name issues { nodes { state { type } } } } }`
-          })
-        });
-        const data = await res.json();
-        const issues = data?.data?.project?.issues?.nodes || [];
-        if (issues.length === 0) continue;
+          const upd = { progress, status: newStatus };
+          // Sync project dates if available
+          if (project?.startDate) upd.start_date = project.startDate;
+          if (project?.targetDate) upd.end_date = project.targetDate;
 
-        const total = issues.length;
-        const done = issues.filter(i => i.state?.type === 'completed').length;
-        const progress = Math.round((done / total) * 100);
-        const newStatus = progress === 100 ? 'Done' : progress > 0 ? 'Doing' : 'To Do';
+          await supabase.from('tasks').update(upd).eq('id', task.id);
+          updated++;
 
-        await supabase.from('tasks').update({ progress, status: newStatus }).eq('id', task.id);
-        updated++;
+        } else if (task.linked_source === 'asana' && asanaToken) {
+          const res = await fetch(
+            `https://app.asana.com/api/1.0/tasks?project=${task.linked_project}&opt_fields=completed&limit=100`,
+            { headers: { 'Authorization': `Bearer ${asanaToken}` } }
+          );
+          const data = await res.json();
+          const tasks_list = data?.data || [];
+          if (tasks_list.length === 0) continue;
 
-      } else if (task.linked_source === 'asana' && asanaToken) {
-        // Fetch project tasks from Asana
-        const res = await fetch(
-          `https://app.asana.com/api/1.0/tasks?project=${task.linked_project}&opt_fields=completed&limit=100`,
-          { headers: { 'Authorization': `Bearer ${asanaToken}` } }
-        );
-        const data = await res.json();
-        const tasks_list = data?.data || [];
-        if (tasks_list.length === 0) continue;
+          const total = tasks_list.length;
+          const done = tasks_list.filter(t => t.completed).length;
+          const progress = Math.round((done / total) * 100);
+          const newStatus = progress === 100 ? 'Done' : progress > 0 ? 'Doing' : 'To Do';
 
-        const total = tasks_list.length;
-        const done = tasks_list.filter(t => t.completed).length;
-        const progress = Math.round((done / total) * 100);
-        const newStatus = progress === 100 ? 'Done' : progress > 0 ? 'Doing' : 'To Do';
-
-        await supabase.from('tasks').update({ progress, status: newStatus }).eq('id', task.id);
-        updated++;
+          await supabase.from('tasks').update({ progress, status: newStatus }).eq('id', task.id);
+          updated++;
+        }
+      } catch (e) {
+        console.error('Linked project sync error for task', task.id, e);
       }
-    } catch (e) {
-      console.error('Linked project sync error for task', task.id, e);
     }
   }
 
-  // Also check linked_task_url (binary done/not-done for specific tasks)
+  // Also check linked_task_url (binary done/not-done + date sync)
+  if (!updated) updated = 0;
   const { data: linkedUrlTasks } = await supabase.from('tasks').select('*').not('linked_task_url', 'is', null);
   if (linkedUrlTasks) {
     for (const task of linkedUrlTasks) {
       try {
         if (task.linked_task_url?.includes('linear.app') && key) {
-          // Extract issue identifier from URL
-          const match = task.linked_task_url.match(/\/issue\/([A-Z]+-\d+)/);
+          const match = task.linked_task_url.match(/ATT-(\d+)/);
           if (match) {
             const res = await fetch('https://api.linear.app/graphql', {
               method: 'POST',
               headers: { 'Authorization': key, 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                query: `{ issueSearch(filter:{number:{eq:${parseInt(match[1].split('-')[1])}}},first:1) { nodes { state { type } } } }`
+                query: `{ issues(filter:{number:{eq:${parseInt(match[1])}}},first:1) { nodes { state { type } dueDate startedAt completedAt } } }`
               })
             });
             const data = await res.json();
-            const issue = data?.data?.issueSearch?.nodes?.[0];
+            const issue = data?.data?.issues?.nodes?.[0];
             if (issue) {
               const isDone = issue.state?.type === 'completed';
-              if (isDone && task.status !== 'Done') {
-                await supabase.from('tasks').update({ status: 'Done', progress: 100 }).eq('id', task.id);
+              const upd = {};
+              if (isDone && task.status !== 'Done') { upd.status = 'Done'; upd.progress = 100; }
+              if (!isDone && issue.state?.type === 'started' && task.status === 'To Do') { upd.status = 'Doing'; }
+              // Sync dates from Linear issue
+              if (issue.dueDate) upd.end_date = issue.dueDate;
+              if (issue.startedAt) upd.start_date = issue.startedAt.split('T')[0];
+              if (Object.keys(upd).length > 0) {
+                await supabase.from('tasks').update(upd).eq('id', task.id);
                 updated++;
               }
             }
           }
         } else if (task.linked_task_url?.includes('asana.com') && asanaToken) {
-          const match = task.linked_task_url.match(/\/(\d+)$/);
+          const match = task.linked_task_url.match(/\/(\d+)(?:\/|\?|$)/);
           if (match) {
             const res = await fetch(
-              `https://app.asana.com/api/1.0/tasks/${match[1]}?opt_fields=completed`,
+              `https://app.asana.com/api/1.0/tasks/${match[1]}?opt_fields=completed,due_on,start_on`,
               { headers: { 'Authorization': `Bearer ${asanaToken}` } }
             );
             const data = await res.json();
-            if (data?.data?.completed && task.status !== 'Done') {
-              await supabase.from('tasks').update({ status: 'Done', progress: 100 }).eq('id', task.id);
-              updated++;
+            if (data?.data) {
+              const upd = {};
+              if (data.data.completed && task.status !== 'Done') { upd.status = 'Done'; upd.progress = 100; }
+              if (!data.data.completed && data.data.due_on && task.status === 'To Do') { upd.status = 'Doing'; }
+              // Sync dates from Asana task
+              if (data.data.due_on) upd.end_date = data.data.due_on;
+              if (data.data.start_on) upd.start_date = data.data.start_on;
+              if (Object.keys(upd).length > 0) {
+                await supabase.from('tasks').update(upd).eq('id', task.id);
+                updated++;
+              }
             }
           }
         }
@@ -213,7 +232,7 @@ async function syncLinkedProjects() {
     }
   }
 
-  return { source: 'Linked Projects', status: 'ok', count: updated };
+  return { source: 'Linked Projects', status: 'ok', count: updated || 0 };
 }
 
 // ─── Main sync handler ───────────────────────────────────────────────────────
