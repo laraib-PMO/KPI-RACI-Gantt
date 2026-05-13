@@ -768,14 +768,18 @@ export default function Home(){
           const leftPct=(sOff/TL_DAYS)*100;
           const widthPct=Math.max((dur/TL_DAYS)*100,0.5);
           const od=isOverdue(t);
+          const isLinked=t.linked_project||t.linked_task_url;
+          const srcType=t.linked_source==="asana"?"Asana":t.linked_project?"Linear":t.linked_task_url?"Linked":"Manual";
           return <div key={t.id} className={rowClass(t)+" asl"} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>setSel(t)}>
-            <div style={{width:"clamp(120px,25vw,200px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            <div style={{width:"clamp(120px,25vw,220px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
               <div style={{width:20,height:20,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{t.owner?.[0]}</span></div>
               <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.name}</span>
+              <span style={{fontSize:7,padding:"1px 4px",borderRadius:3,fontWeight:700,flexShrink:0,background:isLinked?(srcType==="Asana"?"#F472B615":"#6366F115"):"var(--bg3)",color:isLinked?(srcType==="Asana"?"#EC4899":"#6366F1"):"var(--fg2)"}}>{srcType==="Manual"?"M":srcType==="Asana"?"A":"L"}</span>
             </div>
             <div style={{flex:1,height:26,background:"var(--bg3)",borderRadius:6,position:"relative",overflow:"hidden"}}>
-              <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:od?"linear-gradient(90deg,#EF4444,#F87171)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:t.status==="Done"?.3:.9,display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
-                <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden"}}>{fD(startStr)} – {fD(endStr)}</span>
+              <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:od?"linear-gradient(90deg,#EF4444,#F87171)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:t.status==="Done"?.3:.9,display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms",overflow:"hidden"}}>
+                {t.progress>0&&t.progress<100&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:t.progress+"%",background:"rgba(255,255,255,.2)",borderRadius:4}}/>}
+                <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",position:"relative",zIndex:1}}>{t.progress>0?t.progress+"% · ":""}{fD(startStr)} – {fD(endStr)}</span>
               </div>
             </div>
             {od&&<div className="pulse-dot" style={{width:10,height:10,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
@@ -873,8 +877,8 @@ export default function Home(){
         <div style={{display:"flex",flexDirection:"column",gap:8}}>{tasks.filter(t=>t.status===st).map((t,idx)=>{const rc=RC[t.risk];const pc=PC[t.priority];const od=isOverdue(t);
           return <div key={t.id} className="ch asl" draggable onDragStart={()=>setDragId(t.id)} onDragEnd={()=>setDragId(null)}
             onClick={()=>setSel(t)} style={{background:"var(--card)",borderRadius:10,padding:12,border:"1px solid var(--border)",borderLeft:od?"4px solid #EF4444":"4px solid "+(CL[t.dept]||"#94A3B8"),cursor:"grab",animationDelay:idx*40+"ms"}}>
-            <div style={{fontSize:13,fontWeight:600,marginBottom:6,color:od?"#DC2626":"var(--fg)"}}>{t.name}{od&&<span style={{fontSize:9,marginLeft:6,color:"#EF4444",animation:"pulse 1.5s infinite"}}>OVERDUE</span>}</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>{pc&&<Bdg bg={pc.bg} c={pc.c}>{t.priority}</Bdg>}{rc&&<Bdg bg={rc.bg} c={rc.c}>{t.risk}</Bdg>}</div>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:6,color:od?"#DC2626":"var(--fg)",display:"flex",alignItems:"center",gap:4}}>{t.name}{od&&<span style={{fontSize:9,marginLeft:4,color:"#EF4444",animation:"pulse 1.5s infinite"}}>OVERDUE</span>}{(t.linked_project||t.linked_task_url)&&<span style={{fontSize:7,padding:"1px 3px",borderRadius:3,background:t.linked_source==="asana"?"#F472B615":"#6366F115",color:t.linked_source==="asana"?"#EC4899":"#6366F1",fontWeight:700,flexShrink:0}}>{t.linked_source==="asana"?"A":"L"}</span>}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>{pc&&<Bdg bg={pc.bg} c={pc.c}>{t.priority}</Bdg>}{rc&&<Bdg bg={rc.bg} c={rc.c}>{t.risk}</Bdg>}{t.progress>0&&<Bdg bg="#DBEAFE" c="#1D4ED8">{t.progress}%</Bdg>}</div>
             <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--fg2)"}}><div style={{width:16,height:16,borderRadius:"50%",background:CL[t.dept],display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:7,fontWeight:700}}>{t.owner?.[0]}</span></div>{fD(t.start_date)}–{fD(t.end_date)}</div>
           </div>})}</div>
       </div>)}</div>
@@ -894,7 +898,7 @@ export default function Home(){
       </div>
       <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)",marginBottom:16}}>Updates from Slack workflow and manual entries. Syncs when you click Sync All. Slack workflow sends DMs at 5pm daily.</div>
       {(()=>{
-        const byDate={};standups.forEach(s=>{const d=String(s.standup_date).split('T')[0];if(!byDate[d])byDate[d]=[];byDate[d].push(s)});
+        const byDate={};standups.filter(s=>s.person!=="Efehan Maleri").forEach(s=>{const d=String(s.standup_date).split('T')[0];if(!byDate[d])byDate[d]=[];byDate[d].push(s)});
         const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
         if(dates.length===0)return <div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No standup updates yet. Click "+ Add Update" or wait for the 5pm Slack workflow.</div>;
         return dates.map(date=><div key={date} className="asl" style={{marginBottom:20}}>
@@ -905,28 +909,33 @@ export default function Home(){
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
             {byDate[date].map((s,si)=><div key={s.id} className="ch asl" style={{background:"var(--card)",borderRadius:10,padding:14,border:"1px solid var(--border)",borderLeft:"4px solid "+(CL[N2D[s.person]]||"#6366F1"),animationDelay:si*50+"ms"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{s.person?.[0]}</span></div>
-                  <span style={{fontWeight:700,fontSize:13,color:"var(--fg)"}}>{s.person}</span>
+                  {(()=>{const ur=userRoles.find(r=>r.name===s.person);const av=ur?.avatar_url;return av?<img src={av} style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:24,height:24,borderRadius:"50%",background:CL[N2D[s.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{s.person?.[0]}</span></div>})()}
+                  <div><span style={{fontWeight:700,fontSize:12,color:"var(--fg)"}}>{s.person}</span><div style={{fontSize:9,color:"var(--fg2)"}}>{N2D[s.person]||"Team"}</div></div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:9,color:"var(--fg2)",background:"var(--bg3)",padding:"2px 6px",borderRadius:99}}>{s.source==="slack"?"via Slack":"manual"}</span>
+                  <span style={{fontSize:8,color:"var(--fg2)",background:"var(--bg3)",padding:"2px 6px",borderRadius:99}}>{s.source==="slack"?"Slack":s.source==="auto-digest"?"Auto":"Manual"}</span>
                   <button onClick={()=>setConfirmDlg({msg:"Delete this standup entry?",fn:()=>deleteStandup(s.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
                 </div>
               </div>
-              <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
-                <div style={{color:"#10B981",fontWeight:600,fontSize:10,marginBottom:2}}>COMPLETED</div>
-                <div style={{color:"var(--fg)",lineHeight:1.4}}>{s.completed||"—"}</div>
-              </div>
-              <div style={{fontSize:12,color:"var(--fg)",marginBottom:6}}>
-                <div style={{color:"#3B82F6",fontWeight:600,fontSize:10,marginBottom:2}}>TOMORROW</div>
-                <div style={{color:"var(--fg)",lineHeight:1.4}}>{s.tomorrow||"—"}</div>
-              </div>
-              <div style={{fontSize:12}}>
-                <div style={{color:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?"#EF4444":"#10B981",fontWeight:600,fontSize:10,marginBottom:2}}>BLOCKERS</div>
-                <div style={{color:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?"#EF4444":"var(--fg2)",fontWeight:s.blockers&&s.blockers!=="None"&&s.blockers!=="none"?600:400}}>{s.blockers||"None"}</div>
-              </div>
+              {/* Structured sections */}
+              {(()=>{const comp=(s.completed||"").split("\n").filter(l=>l.trim());const next=(s.tomorrow||"").split("\n").filter(l=>l.trim());const block=(s.blockers||"").split("\n").filter(l=>l.trim()&&l!=="None"&&l!=="none");
+                return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {comp.length>0&&<div style={{background:"rgba(16,185,129,.06)",borderRadius:6,padding:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:4}}>{I.check(10)}<span style={{color:"#10B981",fontWeight:700,fontSize:9,textTransform:"uppercase"}}>Done ({comp.length})</span></div>
+                  {comp.map((l,i)=><div key={i} style={{fontSize:11,color:"var(--fg)",paddingLeft:14,lineHeight:1.5,display:"flex",alignItems:"flex-start",gap:4}}><span style={{color:"#10B981",fontSize:8,marginTop:4}}>●</span>{l.replace(/^[+\-•]\s*/,"")}</div>)}
+                </div>}
+                {next.length>0&&<div style={{background:"rgba(59,130,246,.06)",borderRadius:6,padding:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:4}}>{I.zap(10)}<span style={{color:"#3B82F6",fontWeight:700,fontSize:9,textTransform:"uppercase"}}>In Progress / Next ({next.length})</span></div>
+                  {next.map((l,i)=><div key={i} style={{fontSize:11,color:"var(--fg)",paddingLeft:14,lineHeight:1.5,display:"flex",alignItems:"flex-start",gap:4}}><span style={{color:"#3B82F6",fontSize:8,marginTop:4}}>●</span>{l.replace(/^[+\-•]\s*/,"")}</div>)}
+                </div>}
+                {block.length>0&&<div style={{background:"rgba(239,68,68,.06)",borderRadius:6,padding:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:4}}>{I.alert(10)}<span style={{color:"#EF4444",fontWeight:700,fontSize:9,textTransform:"uppercase"}}>Blockers ({block.length})</span></div>
+                  {block.map((l,i)=><div key={i} style={{fontSize:11,color:"#EF4444",paddingLeft:14,lineHeight:1.5,fontWeight:600,display:"flex",alignItems:"flex-start",gap:4}}><span style={{fontSize:8,marginTop:4}}>●</span>{l.replace(/^[+\-•]\s*/,"")}</div>)}
+                </div>}
+                {comp.length===0&&next.length===0&&block.length===0&&<div style={{fontSize:11,color:"var(--fg2)",fontStyle:"italic"}}>No updates</div>}
+              </div>})()}
             </div>)}
           </div>
         </div>);
@@ -1054,7 +1063,7 @@ export default function Home(){
           <div style={{fontSize:9,color:"var(--fg2)"}}>Last synced: {new Date(perfMetrics.timestamp).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'})}</div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-          {Object.entries(perfMetrics.people||{}).sort((a,b)=>b[1].onTimeRate-a[1].onTimeRate).map(([name,d],i)=>{
+          {Object.entries(perfMetrics.people||{}).filter(([name])=>name!=="Efehan Maleri").sort((a,b)=>b[1].onTimeRate-a[1].onTimeRate).map(([name,d],i)=>{
             const ratingC=d.autoRating==="exceeds"?"#10B981":d.autoRating==="meets"?"#3B82F6":d.autoRating==="developing"?"#F59E0B":"#94A3B8";
             return <div key={name} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:14,borderLeft:"4px solid "+ratingC,animationDelay:i*50+"ms"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1103,7 +1112,7 @@ export default function Home(){
       {/* Manual reviews */}
       {perf.length>0&&<div style={{marginTop:8}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Manual Reviews</div>
-        {perf.map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*60+"ms"}}>
+        {perf.filter(p=>p.person!=="Efehan Maleri").map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*60+"ms"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:CL[N2D[p.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:12,fontWeight:700}}>{p.person?.[0]}</span></div>
@@ -1293,7 +1302,13 @@ export default function Home(){
 
     {/* Settings — Admin Only */}
     {view==="settings"&&role==="admin"&&<div className="af">
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div><button className="act-add" onClick={()=>setAddModal("userrole")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add User</button></div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={async()=>{showToast("Syncing team from Slack...");try{const res=await fetch('/api/availability');const d=await res.json();if(!d.users||!d.users.length){showToast("No Slack users found","error");return}let updated=0;for(const su of d.users){if(!su.email)continue;const match=userRoles.find(r=>r.email===su.email);if(match){const upd={};if(su.avatar&&!match.avatar_url)upd.avatar_url=su.avatar;if(su.tz&&!match.timezone)upd.timezone=su.tz;if(Object.keys(upd).length>0){await supabase.from('user_roles').update(upd).eq('id',match.id);updated++}}}const{data:fresh}=await supabase.from('user_roles').select('*').order('created_at');if(fresh)setUserRoles(fresh);showToast(updated+" profiles updated from Slack")}catch(e){showToast("Slack sync failed","error")}}} className="btn-pop" style={{background:"var(--bg3)",color:"var(--fg)",border:"1px solid var(--border)",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>{I.users(12)} Sync from Slack</button>
+          <button className="act-add btn-pop" onClick={()=>setAddModal("userrole")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add User</button>
+        </div>
+      </div>
       <p style={{fontSize:11,color:"var(--fg2)",marginBottom:12}}>Controls who can view, edit, or delete data. Changes take effect on next login.</p>
 
       {/* Pending Hours Requests */}
