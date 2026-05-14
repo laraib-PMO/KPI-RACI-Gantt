@@ -88,6 +88,9 @@ const CSS=`
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
 @keyframes popIn{0%{transform:scale(0);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
 @keyframes gradientShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes tickerSlide{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ticker-scroll{animation:tickerSlide 30s linear infinite}.ticker-scroll:hover{animation-play-state:paused}
 .af{animation:fadeUp .4s cubic-bezier(.22,1,.36,1) both}
 .asl{animation:slideR .4s cubic-bezier(.22,1,.36,1) both}
 .asr{animation:slideL .4s cubic-bezier(.22,1,.36,1) both}
@@ -419,6 +422,7 @@ export default function Home(){
   const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
 
   useEffect(()=>{if(Object.keys(slackStatus).length===0)fetchSlackStatus()},[]);
+  useEffect(()=>{if(view==="avail"&&Object.keys(slackStatus).length<=1)fetchSlackStatus()},[view]);
   useEffect(()=>{if(typeof window!=='undefined'){const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
 
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
@@ -553,7 +557,7 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave & Availability",icon:"◇"}];
+  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"},{id:"avail",l:"Availability",icon:"◎"}];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -628,16 +632,25 @@ export default function Home(){
     {/* ═══ MAIN AREA ═══ */}
     <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden"}}>
 
-    {/* Header — compact */}
-    <div style={{background:"var(--hdr)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <button onClick={doSync} disabled={syncing} className="btn-pop" style={{background:syncing?"rgba(255,255,255,.1)":"rgba(59,130,246,.8)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:syncing?"wait":"pointer"}}>{syncing?"Syncing...":"Sync All"}</button>
-        {lastSync&&<span style={{fontSize:9,color:"#64748B"}}>Last: {lastSync}</span>}
-        <div className="mob-hide" style={{display:"flex",gap:8,fontSize:11,color:"#94A3B8"}}>
-          <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span><span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span><span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
-          {stats.overdue>0&&<span style={{animation:"pulse 1.5s infinite"}}><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span>}
+    {/* Header — animated ticker */}
+    <div style={{background:"var(--hdr)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        <button onClick={doSync} disabled={syncing} className="btn-pop" style={{background:syncing?"rgba(255,255,255,.15)":"linear-gradient(135deg,#3B82F6,#6366F1)",color:"#fff",border:"none",padding:"6px 16px",borderRadius:8,fontWeight:700,fontSize:11,cursor:syncing?"wait":"pointer",display:"flex",alignItems:"center",gap:6,minWidth:90,justifyContent:"center"}}>
+          {syncing?<><span style={{display:"inline-block",animation:"spin .8s linear infinite",fontSize:12}}>◌</span> Syncing</>:<>{I.zap(12)} Sync All</>}
+        </button>
+        {lastSync&&<span style={{fontSize:8,color:"rgba(255,255,255,.4)"}}>Last: {lastSync}</span>}
+      </div>
+      <div style={{flex:1,overflow:"hidden",position:"relative",maskImage:"linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)"}}>
+        <div className="ticker-scroll" style={{display:"flex",gap:16,alignItems:"center",whiteSpace:"nowrap",fontSize:11,color:"#94A3B8",paddingLeft:12}}>
+          <span><b style={{color:"#93C5FD"}}>{stats.total}</b> total</span>
+          <span style={{color:"rgba(255,255,255,.15)"}}>|</span>
+          <span><b style={{color:"#FDE68A"}}>{stats.doing}</b> doing</span>
+          <span style={{color:"rgba(255,255,255,.15)"}}>|</span>
+          <span><b style={{color:"#6EE7B7"}}>{stats.done}</b> done</span>
+          {stats.overdue>0&&<><span style={{color:"rgba(255,255,255,.15)"}}>|</span><span className="pulse-dot"><b style={{color:"#FCA5A5"}}>{stats.overdue}</b> overdue</span></>}
+          <span style={{color:"rgba(255,255,255,.15)"}}>|</span>
+          {ANCH.map((a,i)=><span key={i} style={{fontSize:9,color:a.c,fontWeight:700,padding:"2px 8px",background:a.c+"18",borderRadius:99,border:"1px solid "+a.c+"30"}}>{a.l} {fD(a.d)}</span>)}
         </div>
-        <div className="mob-hide" style={{display:"flex",alignItems:"center",gap:6}}>{ANCH.map((a,i)=><span key={i} style={{fontSize:9,color:a.c,fontWeight:700,padding:"2px 6px",background:a.c+"12",borderRadius:99}}>{a.l} {fD(a.d)}</span>)}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         <label style={{cursor:"pointer",position:"relative"}}>
@@ -666,6 +679,16 @@ export default function Home(){
     {/* ═══ DASHBOARD ═══ */}
     {view==="dashboard"&&<div className="af">
       <div style={{fontSize:16,fontWeight:800,color:"var(--fg)",marginBottom:16}}>Dashboard Overview</div>
+
+      {/* Who's Off Today */}
+      {(()=>{const offToday=userRoles.filter(ur=>leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today));
+        return offToday.length>0?<div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:12,marginBottom:16,display:"flex",alignItems:"center",gap:10,animationDelay:"50ms"}}>
+          <div style={{color:"#F59E0B",flexShrink:0}}>{I.leaf(16)}</div>
+          <div style={{fontSize:11,color:"var(--fg)"}}>
+            <span style={{fontWeight:700}}>Off today:</span>{" "}
+            {offToday.map((ur,i)=><span key={ur.id}>{i>0?", ":""}<span style={{fontWeight:600}}>{ur.name?.split(" ")[0]}</span><span style={{color:"var(--fg2)",fontSize:9}}> ({leaves.find(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today)?.leave_type})</span></span>)}
+          </div>
+        </div>:null})()}
 
       {/* Hero Metrics Row */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:20}}>
@@ -1148,8 +1171,8 @@ export default function Home(){
       </div>}
     </div>}
 
-    {/* ═══ LEAVE ═══ */}
-    {view==="leave"&&<div className="af">
+    {/* ═══ AVAILABILITY ═══ */}
+    {view==="avail"&&<div className="af">
       {/* ─── STATUS BAR + WHO'S AVAILABLE ─── */}
       <div style={{marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
@@ -1202,29 +1225,39 @@ export default function Home(){
         </div>
       </div>
 
-      {/* ─── OVERLAP FINDER (CENTERED, INTERACTIVE) ─── */}
+      {/* ─── OVERLAP FINDER (VIEWER'S TIMEZONE) ─── */}
       <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
+        {(()=>{const myUr=userRoles.find(r=>r.email===user?.email);const myTz=myUr?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";const myTzLabel=myTz.split("/").pop().replace("_"," ");
+        return <>
         <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:4,textAlign:"center"}}>Team Overlap Hours</div>
-        <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16,textAlign:"center"}}>Shared working window across all timezones · Hover for details</div>
+        <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16,textAlign:"center"}}>Showing in your timezone ({myTzLabel}) · Hover for details</div>
         <div style={{display:"flex",gap:3,alignItems:"flex-end",justifyContent:"center",flexWrap:"wrap",minHeight:100}}>
-          {Array.from({length:24},(_,h)=>{
+          {Array.from({length:24},(_,localH)=>{
             const onlineMembers=userRoles.filter(ur=>{
               const slk=slackStatus._match?slackStatus._match(ur):null;
               const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
               const ws=parseInt((ur.work_start||"09:00").split(":")[0]);
               const we=parseInt((ur.work_end||"18:00").split(":")[0]);
-              try{const d=new Date();d.setUTCHours(h,0,0,0);const localH=parseInt(d.toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}));return localH>=ws&&localH<we}catch{return false}
+              try{
+                // Convert localH in my timezone to each person's local hour
+                const now=new Date();const refDate=new Date(now.getFullYear(),now.getMonth(),now.getDate(),localH,0,0);
+                const myOffset=new Date(refDate.toLocaleString('en-US',{timeZone:myTz})).getTime();
+                const theirTime=new Date(refDate.toLocaleString('en-US',{timeZone:tz}));
+                const diff=theirTime.getTime()-myOffset;
+                const theirH=(localH+Math.round(diff/3600000)+24)%24;
+                return theirH>=ws&&theirH<we;
+              }catch{return false}
             });
             const count=onlineMembers.length;
             const pct=count/Math.max(userRoles.length,1);
             const barH=Math.max(count===0?8:20,pct*80);
             const bg=count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6";
-            const timeLabel=h===0?"12AM":h<12?h+"AM":h===12?"12PM":(h-12)+"PM";
-            const nowUTC=new Date().getUTCHours();
-            const isNow=h===nowUTC;
-            return <div key={h} className="ch" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",cursor:count>0?"pointer":"default"}} title={count>0?onlineMembers.map(u=>u.name).join(", "):""}>
+            let myNowH=0;try{myNowH=parseInt(new Date().toLocaleString('en-GB',{timeZone:myTz,hour:'2-digit',hour12:false}))}catch{}
+            const isNow=localH===myNowH;
+            const timeLabel=localH===0?"12AM":localH<12?localH+"AM":localH===12?"12PM":(localH-12)+"PM";
+            return <div key={localH} className="ch" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",cursor:count>0?"pointer":"default"}} title={count>0?onlineMembers.map(u=>u.name).join(", "):""}>
               {isNow&&<div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444",position:"absolute",top:-8}} className="pulse-dot"/>}
-              <div className="asl" style={{width:24,height:barH,borderRadius:5,background:bg,opacity:count===0?.2:0.4+pct*0.6,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:3,animationDelay:h*30+"ms",transition:"all .3s",border:isNow?"2px solid #EF4444":"none"}}>
+              <div className="asl" style={{width:24,height:barH,borderRadius:5,background:bg,opacity:count===0?.2:0.4+pct*0.6,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:3,animationDelay:localH*30+"ms",transition:"all .3s",border:isNow?"2px solid #EF4444":"none"}}>
                 <span style={{fontSize:8,color:"#fff",fontWeight:700}}>{count||""}</span>
               </div>
               <span style={{fontSize:8,color:isNow?"#EF4444":"var(--fg2)",fontWeight:isNow?700:400}}>{timeLabel}</span>
@@ -1235,11 +1268,15 @@ export default function Home(){
           <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#10B981"}}/> Most online</span>
           <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#F59E0B"}}/> Partial</span>
           <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#3B82F6"}}/> Few</span>
-          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444"}}/> Current hour</span>
-          <span>Times in UTC</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444"}}/> Now</span>
+          <span>Your time ({myTzLabel})</span>
         </div>
+        </>})()}
       </div>
+    </div>}
 
+    {/* ═══ LEAVE (separate tab) ═══ */}
+    {view==="leave"&&<div className="af">
       {/* ─── LEAVE BALANCES (DYNAMIC CATEGORIES) ─── */}
       <div style={{marginBottom:20}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Leave Balances ({new Date().getFullYear()})</div>
