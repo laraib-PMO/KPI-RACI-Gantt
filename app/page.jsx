@@ -375,7 +375,7 @@ function Tbl({headers,rows,ids,onReorder}){const[dI,setDI]=useState(null);const[
 function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]||"#94A3B8")+"15",color:CL[dept],padding:"8px 12px",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+(CL[dept]||"#94A3B8")}}>{dept}</div>}
 
 export default function Home(){
-  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);const[decisions,setDecisions]=useState([]);
+  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);const[decisions,setDecisions]=useState([]);const[onboarding,setOnboarding]=useState([]);const[hrDocs,setHrDocs]=useState([]);
   // Gazetted public holidays — Turkey + Pakistan 2026 (official only)
   const PUBLIC_HOLIDAYS=[
     // PAKISTAN — Gazetted
@@ -472,8 +472,8 @@ export default function Home(){
     document.title='Attimo Ops Hub';
   },[dark]);
 
-  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur,pf,lv,dc]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at'),supabase.from('performance').select('*').order('created_at',{ascending:false}),supabase.from('leaves').select('*').order('start_date',{ascending:false}),supabase.from('decisions').select('*').order('sort_order,id')]);
-    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);if(pf.data)setPerf(pf.data);if(lv.data)setLeaves(lv.data);if(dc.data)setDecisions(dc.data);setLoading(false);
+  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur,pf,lv,dc,ob,hd]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at'),supabase.from('performance').select('*').order('created_at',{ascending:false}),supabase.from('leaves').select('*').order('start_date',{ascending:false}),supabase.from('decisions').select('*').order('sort_order,id'),supabase.from('onboarding').select('*').order('sort_order,id'),supabase.from('hr_documents').select('*').order('person,doc_type')]);
+    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);if(pf.data)setPerf(pf.data);if(lv.data)setLeaves(lv.data);if(dc.data)setDecisions(dc.data);if(ob.data)setOnboarding(ob.data);if(hd.data)setHrDocs(hd.data);setLoading(false);
     // Auto-sync linked Gantt tasks on every page load (background)
     fetch('/api/sync',{method:'POST'}).then(()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).catch(()=>{});
     }la();
@@ -523,6 +523,32 @@ export default function Home(){
   const addDecision=useCallback(async v=>{if(!isEditor())return;const{data}=await supabase.from('decisions').insert({title:v.title||'',owner:v.owner||'',priority:v.priority||'medium',due_date:v.due_date||null,context:v.context||'',dept:v.dept||'Team',status:'open'}).select();if(data)setDecisions(p=>[...data,...p]);showToast("Decision added");setAddModal(null)},[]);
   const updateDecision=useCallback(async(id,u)=>{if(!isEditor())return;setDecisions(p=>p.map(d=>d.id===id?{...d,...u}:d));await supabase.from('decisions').update(u).eq('id',id)},[]);
   const deleteDecision=useCallback(async id=>{if(!isAdmin())return;setDecisions(p=>p.filter(d=>d.id!==id));await supabase.from('decisions').delete().eq('id',id)},[]);
+
+  // Onboarding CRUD + template generator
+  const ONBOARD_TEMPLATE=[
+    {item:"Create @attimo.com email",category:"accounts",assigned_to:"Nil Ozdamar"},
+    {item:"Invite to Slack workspace",category:"accounts",assigned_to:"Nil Ozdamar"},
+    {item:"GitHub repository access",category:"accounts",assigned_to:"Syed Osama Ali"},
+    {item:"Linear workspace invite",category:"accounts",assigned_to:"Laraib Haider"},
+    {item:"Google Drive folder access",category:"accounts",assigned_to:"Nil Ozdamar"},
+    {item:"Collect ID copy",category:"documents",assigned_to:"Nil Ozdamar"},
+    {item:"Collect signed contract",category:"documents",assigned_to:"Nil Ozdamar"},
+    {item:"Collect CV / resume",category:"documents",assigned_to:"Nil Ozdamar"},
+    {item:"VERBIS consent form",category:"documents",assigned_to:"Soo Ling Lim"},
+    {item:"Bank details for payroll",category:"documents",assigned_to:"Nil Ozdamar"},
+    {item:"Send welcome email",category:"orientation",assigned_to:"Nil Ozdamar"},
+    {item:"Slack channels introduction",category:"orientation",assigned_to:"Laraib Haider"},
+    {item:"Product walkthrough (Panovia overview)",category:"orientation",assigned_to:"Laraib Haider"},
+    {item:"Technical onboarding (architecture, codebase)",category:"orientation",assigned_to:"Syed Osama Ali"},
+    {item:"Tool setup (dev environment, IDE, etc.)",category:"tools",assigned_to:"Talha Mubeen"},
+  ];
+  const generateOnboarding=useCallback(async(personName)=>{if(!isEditor())return;const dueDate=new Date();dueDate.setDate(dueDate.getDate()+3);const dueDateStr=dueDate.toISOString().split('T')[0];const items=ONBOARD_TEMPLATE.map((t,i)=>({...t,person:personName,status:'pending',due_date:dueDateStr,sort_order:i}));const{data}=await supabase.from('onboarding').insert(items).select();if(data){setOnboarding(p=>[...p,...data]);showToast(data.length+" onboarding items created for "+personName)}
+    // Also generate HR document placeholders
+    const docTypes=['id_copy','cv','contract','verbis_consent','bank_details','emergency_contact','photo'];const docs=docTypes.map(dt=>({person:personName,doc_type:dt,status:'missing'}));const{data:dd}=await supabase.from('hr_documents').insert(docs).select();if(dd)setHrDocs(p=>[...p,...dd]);
+  },[]);
+  const updateOnboardItem=useCallback(async(id,u)=>{if(!isEditor())return;setOnboarding(p=>p.map(o=>o.id===id?{...o,...u}:o));await supabase.from('onboarding').update(u).eq('id',id)},[]);
+  const deleteOnboardItem=useCallback(async id=>{if(!isAdmin())return;setOnboarding(p=>p.filter(o=>o.id!==id));await supabase.from('onboarding').delete().eq('id',id)},[]);
+  const updateHrDoc=useCallback(async(id,u)=>{if(!isEditor())return;setHrDocs(p=>p.map(d=>d.id===id?{...d,...u}:d));await supabase.from('hr_documents').update(u).eq('id',id)},[]);
   const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access","error");return}const leave=leaves.find(l=>l.id===id);setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status){notify(u.status,"leave",leave?.person+" — "+u.status);showToast("Leave "+u.status+" for "+(leave?.person||"employee"))}},[leaves]);
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
@@ -594,7 +620,7 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"}];
+  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"},{id:"onboard",l:"Onboarding",icon:"◑"},{id:"hrdocs",l:"HR Docs",icon:"◪"}];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -1482,6 +1508,100 @@ export default function Home(){
     </div>}
 
     {/* Settings — Admin Only */}
+    {/* ═══ ONBOARDING ═══ */}
+    {view==="onboard"&&<div className="af">
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Onboarding Tracker</div>
+        {canEdit&&<div style={{display:"flex",gap:8}}>
+          <button onClick={()=>{const name=prompt("New hire's full name:");if(name?.trim())generateOnboarding(name.trim())}} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Generate Onboarding</button>
+        </div>}
+      </div>
+
+      {/* Group by person */}
+      {(()=>{const byPerson={};onboarding.forEach(o=>{if(!byPerson[o.person])byPerson[o.person]=[];byPerson[o.person].push(o)});
+        return Object.keys(byPerson).length===0?<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}>
+          <div style={{color:"var(--fg2)",marginBottom:4}}>{I.users(24)}</div>
+          <div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No onboarding in progress</div>
+          <div style={{fontSize:11,color:"var(--fg2)"}}>Click "+ Generate Onboarding" when a new hire is confirmed.</div>
+        </div>
+        :Object.entries(byPerson).map(([person,items],pi)=>{
+          const done=items.filter(i=>i.status==="done").length;const total=items.length;const pct=Math.round(done/total*100);
+          const byCat={};items.forEach(i=>{if(!byCat[i.category])byCat[i.category]=[];byCat[i.category].push(i)});
+          const catIcons={accounts:I.user,documents:I.briefcase,orientation:I.list,tools:I.settings,general:I.grid};
+          const catColors={accounts:"#3B82F6",documents:"#F59E0B",orientation:"#10B981",tools:"#8B5CF6",general:"#64748B"};
+          return <div key={person} className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,marginBottom:16,overflow:"hidden",animationDelay:pi*60+"ms"}}>
+            {/* Person header with progress */}
+            <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"var(--bg2)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:13,fontWeight:700}}>{person?.[0]}</span></div>
+                <div><div style={{fontSize:14,fontWeight:700,color:"var(--fg)"}}>{person}</div><div style={{fontSize:10,color:"var(--fg2)"}}>{done}/{total} complete</div></div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:80,height:6,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}><div className="bar-g" style={{height:"100%",width:pct+"%",borderRadius:3,background:pct===100?"#10B981":pct>50?"#F59E0B":"#3B82F6"}}/></div>
+                <span style={{fontSize:12,fontWeight:800,color:pct===100?"#10B981":"var(--fg)"}}>{pct}%</span>
+              </div>
+            </div>
+            {/* Items by category */}
+            {Object.entries(byCat).map(([cat,citems])=><div key={cat} style={{padding:"10px 16px",borderBottom:"1px solid var(--border)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                <span style={{color:catColors[cat]||"var(--fg2)"}}>{catIcons[cat]?catIcons[cat](12):null}</span>
+                <span style={{fontSize:11,fontWeight:700,color:"var(--fg)",textTransform:"capitalize"}}>{cat}</span>
+                <span style={{fontSize:9,color:"var(--fg2)"}}>{citems.filter(i=>i.status==="done").length}/{citems.length}</span>
+              </div>
+              {citems.map((item,ii)=><div key={item.id} className="rh" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,marginBottom:2}}>
+                <input type="checkbox" checked={item.status==="done"} onChange={()=>updateOnboardItem(item.id,{status:item.status==="done"?"pending":"done",completed_at:item.status==="done"?null:new Date().toISOString()})} style={{cursor:"pointer",accentColor:"#10B981"}}/>
+                <span style={{flex:1,fontSize:11,color:item.status==="done"?"var(--fg2)":"var(--fg)",textDecoration:item.status==="done"?"line-through":"none"}}>{item.item}</span>
+                <span style={{fontSize:9,color:"var(--fg2)",whiteSpace:"nowrap"}}>{item.assigned_to?.split(" ")[0]||""}</span>
+                {item.status==="done"&&<span style={{fontSize:8,color:"#10B981",fontWeight:600}}>Done</span>}
+                <button onClick={()=>setConfirmDlg({msg:"Delete onboarding item?",fn:()=>deleteOnboardItem(item.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:10}}>✕</button>
+              </div>)}
+            </div>)}
+          </div>})})()}
+    </div>}
+
+    {/* ═══ HR DOCUMENTS ═══ */}
+    {view==="hrdocs"&&<div className="af">
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>HR Document Tracker</div>
+      </div>
+      <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16}}>Track collected documents per team member. Red = missing, Yellow = uploaded, Green = verified.</div>
+
+      {(()=>{const docTypes=['id_copy','cv','contract','verbis_consent','nda','bank_details','emergency_contact','photo'];
+        const docLabels={id_copy:"ID Copy",cv:"CV",contract:"Contract",verbis_consent:"VERBIS",nda:"NDA",bank_details:"Bank",emergency_contact:"Emergency",photo:"Photo"};
+        const byPerson={};hrDocs.forEach(d=>{if(!byPerson[d.person])byPerson[d.person]={};byPerson[d.person][d.doc_type]=d});
+        const people=[...new Set(hrDocs.map(d=>d.person))].sort();
+
+        return people.length===0?<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}>
+          <div style={{color:"var(--fg2)",marginBottom:4}}>{I.briefcase(24)}</div>
+          <div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No documents tracked yet</div>
+          <div style={{fontSize:11,color:"var(--fg2)"}}>Document records are auto-created when you generate onboarding for a new hire.</div>
+        </div>
+        :<div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,overflow:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+            <thead><tr style={{background:"var(--bg2)"}}>
+              <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:"var(--fg)",borderBottom:"2px solid var(--border)"}}>Person</th>
+              {docTypes.map(dt=><th key={dt} style={{padding:"10px 6px",textAlign:"center",fontWeight:600,color:"var(--fg2)",borderBottom:"2px solid var(--border)",fontSize:9}}>{docLabels[dt]}</th>)}
+              <th style={{padding:"10px 6px",textAlign:"center",fontWeight:600,color:"var(--fg2)",borderBottom:"2px solid var(--border)",fontSize:9}}>%</th>
+            </tr></thead>
+            <tbody>{people.map((person,pi)=>{
+              const docs=byPerson[person]||{};const collected=Object.values(docs).filter(d=>d.status==="uploaded"||d.status==="verified").length;const verified=Object.values(docs).filter(d=>d.status==="verified").length;const total=Object.keys(docs).length||1;
+              return <tr key={person} className="rh asl" style={{animationDelay:pi*30+"ms"}}>
+                <td style={{padding:"8px 12px",fontWeight:600,color:"var(--fg)",borderBottom:"1px solid var(--border)"}}>{person}</td>
+                {docTypes.map(dt=>{const doc=docs[dt];if(!doc)return <td key={dt} style={{padding:4,textAlign:"center",borderBottom:"1px solid var(--border)"}}>—</td>;
+                  const stC=doc.status==="verified"?"#10B981":doc.status==="uploaded"?"#F59E0B":"#EF4444";
+                  const stBg=doc.status==="verified"?"#DCFCE7":doc.status==="uploaded"?"#FEF3C7":"#FEE2E2";
+                  return <td key={dt} style={{padding:4,textAlign:"center",borderBottom:"1px solid var(--border)"}}>
+                    {canEdit?<select value={doc.status} onChange={e=>updateHrDoc(doc.id,{status:e.target.value,uploaded_at:e.target.value!=="missing"?new Date().toISOString():null,verified_by:e.target.value==="verified"?(user?.user_metadata?.full_name||""):""})} style={{background:stBg,color:stC,border:"none",borderRadius:4,padding:"2px 4px",fontSize:9,fontWeight:700,cursor:"pointer"}}>
+                      <option value="missing">Missing</option><option value="uploaded">Uploaded</option><option value="verified">Verified</option>
+                    </select>:<div style={{width:12,height:12,borderRadius:"50%",background:stC,margin:"0 auto"}} title={doc.status}/>}
+                  </td>})}
+                <td style={{padding:4,textAlign:"center",borderBottom:"1px solid var(--border)",fontWeight:700,color:collected>=total?"#10B981":collected>0?"#F59E0B":"#EF4444",fontSize:10}}>{Math.round(collected/total*100)}%</td>
+              </tr>})}
+            </tbody>
+          </table>
+        </div>})()}
+    </div>}
+
     {view==="settings"&&role==="admin"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div>
