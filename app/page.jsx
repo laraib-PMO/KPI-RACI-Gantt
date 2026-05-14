@@ -444,7 +444,6 @@ export default function Home(){
   const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
 
   useEffect(()=>{if(Object.keys(slackStatus).length===0)fetchSlackStatus()},[]);
-  useEffect(()=>{if(view==="avail"&&Object.keys(slackStatus).length<=1)fetchSlackStatus()},[view]);
   useEffect(()=>{if(typeof window!=='undefined'){const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
 
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
@@ -584,7 +583,7 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"},{id:"avail",l:"Availability",icon:"◎"}];
+  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"}];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -830,6 +829,49 @@ export default function Home(){
             <span style={{fontWeight:600,color:"#EF4444"}}>Not submitted:</span> {notSubmitted.map(n=>n.split(" ")[0]).join(", ")}
           </div>:<div style={{fontSize:10,color:"#10B981",fontWeight:600}}>All submitted</div>}
         </div>})()}
+
+      {/* ─── TEAM AVAILABILITY (merged from Availability tab) ─── */}
+      <div style={{marginTop:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:13,fontWeight:700,color:"var(--fg)"}}>Team Availability</div><button onClick={fetchSlackStatus} disabled={slackLoading} style={{padding:"4px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg3)",color:"var(--fg2)",fontSize:10,fontWeight:600,cursor:"pointer",opacity:slackLoading?.5:1}}>{slackLoading?"Syncing...":"Refresh"}</button></div>
+          <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+            <span style={{fontSize:10,color:"var(--fg2)"}}>My status:</span>
+            {["working","break","meeting","off"].map(s=>{const me=userRoles.find(r=>r.email===user?.email);const active=me?.current_status===s;return <button key={s} onClick={()=>{const me2=userRoles.find(r=>r.email===user?.email);if(me2){supabase.from('user_roles').update({current_status:s}).eq('id',me2.id);setUserRoles(p=>p.map(r=>r.id===me2.id?{...r,current_status:s}:r))}}} style={{padding:"3px 8px",borderRadius:5,border:active?"2px solid":"1px solid var(--border)",borderColor:active?s==="working"?"#10B981":s==="break"?"#F59E0B":s==="meeting"?"#3B82F6":"#64748B":"var(--border)",background:active?(s==="working"?"#DCFCE7":s==="break"?"#FEF3C7":s==="meeting"?"#DBEAFE":"#F1F5F9"):"transparent",color:active?(s==="working"?"#166534":s==="break"?"#92400E":s==="meeting"?"#1D4ED8":"#475569"):"var(--fg2)",fontSize:9,fontWeight:active?700:500,cursor:"pointer",transition:"all .2s"}}>{s}</button>})}
+          </div>
+        </div>
+        {/* Status Filter */}
+        <div style={{display:"flex",gap:4,marginBottom:10,background:"var(--bg3)",borderRadius:8,padding:2,width:"fit-content"}}>
+          {[{id:"all",l:"All"},{id:"working",l:"Working"},{id:"break",l:"Break"},{id:"meeting",l:"Meeting"},{id:"off",l:"Off"}].map(f=><button key={f.id} onClick={()=>setStatusFilter(f.id)} style={{padding:"4px 10px",borderRadius:6,border:"none",fontSize:9,fontWeight:600,cursor:"pointer",transition:"all .2s",background:statusFilter===f.id?"var(--fg)":"transparent",color:statusFilter===f.id?"var(--bg)":"var(--fg2)"}}>{f.l}</button>)}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:6,marginBottom:16}}>
+          {userRoles.filter(ur=>{const slk=slackStatus._match?slackStatus._match(ur):null;const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");if(statusFilter==="all")return true;if(statusFilter==="off")return st==="off"||st==="offline";return st===statusFilter}).map((ur,idx)=>{
+            const slk=slackStatus._match?slackStatus._match(ur):null;const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
+            let localTime="";try{localTime=new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false})}catch{}
+            const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
+            const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
+            const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
+            const av=ur.avatar_url||(slk?.avatar)||null;
+            return <div key={ur.id} onClick={()=>setProfileCard({ur,slk})} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 10px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",animationDelay:idx*20+"ms"}}>
+              <div style={{position:"relative"}}>{av?<img src={av} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:28,height:28,borderRadius:"50%",background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{ur.name?.[0]}</span></div>}<div style={{position:"absolute",bottom:-1,right:-1,width:8,height:8,borderRadius:"50%",background:stC,border:"2px solid var(--card)"}}/></div>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:10,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ur.name?.split(" ")[0]}</div><div style={{fontSize:8,color:"var(--fg2)"}}>{localTime}</div></div>
+            </div>})}
+        </div>
+        {/* Compact overlap */}
+        {(()=>{const myUr=userRoles.find(r=>r.email===user?.email);const myTz=myUr?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";const myTzLabel=myTz.split("/").pop().replace("_"," ");
+        return <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:"var(--fg)",marginBottom:8,textAlign:"center"}}>Team Overlap ({myTzLabel})</div>
+          <div style={{display:"flex",gap:2,alignItems:"flex-end",justifyContent:"center"}}>
+            {Array.from({length:24},(_,localH)=>{
+              const count=userRoles.filter(ur=>{const slk=slackStatus._match?slackStatus._match(ur):null;const tz=slk?.tz||ur.timezone||"Europe/Istanbul";const ws=parseInt((ur.work_start||"09:00").split(":")[0]);const we=parseInt((ur.work_end||"18:00").split(":")[0]);try{const now=new Date();const ref=new Date(now.getFullYear(),now.getMonth(),now.getDate(),localH,0,0);const myOff=new Date(ref.toLocaleString('en-US',{timeZone:myTz})).getTime();const theirT=new Date(ref.toLocaleString('en-US',{timeZone:tz}));const diff=theirT.getTime()-myOff;const thH=(localH+Math.round(diff/3600000)+24)%24;return thH>=ws&&thH<we}catch{return false}}).length;
+              const pct=count/Math.max(userRoles.length,1);let myNowH=0;try{myNowH=parseInt(new Date().toLocaleString('en-GB',{timeZone:myTz,hour:'2-digit',hour12:false}))}catch{}
+              const isNow=localH===myNowH;
+              return <div key={localH} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}} title={count+" online"}>
+                <div style={{width:14,height:Math.max(4,pct*50),borderRadius:3,background:count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6",opacity:count===0?.15:.4+pct*.6,border:isNow?"1.5px solid #EF4444":"none",transition:"all .3s"}}/>
+                {localH%3===0&&<span style={{fontSize:6,color:isNow?"#EF4444":"var(--fg2)"}}>{localH%12||12}{localH<12?"a":"p"}</span>}
+              </div>})}
+          </div>
+        </div>})()}
+      </div>
     </div>}
 
     {/* ═══ TIMELINE ═══ */}
@@ -1256,110 +1298,6 @@ export default function Home(){
       </div>}
     </div>}
 
-    {/* ═══ AVAILABILITY ═══ */}
-    {view==="avail"&&<div className="af">
-      {/* ─── STATUS BAR + WHO'S AVAILABLE ─── */}
-      <div style={{marginBottom:20}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Team Availability</div><button onClick={fetchSlackStatus} disabled={slackLoading} style={{padding:"4px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg3)",color:"var(--fg2)",fontSize:10,fontWeight:600,cursor:"pointer",opacity:slackLoading?.5:1}}>{slackLoading?"Syncing...":"Refresh from Slack"}</button></div>
-          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:10,color:"var(--fg2)"}}>My status:</span>
-            {["working","break","meeting","off"].map(s=>{const me=userRoles.find(r=>r.email===user?.email);const active=me?.current_status===s;return <button key={s} onClick={()=>{const me2=userRoles.find(r=>r.email===user?.email);if(me2){supabase.from('user_roles').update({current_status:s}).eq('id',me2.id);setUserRoles(p=>p.map(r=>r.id===me2.id?{...r,current_status:s}:r))}}} style={{padding:"4px 10px",borderRadius:6,border:active?"2px solid":"1px solid var(--border)",borderColor:active?s==="working"?"#10B981":s==="break"?"#F59E0B":s==="meeting"?"#3B82F6":"#64748B":"var(--border)",background:active?(s==="working"?"#DCFCE7":s==="break"?"#FEF3C7":s==="meeting"?"#DBEAFE":"#F1F5F9"):"transparent",color:active?(s==="working"?"#166534":s==="break"?"#92400E":s==="meeting"?"#1D4ED8":"#475569"):"var(--fg2)",fontSize:10,fontWeight:active?700:500,cursor:"pointer",transition:"all .2s"}}>{s}</button>})}
-          </div>
-        </div>
-
-        {/* Status Filter */}
-        <div style={{display:"flex",gap:4,marginBottom:12,background:"var(--bg3)",borderRadius:8,padding:2,width:"fit-content"}}>
-          {[{id:"all",l:"All"},{id:"working",l:"Working"},{id:"break",l:"Break"},{id:"meeting",l:"Meeting"},{id:"off",l:"Off/Offline"}].map(f=><button key={f.id} onClick={()=>setStatusFilter(f.id)} style={{padding:"5px 12px",borderRadius:6,border:"none",fontSize:10,fontWeight:600,cursor:"pointer",transition:"all .2s",background:statusFilter===f.id?"var(--fg)":"transparent",color:statusFilter===f.id?"var(--bg)":"var(--fg2)"}}>{f.l}</button>)}
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
-          {userRoles.filter(ur=>{
-            const slk=slackStatus._match?slackStatus._match(ur):null;
-            const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
-            const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
-            if(statusFilter==="all")return true;
-            if(statusFilter==="off")return st==="off"||st==="offline";
-            return st===statusFilter;
-          }).map((ur,idx)=>{
-            const slk=slackStatus._match?slackStatus._match(ur):null;
-            const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
-            let localTime="";try{localTime=new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false})}catch{localTime="--:--"}
-            const ws=parseInt((ur.work_start||"09:00").split(":")[0]);const we=parseInt((ur.work_end||"18:00").split(":")[0]);
-            let localH=0;try{localH=parseInt(new Date().toLocaleString('en-GB',{timeZone:tz,hour:'2-digit',hour12:false}))}catch{}
-            const inHours=localH>=ws&&localH<we;
-            const onLeave=leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
-            const st=onLeave?"off":slk?slk.mapped_status:(ur.current_status||"offline");
-            const slkText=slk?.status_text||"";
-            const slkEmoji=slk?.status_emoji||"";
-            const stC=st==="working"?"#10B981":st==="break"?"#F59E0B":st==="meeting"?"#3B82F6":"#94A3B8";
-            const avatarSrc=ur.avatar_url||(slk?.avatar)||null;
-            return <div key={ur.id} onClick={()=>setProfileCard({ur,slk})} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",animationDelay:idx*30+"ms"}}>
-              <div style={{position:"relative"}} className="avatar-click">
-                {avatarSrc?<img src={avatarSrc} style={{width:32,height:32,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:32,height:32,borderRadius:"50%",background:CL[ur.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:11,fontWeight:700}}>{ur.name?.[0]}</span></div>}
-                <div style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:stC,border:"2px solid var(--card)"}}/>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ur.name}</div>
-                <div style={{fontSize:9,color:"var(--fg2)"}}>{localTime} {slk?.tz_label||tz.split("/").pop().replace("_"," ")}</div>
-                <div style={{fontSize:8,color:stC,fontWeight:700,textTransform:"uppercase"}}>{onLeave?"ON LEAVE":st}{inHours&&st!=="off"&&!onLeave?" (in hours)":""}</div>
-                {slkText&&<div style={{fontSize:8,color:"var(--fg2)",marginTop:1}}>{stripSlackEmoji(slkText)}</div>}
-                {ur.hours_status==="pending"&&<div style={{fontSize:7,color:"#F59E0B",fontWeight:700}}>HOURS PENDING APPROVAL</div>}
-              </div>
-            </div>})}
-        </div>
-      </div>
-
-      {/* ─── OVERLAP FINDER (VIEWER'S TIMEZONE) ─── */}
-      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:20,marginBottom:20}}>
-        {(()=>{const myUr=userRoles.find(r=>r.email===user?.email);const myTz=myUr?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";const myTzLabel=myTz.split("/").pop().replace("_"," ");
-        return <>
-        <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:4,textAlign:"center"}}>Team Overlap Hours</div>
-        <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16,textAlign:"center"}}>Showing in your timezone ({myTzLabel}) · Hover for details</div>
-        <div style={{display:"flex",gap:3,alignItems:"flex-end",justifyContent:"center",flexWrap:"wrap",minHeight:100}}>
-          {Array.from({length:24},(_,localH)=>{
-            const onlineMembers=userRoles.filter(ur=>{
-              const slk=slackStatus._match?slackStatus._match(ur):null;
-              const tz=slk?.tz||ur.timezone||"Europe/Istanbul";
-              const ws=parseInt((ur.work_start||"09:00").split(":")[0]);
-              const we=parseInt((ur.work_end||"18:00").split(":")[0]);
-              try{
-                // Convert localH in my timezone to each person's local hour
-                const now=new Date();const refDate=new Date(now.getFullYear(),now.getMonth(),now.getDate(),localH,0,0);
-                const myOffset=new Date(refDate.toLocaleString('en-US',{timeZone:myTz})).getTime();
-                const theirTime=new Date(refDate.toLocaleString('en-US',{timeZone:tz}));
-                const diff=theirTime.getTime()-myOffset;
-                const theirH=(localH+Math.round(diff/3600000)+24)%24;
-                return theirH>=ws&&theirH<we;
-              }catch{return false}
-            });
-            const count=onlineMembers.length;
-            const pct=count/Math.max(userRoles.length,1);
-            const barH=Math.max(count===0?8:20,pct*80);
-            const bg=count===0?"var(--bg3)":pct>0.7?"#10B981":pct>0.4?"#F59E0B":"#3B82F6";
-            let myNowH=0;try{myNowH=parseInt(new Date().toLocaleString('en-GB',{timeZone:myTz,hour:'2-digit',hour12:false}))}catch{}
-            const isNow=localH===myNowH;
-            const timeLabel=localH===0?"12AM":localH<12?localH+"AM":localH===12?"12PM":(localH-12)+"PM";
-            return <div key={localH} className="ch" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",cursor:count>0?"pointer":"default"}} title={count>0?onlineMembers.map(u=>u.name).join(", "):""}>
-              {isNow&&<div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444",position:"absolute",top:-8}} className="pulse-dot"/>}
-              <div className="asl" style={{width:24,height:barH,borderRadius:5,background:bg,opacity:count===0?.2:0.4+pct*0.6,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:3,animationDelay:localH*30+"ms",transition:"all .3s",border:isNow?"2px solid #EF4444":"none"}}>
-                <span style={{fontSize:8,color:"#fff",fontWeight:700}}>{count||""}</span>
-              </div>
-              <span style={{fontSize:8,color:isNow?"#EF4444":"var(--fg2)",fontWeight:isNow?700:400}}>{timeLabel}</span>
-            </div>
-          })}
-        </div>
-        <div style={{display:"flex",gap:16,marginTop:12,fontSize:9,color:"var(--fg2)",justifyContent:"center",alignItems:"center",flexWrap:"wrap"}}>
-          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#10B981"}}/> Most online</span>
-          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#F59E0B"}}/> Partial</span>
-          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:"#3B82F6"}}/> Few</span>
-          <span style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444"}}/> Now</span>
-          <span>Your time ({myTzLabel})</span>
-        </div>
-        </>})()}
-      </div>
-    </div>}
-
     {/* ═══ LEAVE (separate tab) ═══ */}
     {view==="leave"&&<div className="af">
       {/* ─── LEAVE BALANCES (CLEAN ROWS) ─── */}
@@ -1368,11 +1306,13 @@ export default function Home(){
           <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Leave Balances — {new Date().getFullYear()}</div>
           <button className="act-add btn-pop" onClick={()=>setAddModal("leave")} style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Request Leave</button>
         </div>
-        {userRoles.filter(ur=>{
-          if(ur.name==="Efehan Maleri")return false;
-          if(role==="admin")return true;
-          return userRoles.find(r=>r.email===user?.email)?.name===ur.name;
-        }).map((ur,idx)=>{
+        {(()=>{const myName=userRoles.find(r=>r.email===user?.email)?.name;
+          const visible=userRoles.filter(ur=>{
+            if(ur.name==="Efehan Maleri")return false;
+            if(role==="admin")return true;
+            return ur.name===myName;
+          }).sort((a,b)=>a.name===myName?-1:b.name===myName?1:0);
+          return visible.map((ur,idx)=>{
           const yearStr=String(new Date().getFullYear());
           const approved=leaves.filter(l=>l.person===ur.name&&l.status==="approved"&&l.start_date?.startsWith(yearStr));
           const calc=(type)=>approved.filter(l=>l.leave_type===type).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
@@ -1402,7 +1342,7 @@ export default function Home(){
                 </div>
                 {canEdit&&ur.name===userRoles.find(r=>r.email===user?.email)?.name&&<button onClick={()=>{setLeavePreFill(t.id);setAddModal("leave")}} style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+t.c,background:"transparent",color:t.c,fontSize:10,fontWeight:600,cursor:"pointer",transition:"all .2s",whiteSpace:"nowrap"}} className="btn-pop">Apply Leave</button>}
               </div>})}
-          </div>})}
+          </div>})})()}
       </div>
 
       {/* ─── HOLIDAY CALENDAR (TR + PK) ─── */}
