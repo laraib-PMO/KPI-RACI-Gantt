@@ -376,19 +376,27 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);const[decisions,setDecisions]=useState([]);
-  // Public holidays — Turkey + Pakistan 2026
+  // Gazetted public holidays — Turkey + Pakistan 2026 (official only)
   const PUBLIC_HOLIDAYS=[
-    {d:"2026-01-01",l:"New Year",c:"TR,PK"},{d:"2026-02-05",l:"Kashmir Day",c:"PK"},{d:"2026-03-17",l:"Shab-e-Meraj",c:"PK"},
-    {d:"2026-03-23",l:"Pakistan Day",c:"PK"},{d:"2026-03-28",l:"Ramadan Start (est.)",c:"TR,PK"},
-    {d:"2026-04-23",l:"Children's Day",c:"TR"},{d:"2026-04-27",l:"Eid al-Fitr (est.)",c:"TR,PK"},{d:"2026-04-28",l:"Eid al-Fitr Day 2",c:"TR,PK"},{d:"2026-04-29",l:"Eid al-Fitr Day 3",c:"PK"},
-    {d:"2026-05-01",l:"Labour Day",c:"TR,PK"},{d:"2026-05-19",l:"Youth Day",c:"TR"},
-    {d:"2026-07-04",l:"Eid al-Adha (est.)",c:"TR,PK"},{d:"2026-07-05",l:"Eid al-Adha Day 2",c:"TR,PK"},{d:"2026-07-06",l:"Eid al-Adha Day 3",c:"PK"},{d:"2026-07-07",l:"Eid al-Adha Day 4",c:"PK"},
-    {d:"2026-07-25",l:"Muharram (est.)",c:"TR,PK"},{d:"2026-08-14",l:"Independence Day",c:"PK"},{d:"2026-08-30",l:"Victory Day",c:"TR"},
-    {d:"2026-10-03",l:"Milad un-Nabi (est.)",c:"TR,PK"},{d:"2026-10-29",l:"Republic Day",c:"TR"},
-    {d:"2026-11-09",l:"Iqbal Day",c:"PK"},{d:"2026-12-25",l:"Quaid Day",c:"PK"}
+    // PAKISTAN — Gazetted
+    {d:"2026-02-05",l:"Kashmir Day",c:"PK"},{d:"2026-03-23",l:"Pakistan Day",c:"PK"},
+    {d:"2026-04-27",l:"Eid al-Fitr Day 1",c:"PK"},{d:"2026-04-28",l:"Eid al-Fitr Day 2",c:"PK"},{d:"2026-04-29",l:"Eid al-Fitr Day 3",c:"PK"},
+    {d:"2026-05-01",l:"Labour Day",c:"PK,TR"},
+    {d:"2026-07-03",l:"Hajj Day",c:"PK"},
+    {d:"2026-07-04",l:"Eid al-Adha Day 1",c:"PK,TR"},{d:"2026-07-05",l:"Eid al-Adha Day 2",c:"PK,TR"},{d:"2026-07-06",l:"Eid al-Adha Day 3",c:"PK"},{d:"2026-07-07",l:"Eid al-Adha Day 4",c:"PK"},
+    {d:"2026-07-25",l:"Muharram",c:"PK"},{d:"2026-08-14",l:"Independence Day",c:"PK"},
+    {d:"2026-10-03",l:"Eid Milad-un-Nabi",c:"PK,TR"},
+    {d:"2026-11-09",l:"Iqbal Day",c:"PK"},{d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
+    // TURKEY — Gazetted
+    {d:"2026-01-01",l:"New Year's Day",c:"TR"},
+    {d:"2026-04-23",l:"National Sovereignty & Children's Day",c:"TR"},
+    {d:"2026-05-19",l:"Commemoration of Atatürk / Youth Day",c:"TR"},
+    {d:"2026-07-15",l:"Democracy & National Unity Day",c:"TR"},
+    {d:"2026-08-30",l:"Victory Day",c:"TR"},
+    {d:"2026-10-29",l:"Republic Day",c:"TR"}
   ];
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
 
@@ -576,7 +584,10 @@ export default function Home(){
     await Promise.all(updated.map(item=>supabase.from(table).update({sort_order:item.sort_order}).eq('id',item.id)));
   },[canEdit]);
 
-  // Strip Slack emoji codes from status text
+  // Leave approvers — ONLY these people can approve/reject leaves
+  const LEAVE_APPROVERS=['nil@attimo.com','laraib@attimo.com','efehan@attimo.com'];
+  const isLeaveApprover=LEAVE_APPROVERS.includes(user?.email);
+
   const stripSlackEmoji=(text)=>(text||"").replace(/:[a-z_]+:/g,"").trim();
 
   const doSync=async()=>{setSyncing(true);showToast("Syncing...");try{const res=await fetch('/api/sync',{method:'POST'});await res.json();const now=new Date().toLocaleString('en-GB',{timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'});setLastSync(now);localStorage.setItem('attimo_last_sync',now);showToast("Sync complete — "+now);if(deptTasks)fetch('/api/linear-tasks').then(r=>r.json()).then(d=>setDeptTasks(d)).catch(()=>{})}catch(e){showToast("Sync failed","error")}setSyncing(false)};
@@ -1230,6 +1241,39 @@ export default function Home(){
           <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
+
+      {/* ─── MEETING SLOT FINDER ─── */}
+      <div style={{marginTop:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>{I.clock(14)} Find Available Slot</div>
+        <div style={{fontSize:10,color:"var(--fg2)",marginBottom:12}}>Select attendees → see when everyone is available across timezones</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+          {userRoles.map(ur=>{const sel=slotAttendees.includes(ur.email);return <button key={ur.id} onClick={()=>setSlotAttendees(p=>sel?p.filter(e=>e!==ur.email):[...p,ur.email])} className="btn-pop" style={{padding:"4px 10px",borderRadius:6,border:sel?"2px solid #3B82F6":"1px solid var(--border)",background:sel?"rgba(59,130,246,.1)":"var(--bg2)",color:sel?"#3B82F6":"var(--fg2)",fontSize:10,fontWeight:sel?700:500,cursor:"pointer"}}>{ur.name?.split(" ")[0]}</button>})}
+        </div>
+        {slotAttendees.length>=2&&<button onClick={()=>{setSlotLoading(true);fetch('/api/calendar-slots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails:slotAttendees,days:5})}).then(r=>r.json()).then(d=>{setSlotFinder(d);setSlotLoading(false)}).catch(()=>{setSlotLoading(false);showToast("Failed to load slots","error")})}} className="btn-pop" style={{padding:"8px 16px",borderRadius:8,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",marginBottom:12}}>{slotLoading?"Finding slots...":"Find Available Slots"}</button>}
+        {slotAttendees.length<2&&<div style={{fontSize:10,color:"var(--fg2)",fontStyle:"italic"}}>Select at least 2 people to find common slots</div>}
+        {slotFinder&&slotFinder.slots&&<div style={{overflowX:"auto",marginTop:8}}>
+          {!slotFinder.hasCalendarData&&<div style={{fontSize:9,color:"#F59E0B",marginBottom:8,padding:"6px 10px",background:"#FEF3C720",borderRadius:6}}>Showing working hours overlap only. Connect Google Calendar API for real free/busy data.</div>}
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+            <thead><tr><th style={{padding:6,textAlign:"left",color:"var(--fg2)",borderBottom:"2px solid var(--border)"}}>Time</th>
+              {slotFinder.slots.map(day=><th key={day.date} style={{padding:6,textAlign:"center",color:"var(--fg)",borderBottom:"2px solid var(--border)"}}>{day.dayName}</th>)}
+            </tr></thead>
+            <tbody>{Array.from({length:14},(_,i)=>i+7).map(h=><tr key={h}>
+              <td style={{padding:4,fontSize:9,color:"var(--fg2)",borderTop:"1px solid var(--border)"}}>{h>12?h-12:h}:00 {h>=12?"PM":"AM"}</td>
+              {slotFinder.slots.map(day=>{const slot=day.slots?.find(s=>s.hour===h);if(!slot)return <td key={day.date+h} style={{borderTop:"1px solid var(--border)"}}/>;
+                const bg=slot.allAvailable?"#DCFCE7":slot.someAvailable?"#FEF3C7":"#FEE2E2";
+                return <td key={day.date+h} className="rh" style={{padding:4,borderTop:"1px solid var(--border)",background:bg+"80",textAlign:"center",cursor:slot.allAvailable?"pointer":"default"}} title={slot.attendees.map(a=>a.name+(a.available?" ✓":" ✗")).join(", ")} onClick={()=>{if(slot.allAvailable)window.open("https://calendar.google.com/calendar/r/eventedit?text=Meeting&dates="+day.date.replace(/-/g,"")+"T"+String(h).padStart(2,"0")+"0000/"+day.date.replace(/-/g,"")+"T"+String(h+1).padStart(2,"0")+"0000&details="+encodeURIComponent("Attendees: "+slot.attendees.map(a=>a.name).join(", ")))}}>
+                  <div style={{fontSize:9,fontWeight:700,color:slot.allAvailable?"#166534":slot.someAvailable?"#92400E":"#991B1B"}}>{slot.availableCount}/{slot.attendees.length}</div>
+                  {slot.allAvailable&&<div style={{fontSize:7,color:"#10B981",fontWeight:700}}>BOOK</div>}
+                </td>})}
+            </tr>)}</tbody>
+          </table>
+          <div style={{display:"flex",gap:12,marginTop:8,fontSize:9,color:"var(--fg2)"}}>
+            <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:10,height:10,borderRadius:2,background:"#DCFCE7"}}/> All free — click to book</span>
+            <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:10,height:10,borderRadius:2,background:"#FEF3C7"}}/> Partial</span>
+            <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:10,height:10,borderRadius:2,background:"#FEE2E2"}}/> Conflict</span>
+          </div>
+        </div>}
+      </div>
     </div>}
 
     {/* ═══ PERFORMANCE ═══ */}
@@ -1431,7 +1475,7 @@ export default function Home(){
         <span style={{fontSize:10,color:l.half_day?"#F59E0B":"var(--fg2)"}}>{l.half_day?"Yes":"No"}</span>,
         fD(l.start_date),fD(l.end_date),<b>{l.half_day?"0.5":l.days}</b>,
         <span style={{fontSize:11}}>{l.reason}</span>,
-        canEdit?<InEdit value={l.status} onChange={v=>{updateLeave(l.id,{status:v,approved_by:v==="approved"||v==="rejected"?user?.user_metadata?.full_name||user?.email:""})}} type="select" options={["pending","approved","rejected","cancelled"]}/>:<Bdg bg={l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7"} c={l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E"}>{l.status}</Bdg>,
+        isLeaveApprover?<InEdit value={l.status} onChange={v=>{updateLeave(l.id,{status:v,approved_by:v==="approved"||v==="rejected"?user?.user_metadata?.full_name||user?.email:"",approved_by_email:user?.email||""})}} type="select" options={["pending","approved","rejected","cancelled"]}/>:<Bdg bg={l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7"} c={l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E"}>{l.status}</Bdg>,
         <span style={{fontSize:10,color:"var(--fg2)"}}>{l.approved_by}</span>,
         <button onClick={()=>setConfirmDlg({msg:"Delete this leave record?",fn:()=>deleteLeave(l.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
