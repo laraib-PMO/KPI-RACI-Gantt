@@ -189,7 +189,7 @@ function ConfirmDialog({message,onConfirm,onCancel}){
   </div>;
 }
 
-function LeaveRequestModal({user,onSave,onClose,isAdmin}){
+function LeaveRequestModal({user,onSave,onClose,isAdmin,leaves,userRoles,holidays}){
   const[step,setStep]=useState(1);const[vals,setVals]=useState({duration:"full",leave_type:"",person:user?.user_metadata?.full_name||""});const[err,setErr]=useState("");
   const set=(k,v)=>setVals(p=>({...p,[k]:v}));
   const empTypes=[{id:"annual",l:"Annual",sub:"14/yr"},{id:"sick",l:"Sick",sub:"8/yr"},{id:"casual",l:"Casual",sub:"1/mo"}];
@@ -201,6 +201,8 @@ function LeaveRequestModal({user,onSave,onClose,isAdmin}){
   };
   const types=getTypes();
   const validate1=()=>{if(!vals.leave_type){setErr("Select a leave type");return false}setErr("");return true};
+  // Check overlap + holidays
+  const getOverlap=()=>{if(!vals.start_date)return{overlap:[],hols:[]};const me=userRoles?.find(r=>r.name===vals.person);const myDept=me?.dept||"";const s=vals.start_date;const e=vals.duration==="half"?s:(vals.end_date||s);const overlap=(leaves||[]).filter(l=>l.status==="approved"&&l.person!==vals.person&&l.start_date<=e&&l.end_date>=s).map(l=>{const ur=userRoles?.find(r=>r.name===l.person);return{name:l.person,dept:ur?.dept||"",sameDept:ur?.dept===myDept}}).filter(o=>o.sameDept);const hols=(holidays||[]).filter(h=>h.d>=s&&h.d<=e);return{overlap,hols}};
   const validate2=()=>{if(!vals.person?.trim()){setErr("Name is required");return false}if(!vals.start_date){setErr("Select a date");return false}if(vals.duration==="full"&&!vals.end_date){setErr("Select end date");return false}if(vals.duration==="full"&&vals.end_date<vals.start_date){setErr("End date must be after start date");return false}setErr("");return true};
   return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
     <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(440px,95vw)",padding:20,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
@@ -246,6 +248,15 @@ function LeaveRequestModal({user,onSave,onClose,isAdmin}){
           <button onClick={()=>{setStep(1);setErr("")}} style={{flex:1,padding:10,border:"1px solid var(--border)",borderRadius:8,background:"transparent",color:"var(--fg2)",fontWeight:600,fontSize:12,cursor:"pointer"}}>Back</button>
           <button onClick={()=>{if(validate2())onSave({...vals,half_day:vals.duration==="half"?"Yes":"No"})}} className="btn-pop" style={{flex:2,padding:10,background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>Submit Request</button>
         </div>
+        {/* Overlap + holiday warnings */}
+        {(()=>{const{overlap,hols}=getOverlap();return <>
+          {overlap.length>0&&<div style={{marginTop:10,padding:8,background:"#FEF3C720",borderRadius:8,border:"1px solid #FDE68A50",fontSize:10}}>
+            <span style={{fontWeight:700,color:"#D97706"}}>Overlap warning:</span> {overlap.map(o=>o.name.split(" ")[0]).join(", ")} from your dept {overlap.length===1?"is":"are"} also off on these dates.
+          </div>}
+          {hols.length>0&&<div style={{marginTop:6,padding:8,background:"#DBEAFE50",borderRadius:8,border:"1px solid #93C5FD50",fontSize:10}}>
+            <span style={{fontWeight:700,color:"#1D4ED8"}}>Public holiday{hols.length>1?"s":""}:</span> {hols.map(h=>h.l+" ("+h.d.slice(5)+")").join(", ")}
+          </div>}
+        </>})()}
       </div>}
     </div>
   </div>;
@@ -364,7 +375,18 @@ function Tbl({headers,rows,ids,onReorder}){const[dI,setDI]=useState(null);const[
 function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]||"#94A3B8")+"15",color:CL[dept],padding:"8px 12px",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+(CL[dept]||"#94A3B8")}}>{dept}</div>}
 
 export default function Home(){
-  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);
+  const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);const[decisions,setDecisions]=useState([]);
+  // Public holidays — Turkey + Pakistan 2026
+  const PUBLIC_HOLIDAYS=[
+    {d:"2026-01-01",l:"New Year",c:"TR,PK"},{d:"2026-02-05",l:"Kashmir Day",c:"PK"},{d:"2026-03-17",l:"Shab-e-Meraj",c:"PK"},
+    {d:"2026-03-23",l:"Pakistan Day",c:"PK"},{d:"2026-03-28",l:"Ramadan Start (est.)",c:"TR,PK"},
+    {d:"2026-04-23",l:"Children's Day",c:"TR"},{d:"2026-04-27",l:"Eid al-Fitr (est.)",c:"TR,PK"},{d:"2026-04-28",l:"Eid al-Fitr Day 2",c:"TR,PK"},{d:"2026-04-29",l:"Eid al-Fitr Day 3",c:"PK"},
+    {d:"2026-05-01",l:"Labour Day",c:"TR,PK"},{d:"2026-05-19",l:"Youth Day",c:"TR"},
+    {d:"2026-07-04",l:"Eid al-Adha (est.)",c:"TR,PK"},{d:"2026-07-05",l:"Eid al-Adha Day 2",c:"TR,PK"},{d:"2026-07-06",l:"Eid al-Adha Day 3",c:"PK"},{d:"2026-07-07",l:"Eid al-Adha Day 4",c:"PK"},
+    {d:"2026-07-25",l:"Muharram (est.)",c:"TR,PK"},{d:"2026-08-14",l:"Independence Day",c:"PK"},{d:"2026-08-30",l:"Victory Day",c:"TR"},
+    {d:"2026-10-03",l:"Milad un-Nabi (est.)",c:"TR,PK"},{d:"2026-10-29",l:"Republic Day",c:"TR"},
+    {d:"2026-11-09",l:"Iqbal Day",c:"PK"},{d:"2026-12-25",l:"Quaid Day",c:"PK"}
+  ];
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
@@ -443,12 +465,12 @@ export default function Home(){
     document.title='Attimo Ops Hub';
   },[dark]);
 
-  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur,pf,lv]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at'),supabase.from('performance').select('*').order('created_at',{ascending:false}),supabase.from('leaves').select('*').order('start_date',{ascending:false})]);
-    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);if(pf.data)setPerf(pf.data);if(lv.data)setLeaves(lv.data);setLoading(false);
+  useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur,pf,lv,dc]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at'),supabase.from('performance').select('*').order('created_at',{ascending:false}),supabase.from('leaves').select('*').order('start_date',{ascending:false}),supabase.from('decisions').select('*').order('sort_order,id')]);
+    if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);if(pf.data)setPerf(pf.data);if(lv.data)setLeaves(lv.data);if(dc.data)setDecisions(dc.data);setLoading(false);
     // Auto-sync linked Gantt tasks on every page load (background)
     fetch('/api/sync',{method:'POST'}).then(()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).catch(()=>{});
     }la();
-    const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).on('postgres_changes',{event:'*',schema:'public',table:'user_roles'},()=>supabase.from('user_roles').select('*').order('created_at').then(({data})=>{if(data)setUserRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'performance'},()=>supabase.from('performance').select('*').order('created_at',{ascending:false}).then(({data})=>{if(data)setPerf(data)})).on('postgres_changes',{event:'*',schema:'public',table:'leaves'},()=>supabase.from('leaves').select('*').order('start_date',{ascending:false}).then(({data})=>{if(data)setLeaves(data)})).subscribe();
+    const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).on('postgres_changes',{event:'*',schema:'public',table:'user_roles'},()=>supabase.from('user_roles').select('*').order('created_at').then(({data})=>{if(data)setUserRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'performance'},()=>supabase.from('performance').select('*').order('created_at',{ascending:false}).then(({data})=>{if(data)setPerf(data)})).on('postgres_changes',{event:'*',schema:'public',table:'leaves'},()=>supabase.from('leaves').select('*').order('start_date',{ascending:false}).then(({data})=>{if(data)setLeaves(data)})).on('postgres_changes',{event:'*',schema:'public',table:'decisions'},()=>supabase.from('decisions').select('*').order('sort_order,id').then(({data})=>{if(data)setDecisions(data)})).subscribe();
     return()=>supabase.removeChannel(ch)},[]);
 
   const updateTask=useCallback(async(id,u)=>{if(!isEditor())return;notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
@@ -489,6 +511,11 @@ export default function Home(){
 
   // Leave CRUD
   const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data){setLeaves(p=>[...data,...p]);showToast("Leave request submitted — pending approval")}notify("requested","leave",(v.leave_type||"annual")+" "+s+(hd?" (half day)":""));setAddModal(null)},[user,userRoles]);
+
+  // Decisions CRUD
+  const addDecision=useCallback(async v=>{if(!isEditor())return;const{data}=await supabase.from('decisions').insert({title:v.title||'',owner:v.owner||'',priority:v.priority||'medium',due_date:v.due_date||null,context:v.context||'',dept:v.dept||'Team',status:'open'}).select();if(data)setDecisions(p=>[...data,...p]);showToast("Decision added");setAddModal(null)},[]);
+  const updateDecision=useCallback(async(id,u)=>{if(!isEditor())return;setDecisions(p=>p.map(d=>d.id===id?{...d,...u}:d));await supabase.from('decisions').update(u).eq('id',id)},[]);
+  const deleteDecision=useCallback(async id=>{if(!isAdmin())return;setDecisions(p=>p.filter(d=>d.id!==id));await supabase.from('decisions').delete().eq('id',id)},[]);
   const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access","error");return}const leave=leaves.find(l=>l.id===id);setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status){notify(u.status,"leave",leave?.person+" — "+u.status);showToast("Leave "+u.status+" for "+(leave?.person||"employee"))}},[leaves]);
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
@@ -742,10 +769,18 @@ export default function Home(){
         {/* KPI Health */}
         <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"200ms"}}>
           <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{ I.target(14)} KPI Health</div>
-          {kpis.length>0?<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,textAlign:"center"}}>
-            <div style={{background:"#DCFCE720",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#10B981"}}>{kpis.filter(k=>k.flag==="green").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>On Track</div></div>
-            <div style={{background:"#FEF3C720",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#F59E0B"}}>{kpis.filter(k=>k.flag==="yellow").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>Attention</div></div>
-            <div style={{background:"#FEE2E220",borderRadius:8,padding:12}}><div style={{fontSize:20,fontWeight:800,color:"#EF4444"}}>{kpis.filter(k=>k.flag==="red").length}</div><div style={{fontSize:9,color:"var(--fg2)"}}>Critical</div></div>
+          {kpis.length>0?<div>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              {[{l:"On Track",c:"#10B981",n:kpis.filter(k=>k.flag==="green").length},{l:"Attention",c:"#F59E0B",n:kpis.filter(k=>k.flag==="yellow").length},{l:"Critical",c:"#EF4444",n:kpis.filter(k=>k.flag==="red").length}].map(s=><div key={s.l} style={{flex:1,textAlign:"center",padding:6,background:s.c+"10",borderRadius:6}}>
+                <div style={{fontSize:16,fontWeight:800,color:s.c}}>{s.n}</div><div style={{fontSize:8,color:"var(--fg2)"}}>{s.l}</div>
+              </div>)}
+            </div>
+            {kpis.slice(0,6).map((k,i)=><div key={k.id} className="rh" style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",borderRadius:4,fontSize:10}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:FC[k.flag],flexShrink:0}}/>
+              <span style={{flex:1,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{k.name}</span>
+              <span style={{fontWeight:700,color:FC[k.flag],fontSize:9}}>{k.current_value||"—"}</span>
+            </div>)}
+            {kpis.length>6&&<div style={{fontSize:9,color:"#3B82F6",textAlign:"center",marginTop:4,cursor:"pointer"}} onClick={()=>setView("kpi")}>+{kpis.length-6} more →</div>}
           </div>:<div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No KPIs configured yet</div>}
         </div>
 
@@ -762,16 +797,39 @@ export default function Home(){
         </div>
       </div>
 
-      {/* Quick Nav */}
-      <div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"300ms"}}>
-        <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12}}>Quick Navigation</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
-          {TABS.filter(t=>t.id!=="dashboard").map(t=><div key={t.id} onClick={()=>setView(t.id)} className="ch" style={{background:"var(--bg2)",borderRadius:8,padding:12,cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
-            <div style={{fontSize:18,marginBottom:4}}>{t.icon}</div>
-            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{t.l}</div>
-          </div>)}
+      {/* Decisions Pending */}
+      <div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:16,animationDelay:"280ms"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",display:"flex",alignItems:"center",gap:6}}>{I.alert(14)} Decisions Pending</div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:20,fontWeight:800,color:decisions.filter(d=>d.status==="open").length>0?"#EF4444":"#10B981"}}>{decisions.filter(d=>d.status==="open").length}</span>
+            {canEdit&&<button onClick={()=>setAddModal("decision")} className="btn-pop" style={{fontSize:9,padding:"3px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg2)",cursor:"pointer"}}>+ Add</button>}
+          </div>
         </div>
+        {decisions.filter(d=>d.status==="open").length===0?<div style={{fontSize:11,color:"var(--fg2)",textAlign:"center",padding:8}}>No open decisions</div>
+        :decisions.filter(d=>d.status==="open").slice(0,5).map((d,i)=>{
+          const age=d.created_at?Math.floor((Date.now()-new Date(d.created_at).getTime())/86400000):0;
+          return <div key={d.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,borderLeft:"3px solid "+(d.priority==="critical"?"#EF4444":d.priority==="high"?"#F97316":"#F59E0B"),marginBottom:3,animationDelay:i*40+"ms"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.title}</div>
+              <div style={{fontSize:9,color:"var(--fg2)"}}>{d.owner} · {age}d open</div>
+            </div>
+            <Bdg bg={d.priority==="critical"?"#FEE2E2":d.priority==="high"?"#FEF3C7":"#F1F5F9"} c={d.priority==="critical"?"#DC2626":d.priority==="high"?"#D97706":"#64748B"}>{d.priority}</Bdg>
+            {canEdit&&<button onClick={()=>updateDecision(d.id,{status:"decided",decided_date:today})} style={{fontSize:8,padding:"2px 6px",borderRadius:4,border:"1px solid #10B981",background:"#DCFCE7",color:"#166534",cursor:"pointer",fontWeight:600}}>Decide</button>}
+          </div>})}
       </div>
+
+      {/* Standup Compliance */}
+      {(()=>{const todayStr=today;const submitted=standups.filter(s=>String(s.standup_date).split('T')[0]===todayStr&&s.person!=="Efehan Maleri").map(s=>s.person);const allMembers=userRoles.filter(ur=>ur.name!=="Efehan Maleri").map(ur=>ur.name);const notSubmitted=allMembers.filter(n=>!submitted.includes(n));
+        return <div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"320ms"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",display:"flex",alignItems:"center",gap:6}}>{I.list(14)} Standup Today</div>
+            <span style={{fontSize:12,fontWeight:700,color:submitted.length>=allMembers.length?"#10B981":"#F59E0B"}}>{submitted.length}/{allMembers.length}</span>
+          </div>
+          {notSubmitted.length>0?<div style={{fontSize:10,color:"var(--fg2)"}}>
+            <span style={{fontWeight:600,color:"#EF4444"}}>Not submitted:</span> {notSubmitted.map(n=>n.split(" ")[0]).join(", ")}
+          </div>:<div style={{fontSize:10,color:"#10B981",fontWeight:600}}>All submitted</div>}
+        </div>})()}
     </div>}
 
     {/* ═══ TIMELINE ═══ */}
@@ -934,6 +992,13 @@ export default function Home(){
         </div>
       </div>
       <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)",marginBottom:16}}>Updates from Slack workflow and manual entries. Syncs when you click Sync All. Slack workflow sends DMs at 5pm daily.</div>
+      {/* Not Submitted callout */}
+      {(()=>{const todayStr=today;const submitted=standups.filter(s=>String(s.standup_date).split('T')[0]===todayStr&&s.person!=="Efehan Maleri").map(s=>s.person);const allNames=userRoles.filter(ur=>ur.name!=="Efehan Maleri").map(ur=>ur.name);const missing=allNames.filter(n=>!submitted.includes(n));
+        const nowH=new Date().getHours();
+        return missing.length>0&&nowH>=10?<div className="af" style={{background:"#FEE2E215",border:"1px solid #FCA5A530",borderRadius:10,padding:12,marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#EF4444",marginBottom:4,display:"flex",alignItems:"center",gap:6}}>{I.alert(12)} Not submitted today ({missing.length})</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{missing.map(n=><span key={n} style={{fontSize:10,padding:"3px 8px",borderRadius:99,background:"#FEE2E2",color:"#DC2626",fontWeight:600}}>{n.split(" ")[0]}</span>)}</div>
+        </div>:null})()}
       {(()=>{
         const byDate={};standups.filter(s=>s.person!=="Efehan Maleri").forEach(s=>{const d=String(s.standup_date).split('T')[0];if(!byDate[d])byDate[d]=[];byDate[d].push(s)});
         const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
@@ -983,6 +1048,14 @@ export default function Home(){
     {view==="raci"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><button onClick={()=>setAddModal("raci")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add</button></div>
       <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)"}}><b>R</b>=Responsible <b>A</b>=Accountable <b>C</b>=Consulted <b>I</b>=Informed <span style={{color:"#3B82F6"}}>[Suggest]</span>=PMO suggestion</div>
+      {/* RACI Conflict Detection */}
+      {(()=>{const noR=raci.filter(r=>!r.responsible);const noA=raci.filter(r=>!r.accountable);const both=raci.filter(r=>!r.responsible&&!r.accountable);
+        return (noR.length>0||noA.length>0)?<div className="af" style={{background:"#FEF3C720",border:"1px solid #FDE68A50",borderRadius:10,padding:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:4,display:"flex",alignItems:"center",gap:6}}>{I.alert(12)} {both.length+noR.length+noA.length-both.length} RACI conflicts</div>
+          {both.length>0&&<div style={{fontSize:10,color:"#DC2626",marginBottom:2}}>No R or A: {both.slice(0,4).map(r=>r.task).join(", ")}{both.length>4?" +more":""}</div>}
+          {noR.filter(r=>r.accountable).length>0&&<div style={{fontSize:10,color:"#D97706",marginBottom:2}}>Missing R: {noR.filter(r=>r.accountable).slice(0,4).map(r=>r.task).join(", ")}</div>}
+          {noA.filter(r=>r.responsible).length>0&&<div style={{fontSize:10,color:"#D97706"}}>Missing A: {noA.filter(r=>r.responsible).slice(0,4).map(r=>r.task).join(", ")}</div>}
+        </div>:null})()}
       {Object.keys(raciByDept).length===0&&<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}>
         <div style={{color:"var(--fg2)",marginBottom:4}}>{I.list(24)}</div>
         <div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No RACI entries yet</div>
@@ -1017,7 +1090,9 @@ export default function Home(){
     {view==="risk"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Risk Register</div><button onClick={()=>setAddModal("risk")} className="act-add btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Risk</button></div>
       {risks.length===0?<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}><div style={{color:"var(--fg2)",marginBottom:4}}>{I.shield(24)}</div><div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No risks logged</div><div style={{fontSize:11,color:"var(--fg2)"}}>Click "+ Add Risk" to start tracking project risks.</div></div>
-      :<Tbl headers={["#","Risk","Impact","Status","Owner","Mitigation","Linked To",""]} ids={risks.map(r=>r.id)} onReorder={(a,b)=>reorder("risks",risks,setRisks,a,b)} rows={risks.map(r=>[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.owner} onChange={v=>updateRisk(r.id,{owner:v})}/>,<InEdit value={r.mitigation} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>setConfirmDlg({msg:"Delete this risk?",fn:()=>deleteRisk(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>])}/>}
+      :<Tbl headers={["#","Risk","Impact","Status","Mitigation","Stage","Owner","Age","Linked",""]} ids={risks.map(r=>r.id)} onReorder={(a,b)=>reorder("risks",risks,setRisks,a,b)} rows={risks.map(r=>{
+        const age=r.created_date?Math.floor((Date.now()-new Date(r.created_date).getTime())/86400000):r.created_at?Math.floor((Date.now()-new Date(r.created_at).getTime())/86400000):0;
+        return[<b>{r.id}</b>,<InEdit value={r.description} onChange={v=>updateRisk(r.id,{description:v})}/>,<InEdit value={r.impact} onChange={v=>updateRisk(r.id,{impact:v})} type="select" options={IMP_OPT}/>,<InEdit value={r.status} onChange={v=>updateRisk(r.id,{status:v})} type="select" options={["ACTIVE","MITIGATING","FUTURE","CLOSED"]}/>,<InEdit value={r.mitigation||""} onChange={v=>updateRisk(r.id,{mitigation:v})}/>,<InEdit value={r.mitigation_status||"identified"} onChange={v=>updateRisk(r.id,{mitigation_status:v})} type="select" options={["identified","mitigating","resolved","accepted"]}/>,<InEdit value={r.owner||""} onChange={v=>updateRisk(r.id,{owner:v})}/>,<span style={{fontSize:10,color:age>14?"#EF4444":age>7?"#F59E0B":"var(--fg2)",fontWeight:age>14?700:400}}>{age}d</span>,<span style={{fontSize:11}}><InEdit value={r.linked_to||""} onChange={v=>updateRisk(r.id,{linked_to:v})}/>{r.linked_to&&tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to)?<div style={{fontSize:9,color:"#6366F1",marginTop:2}}>{"→ "+tasks.find(t=>t.id===r.linked_to||t.name===r.linked_to).name}</div>:null}</span>,<button onClick={()=>setConfirmDlg({msg:"Delete this risk?",fn:()=>deleteRisk(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>]})}/>}
     </div>}
 
     {/* ═══ OPEN ROLES (dynamic from DB) ═══ */}
@@ -1149,25 +1224,35 @@ export default function Home(){
       {/* Manual reviews */}
       {perf.length>0&&<div style={{marginTop:8}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Manual Reviews</div>
-        {perf.filter(p=>p.person!=="Efehan Maleri").map((p,idx)=><div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*60+"ms"}}>
+        {perf.filter(p=>p.person!=="Efehan Maleri").map((p,idx)=>{
+        const wf=p.workflow_status||"not_started";const isSelf=userRoles.find(r=>r.email===user?.email)?.name===p.person;
+        const wfC=wf==="complete"?"#10B981":wf==="manager_review"?"#8B5CF6":wf==="self_review"?"#3B82F6":"#94A3B8";
+        const wfL=wf==="complete"?"Complete":wf==="manager_review"?"Manager Review":wf==="self_review"?"Self Review":"Not Started";
+        return <div key={p.id} className="af ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:12,animationDelay:idx*60+"ms"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:32,height:32,borderRadius:"50%",background:CL[N2D[p.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:12,fontWeight:700}}>{p.person?.[0]}</span></div>
             <div><InEdit value={p.person} onChange={v=>updatePerf(p.id,{person:v})}/><div style={{fontSize:10,color:"var(--fg2)"}}>{p.period}</div></div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <Bdg bg={wfC+"20"} c={wfC}>{wfL}</Bdg>
             <InEdit value={p.rating} onChange={v=>updatePerf(p.id,{rating:v})} type="select" options={["pending","exceeds","meets","developing"]}/>
-            <InEdit value={p.status} onChange={v=>updatePerf(p.id,{status:v})} type="select" options={["draft","submitted","reviewed","closed"]}/>
             <button onClick={()=>setConfirmDlg({msg:"Delete this review?",fn:()=>deletePerf(p.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Goals</div><InEdit value={p.goals||""} onChange={v=>updatePerf(p.id,{goals:v})}/></div>
-          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Self Review</div><InEdit value={p.self_review||""} onChange={v=>updatePerf(p.id,{self_review:v})}/></div>
-          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Manager Review</div><InEdit value={p.manager_review||""} onChange={v=>updatePerf(p.id,{manager_review:v})}/></div>
+          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Self Review {wf==="not_started"&&isSelf?"(fill this)":""}</div><InEdit value={p.self_review||""} onChange={v=>updatePerf(p.id,{self_review:v})}/></div>
+          <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Manager Review</div>{role==="admin"?<InEdit value={p.manager_review||""} onChange={v=>updatePerf(p.id,{manager_review:v})}/>:<span style={{fontSize:12,color:"var(--fg)"}}>{p.manager_review||"—"}</span>}</div>
           <div><div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",marginBottom:4}}>Reviewer</div><InEdit value={p.reviewer||""} onChange={v=>updatePerf(p.id,{reviewer:v})}/></div>
         </div>
-      </div>)}
+        {/* Workflow actions */}
+        <div style={{display:"flex",gap:6,marginTop:10}}>
+          {wf==="not_started"&&isSelf&&<button onClick={()=>updatePerf(p.id,{workflow_status:"self_review"})} className="btn-pop" style={{fontSize:10,padding:"5px 12px",borderRadius:6,border:"none",background:"#3B82F6",color:"#fff",cursor:"pointer",fontWeight:600}}>Start Self Review</button>}
+          {wf==="self_review"&&isSelf&&p.self_review&&<button onClick={()=>{updatePerf(p.id,{workflow_status:"manager_review",submitted_at:new Date().toISOString()});showToast("Submitted for manager review")}} className="btn-pop" style={{fontSize:10,padding:"5px 12px",borderRadius:6,border:"none",background:"#8B5CF6",color:"#fff",cursor:"pointer",fontWeight:600}}>Submit for Review</button>}
+          {wf==="manager_review"&&role==="admin"&&<button onClick={()=>{updatePerf(p.id,{workflow_status:"complete",reviewed_at:new Date().toISOString(),status:"reviewed"});showToast("Review complete")}} className="btn-pop" style={{fontSize:10,padding:"5px 12px",borderRadius:6,border:"none",background:"#10B981",color:"#fff",cursor:"pointer",fontWeight:600}}>Mark Complete</button>}
+        </div>
+      </div>})}
       </div>}
     </div>}
 
@@ -1407,7 +1492,8 @@ export default function Home(){
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
     {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="perf"&&<AddModal title="Add Performance Review" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha Mubeen"},{key:"period",label:"Period",placeholder:"e.g. Q2 2026"},{key:"goals",label:"Goals",placeholder:"Key objectives..."}]} onSave={addPerf} onClose={()=>setAddModal(null)}/>}
-    {addModal==="leave"&&<LeaveRequestModal user={user} isAdmin={role==="admin"} onSave={addLeave} onClose={()=>setAddModal(null)}/>}
+    {addModal==="leave"&&<LeaveRequestModal user={user} isAdmin={role==="admin"} onSave={addLeave} onClose={()=>setAddModal(null)} leaves={leaves} userRoles={userRoles} holidays={PUBLIC_HOLIDAYS}/>}
+    {addModal==="decision"&&<AddModal title="Add Decision" fields={[{key:"title",label:"Decision",placeholder:"What needs to be decided?"},{key:"owner",label:"Owner",placeholder:"Who decides?"},{key:"priority",label:"Priority",type:"select",options:["low","medium","high","critical"]},{key:"due_date",label:"Due Date",type:"date"},{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"context",label:"Context",placeholder:"Why it matters"}]} onSave={addDecision} onClose={()=>setAddModal(null)}/>}
 
     {/* Working Hours Modal */}
     {showHoursModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowHoursModal(false)}>
