@@ -396,7 +396,7 @@ export default function Home(){
     {d:"2026-10-29",l:"Republic Day",c:"TR"}
   ];
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
 
@@ -423,9 +423,16 @@ export default function Home(){
         const first=name.split(' ')[0];
         return map['e:'+email]||map['n:'+name]||map['f:'+first]||null;
       };
-      setSlackStatus(map);showToast("Slack status refreshed")
+      map._allUsers=users; // raw array for new member detection
+      setSlackStatus(map);
+      // Detect new Slack members not in user_roles
+      if(userRoles.length>0){const knownEmails=userRoles.map(r=>r.email?.toLowerCase());const newMembers=users.filter(u=>u.email&&!knownEmails.includes(u.email.toLowerCase())&&!u.email.includes('bot')&&!u.email.includes('slackbot'));if(newMembers.length>0)setNewSlackMembers(newMembers)}
+      showToast("Slack status refreshed")
     }catch{}setSlackLoading(false);
-  },[]);
+  },[userRoles]);
+
+  // Performance auto-fetch on tab open
+  useEffect(()=>{if(view==="perf"&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view]);
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
   const roleRef=useRef(null);roleRef.current=role;
@@ -524,27 +531,74 @@ export default function Home(){
   const updateDecision=useCallback(async(id,u)=>{if(!isEditor())return;setDecisions(p=>p.map(d=>d.id===id?{...d,...u}:d));await supabase.from('decisions').update(u).eq('id',id)},[]);
   const deleteDecision=useCallback(async id=>{if(!isAdmin())return;setDecisions(p=>p.filter(d=>d.id!==id));await supabase.from('decisions').delete().eq('id',id)},[]);
 
-  // Onboarding CRUD + template generator
-  const ONBOARD_TEMPLATE=[
+  // Department-specific onboarding templates
+  const ONBOARD_COMMON=[
     {item:"Create @attimo.com email",category:"accounts",assigned_to:"Nil Ozdamar"},
     {item:"Invite to Slack workspace",category:"accounts",assigned_to:"Nil Ozdamar"},
-    {item:"GitHub repository access",category:"accounts",assigned_to:"Syed Osama Ali"},
-    {item:"Linear workspace invite",category:"accounts",assigned_to:"Laraib Haider"},
     {item:"Google Drive folder access",category:"accounts",assigned_to:"Nil Ozdamar"},
     {item:"Collect ID copy",category:"documents",assigned_to:"Nil Ozdamar"},
     {item:"Collect signed contract",category:"documents",assigned_to:"Nil Ozdamar"},
     {item:"Collect CV / resume",category:"documents",assigned_to:"Nil Ozdamar"},
-    {item:"VERBIS consent form",category:"documents",assigned_to:"Soo Ling Lim"},
     {item:"Bank details for payroll",category:"documents",assigned_to:"Nil Ozdamar"},
     {item:"Send welcome email",category:"orientation",assigned_to:"Nil Ozdamar"},
     {item:"Slack channels introduction",category:"orientation",assigned_to:"Laraib Haider"},
     {item:"Product walkthrough (Panovia overview)",category:"orientation",assigned_to:"Laraib Haider"},
-    {item:"Technical onboarding (architecture, codebase)",category:"orientation",assigned_to:"Syed Osama Ali"},
-    {item:"Tool setup (dev environment, IDE, etc.)",category:"tools",assigned_to:"Talha Mubeen"},
   ];
-  const generateOnboarding=useCallback(async(personName)=>{if(!isEditor())return;const dueDate=new Date();dueDate.setDate(dueDate.getDate()+3);const dueDateStr=dueDate.toISOString().split('T')[0];const items=ONBOARD_TEMPLATE.map((t,i)=>({...t,person:personName,status:'pending',due_date:dueDateStr,sort_order:i}));const{data}=await supabase.from('onboarding').insert(items).select();if(data){setOnboarding(p=>[...p,...data]);showToast(data.length+" onboarding items created for "+personName)}
-    // Also generate HR document placeholders
-    const docTypes=['id_copy','cv','contract','verbis_consent','bank_details','emergency_contact','photo'];const docs=docTypes.map(dt=>({person:personName,doc_type:dt,status:'missing'}));const{data:dd}=await supabase.from('hr_documents').insert(docs).select();if(dd)setHrDocs(p=>[...p,...dd]);
+  const ONBOARD_DEPT={
+    Development:[
+      {item:"GitHub repository access",category:"accounts",assigned_to:"Syed Osama Ali"},
+      {item:"Linear workspace invite",category:"accounts",assigned_to:"Laraib Haider"},
+      {item:"Technical onboarding (architecture, codebase)",category:"orientation",assigned_to:"Syed Osama Ali"},
+      {item:"Dev environment setup (IDE, Docker, local stack)",category:"tools",assigned_to:"Talha Mubeen"},
+      {item:"Code review standards walkthrough",category:"orientation",assigned_to:"Talha Mubeen"},
+      {item:"VERBIS consent form",category:"documents",assigned_to:"Soo Ling Lim"},
+    ],
+    "AI/Science":[
+      {item:"GitHub repository access",category:"accounts",assigned_to:"Syed Osama Ali"},
+      {item:"Linear workspace invite",category:"accounts",assigned_to:"Laraib Haider"},
+      {item:"Research methodology walkthrough",category:"orientation",assigned_to:"Soo Ling Lim"},
+      {item:"ML pipeline & data access setup",category:"tools",assigned_to:"Soo Ling Lim"},
+      {item:"VERBIS consent form",category:"documents",assigned_to:"Soo Ling Lim"},
+    ],
+    Design:[
+      {item:"Figma workspace invite",category:"accounts",assigned_to:"Gamze Savaş"},
+      {item:"Asana Design board access",category:"accounts",assigned_to:"Laraib Haider"},
+      {item:"Design system walkthrough",category:"orientation",assigned_to:"Tunç Karadağ"},
+      {item:"Brand guidelines & assets folder",category:"tools",assigned_to:"Gamze Savaş"},
+    ],
+    Marketing:[
+      {item:"Asana Marketing board access",category:"accounts",assigned_to:"Laraib Haider"},
+      {item:"HubSpot CRM access",category:"accounts",assigned_to:"Claire Eskander"},
+      {item:"Brand voice & messaging doc walkthrough",category:"orientation",assigned_to:"Claire Eskander"},
+      {item:"Social media account access",category:"tools",assigned_to:"Claire Eskander"},
+    ],
+    PMO:[
+      {item:"Linear Operations board access",category:"accounts",assigned_to:"Laraib Haider"},
+      {item:"Asana board access",category:"accounts",assigned_to:"Laraib Haider"},
+      {item:"PMO Ops Hub walkthrough",category:"orientation",assigned_to:"Laraib Haider"},
+      {item:"Standup & reporting workflow",category:"orientation",assigned_to:"Laraib Haider"},
+    ],
+    Leadership:[
+      {item:"All tool admin access",category:"accounts",assigned_to:"Laraib Haider"},
+      {item:"Strategic docs & investor materials access",category:"orientation",assigned_to:"Efehan Maleri"},
+    ],
+  };
+  const OFFBOARD_TEMPLATE=[
+    {item:"Revoke @attimo.com email",category:"accounts",assigned_to:"Nil Ozdamar"},
+    {item:"Remove from Slack workspace",category:"accounts",assigned_to:"Nil Ozdamar"},
+    {item:"Revoke GitHub access",category:"accounts",assigned_to:"Syed Osama Ali"},
+    {item:"Remove from Linear/Asana",category:"accounts",assigned_to:"Laraib Haider"},
+    {item:"Revoke Google Drive access",category:"accounts",assigned_to:"Nil Ozdamar"},
+    {item:"Collect company equipment",category:"general",assigned_to:"Nil Ozdamar"},
+    {item:"Final payroll settlement",category:"documents",assigned_to:"Nil Ozdamar"},
+    {item:"Exit interview",category:"orientation",assigned_to:"Nil Ozdamar"},
+    {item:"Knowledge transfer documentation",category:"general",assigned_to:"Laraib Haider"},
+    {item:"Update team directory & user_roles",category:"general",assigned_to:"Laraib Haider"},
+  ];
+  const generateOnboarding=useCallback(async(personName,dept,isOffboard=false)=>{if(!isEditor())return;const dueDate=new Date();dueDate.setDate(dueDate.getDate()+(isOffboard?7:3));const dueDateStr=dueDate.toISOString().split('T')[0];
+    const template=isOffboard?OFFBOARD_TEMPLATE:[...ONBOARD_COMMON,...(ONBOARD_DEPT[dept]||ONBOARD_DEPT['Development'])];
+    const items=template.map((t,i)=>({...t,person:personName+(isOffboard?" (offboarding)":""),status:'pending',due_date:dueDateStr,sort_order:i}));const{data}=await supabase.from('onboarding').insert(items).select();if(data){setOnboarding(p=>[...p,...data]);showToast(data.length+(isOffboard?" offboarding":" onboarding")+" items created for "+personName)}
+    if(!isOffboard){const docTypes=['id_copy','cv','contract','verbis_consent','bank_details','emergency_contact','photo'];const docs=docTypes.map(dt=>({person:personName,doc_type:dt,status:'missing'}));const{data:dd}=await supabase.from('hr_documents').insert(docs).select();if(dd)setHrDocs(p=>[...p,...dd])}
   },[]);
   const updateOnboardItem=useCallback(async(id,u)=>{if(!isEditor())return;setOnboarding(p=>p.map(o=>o.id===id?{...o,...u}:o));await supabase.from('onboarding').update(u).eq('id',id)},[]);
   const deleteOnboardItem=useCallback(async id=>{if(!isAdmin())return;setOnboarding(p=>p.filter(o=>o.id!==id));await supabase.from('onboarding').delete().eq('id',id)},[]);
@@ -817,15 +871,57 @@ export default function Home(){
         </div>})()}
       </div>
 
-      {/* Who's Off Today */}
-      {(()=>{const offToday=userRoles.filter(ur=>leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today));
-        return offToday.length>0?<div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:12,marginBottom:16,display:"flex",alignItems:"center",gap:10,animationDelay:"50ms"}}>
-          <div style={{color:"#F59E0B",flexShrink:0}}>{I.leaf(16)}</div>
-          <div style={{fontSize:11,color:"var(--fg)"}}>
-            <span style={{fontWeight:700}}>Off today:</span>{" "}
-            {offToday.map((ur,i)=><span key={ur.id}>{i>0?", ":""}<span style={{fontWeight:600}}>{ur.name?.split(" ")[0]}</span><span style={{color:"var(--fg2)",fontSize:9}}> ({leaves.find(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today)?.leave_type})</span></span>)}
+      {/* ─── NEW SLACK MEMBER DETECTION (admin only) ─── */}
+      {role==="admin"&&(()=>{const slackUsers=(slackStatus._allUsers||[]);const knownEmails=userRoles.map(r=>r.email?.toLowerCase());const newMembers=slackUsers.filter(s=>s.email&&!knownEmails.includes(s.email.toLowerCase())&&!s.email.includes("bot")&&s.name!=="Slackbot");
+        return newMembers.length>0?<div className="asl" style={{background:"rgba(59,130,246,.06)",border:"1px solid rgba(59,130,246,.2)",borderRadius:10,padding:12,marginBottom:12,animationDelay:"30ms"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <span style={{color:"#3B82F6"}}>{I.users(14)}</span>
+            <span style={{fontSize:12,fontWeight:700,color:"#3B82F6"}}>New Slack member{newMembers.length>1?"s":""} detected</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {newMembers.map(m=><div key={m.email} className="rh" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 10px",borderRadius:6,background:"var(--card)",border:"1px solid var(--border)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {m.avatar?<img src={m.avatar} style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:24,height:24,borderRadius:"50%",background:"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:9,fontWeight:700}}>{m.name?.[0]}</span></div>}
+                <div><div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{m.name}</div><div style={{fontSize:9,color:"var(--fg2)"}}>{m.email}</div></div>
+              </div>
+              <button onClick={async()=>{const dept=prompt("Department for "+m.name+"?","Development");if(!dept)return;const{data}=await supabase.from('user_roles').insert({email:m.email,name:m.name,role:'viewer',dept,timezone:m.tz||'Europe/Istanbul',work_start:'09:00',work_end:'18:00',employment_type:'full_time',avatar_url:m.avatar||''}).select();if(data){setUserRoles(p=>[...p,...data]);showToast(m.name+" added to team")}}} className="btn-pop" style={{padding:"4px 12px",borderRadius:6,border:"none",background:"#3B82F6",color:"#fff",fontSize:10,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>+ Add to Team</button>
+            </div>)}
           </div>
         </div>:null})()}
+
+      {/* ─── WHO'S OFF + UPCOMING HOLIDAYS ─── */}
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        {/* Off Today */}
+        {(()=>{const offToday=userRoles.filter(ur=>leaves.some(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today));
+          return offToday.length>0?<div className="asl" style={{flex:1,minWidth:200,background:"rgba(245,158,11,.06)",border:"1px solid rgba(245,158,11,.2)",borderRadius:10,padding:12,display:"flex",alignItems:"center",gap:10,animationDelay:"40ms"}}>
+            <span style={{color:"#F59E0B"}}>{I.leaf(16)}</span>
+            <div style={{fontSize:11,color:"var(--fg)"}}>
+              <span style={{fontWeight:700}}>Off today:</span>{" "}
+              {offToday.map((ur,i)=><span key={ur.id}>{i>0?", ":""}<span style={{fontWeight:600}}>{ur.name?.split(" ")[0]}</span><span style={{color:"var(--fg2)",fontSize:9}}> ({leaves.find(l=>l.person===ur.name&&l.status==="approved"&&l.start_date<=today&&l.end_date>=today)?.leave_type})</span></span>)}
+            </div>
+          </div>:<div className="asl" style={{flex:1,minWidth:200,background:"rgba(16,185,129,.06)",border:"1px solid rgba(16,185,129,.2)",borderRadius:10,padding:12,display:"flex",alignItems:"center",gap:10,animationDelay:"40ms"}}>
+            <span style={{color:"#10B981"}}>{I.check(16)}</span>
+            <span style={{fontSize:11,fontWeight:600,color:"#10B981"}}>Full team available today</span>
+          </div>})()}
+
+        {/* Next Holiday */}
+        {(()=>{const upcoming=PUBLIC_HOLIDAYS.filter(h=>h.d>=today).sort((a,b)=>a.d.localeCompare(b.d));const next=upcoming[0];
+          if(!next)return null;
+          const daysUntil=Math.ceil((new Date(next.d+"T00:00:00").getTime()-new Date(today+"T00:00:00").getTime())/86400000);
+          return <div className="asl" style={{flex:1,minWidth:200,background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.2)",borderRadius:10,padding:12,display:"flex",alignItems:"center",gap:10,animationDelay:"60ms"}}>
+            <span style={{color:"#6366F1"}}>{I.calendar(16)}</span>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:"var(--fg)"}}>{next.l}</div>
+              <div style={{fontSize:9,color:"var(--fg2)"}}>{fD(next.d)} · {daysUntil===0?"Today":daysUntil===1?"Tomorrow":daysUntil+" days away"} · {next.c.split(",").join(" + ")}</div>
+            </div>
+          </div>})()}
+      </div>
+
+      {/* Upcoming leaves (next 7 days) */}
+      {(()=>{const next7=new Date();next7.setDate(next7.getDate()+7);const next7Str=next7.toISOString().split("T")[0];const upcoming=leaves.filter(l=>l.status==="approved"&&l.start_date>today&&l.start_date<=next7Str);return upcoming.length>0?<div className="asl" style={{background:"rgba(139,92,246,.06)",border:"1px solid rgba(139,92,246,.2)",borderRadius:10,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}><span style={{color:"#8B5CF6"}}>{I.calendar(16)}</span><div style={{fontSize:11,color:"var(--fg)"}}><span style={{fontWeight:700}}>Upcoming leave:</span>{" "}{upcoming.slice(0,4).map((l,i)=>{const days=Math.ceil((new Date(l.start_date)-new Date(today))/86400000);return <span key={l.id}>{i>0?" · ":""}<span style={{fontWeight:600}}>{l.person?.split(" ")[0]}</span><span style={{color:"var(--fg2)",fontSize:9}}> in {days}d</span></span>})}</div></div>:null})()}
+
+      {/* Upcoming meetings */}
+      {(()=>{const nextMeet=meetings.filter(m=>m.schedule).slice(0,2);return nextMeet.length>0?<div className="asl" style={{background:"rgba(6,182,212,.06)",border:"1px solid rgba(6,182,212,.2)",borderRadius:10,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}><span style={{color:"#06B6D4"}}>{I.clock(16)}</span><div style={{fontSize:11,color:"var(--fg)"}}><span style={{fontWeight:700}}>Next meetings:</span>{" "}{nextMeet.map((m,i)=><span key={m.id}>{i>0?" · ":""}<span style={{fontWeight:600}}>{m.name}</span><span style={{color:"var(--fg2)",fontSize:9}}> {m.schedule}{m.meeting_link?" ":"" }</span>{m.meeting_link&&<a href={m.meeting_link} target="_blank" rel="noopener" style={{fontSize:9,color:"#06B6D4",textDecoration:"none"}}>Join</a>}</span>)}</div></div>:null})()}
 
       {/* Hero Metrics Row */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:20}}>
@@ -1242,13 +1338,13 @@ export default function Home(){
       {/* Recurring section */}
       {(meetFilter==="all"||meetFilter==="recurring")&&<div style={{marginBottom:16}}>
         {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/> Recurring Meetings</div>}
-        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees","",""]} rows={meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).map(m=>[
+        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees","Link","",""]} rows={meetings.filter(m=>["Weekly","Bi-weekly","Monthly"].includes(m.type)).map(m=>[
           <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
           <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
           <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
-          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
+          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,<InEdit value={m.meeting_link||""} onChange={v=>updateMeeting(m.id,{meeting_link:v})} />,
           (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
           <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
@@ -1256,13 +1352,13 @@ export default function Home(){
       {/* Milestone section */}
       {(meetFilter==="all"||meetFilter==="milestone")&&<div>
         {meetFilter==="all"&&<div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><div style={{width:4,height:16,borderRadius:2,background:"#F59E0B"}}/> Milestone-Gated Meetings</div>}
-        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees","",""]} rows={meetings.filter(m=>m.type==="Milestone").map(m=>[
+        <Tbl headers={["Type","Meeting","When","Duration","Owner","Attendees","Link","",""]} rows={meetings.filter(m=>m.type==="Milestone").map(m=>[
           <InEdit value={m.type} onChange={v=>updateMeeting(m.id,{type:v})} type="select" options={["Weekly","Bi-weekly","Monthly","Milestone"]}/>,
           <InEdit value={m.name} onChange={v=>updateMeeting(m.id,{name:v})}/>,
           <InEdit value={m.schedule} onChange={v=>updateMeeting(m.id,{schedule:v})}/>,
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
-          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,
+          <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,<InEdit value={m.meeting_link||""} onChange={v=>updateMeeting(m.id,{meeting_link:v})} />,
           (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
           <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
@@ -1513,7 +1609,8 @@ export default function Home(){
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Onboarding Tracker</div>
         {canEdit&&<div style={{display:"flex",gap:8}}>
-          <button onClick={()=>{const name=prompt("New hire's full name:");if(name?.trim())generateOnboarding(name.trim())}} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Generate Onboarding</button>
+          <button onClick={()=>{const name=prompt("New hire's full name:");if(!name?.trim())return;const dept=prompt("Department?\n(Development, AI/Science, Design, Marketing, PMO, Leadership)","Development");if(!dept)return;generateOnboarding(name.trim(),dept.trim())}} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Onboarding</button>
+          <button onClick={()=>{const name=prompt("Departing person's full name:");if(!name?.trim())return;generateOnboarding(name.trim(),"",true)}} className="btn-pop" style={{background:"linear-gradient(135deg,#EF4444,#F97316)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Offboarding</button>
         </div>}
       </div>
 
@@ -1564,7 +1661,7 @@ export default function Home(){
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>HR Document Tracker</div>
       </div>
-      <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16}}>Track collected documents per team member. Red = missing, Yellow = uploaded, Green = verified.</div>
+      <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16}}>Track collected documents per team member. Red = missing, Yellow = uploaded, Green = verified. Link Drive folder per person.</div>
 
       {(()=>{const docTypes=['id_copy','cv','contract','verbis_consent','nda','bank_details','emergency_contact','photo'];
         const docLabels={id_copy:"ID Copy",cv:"CV",contract:"Contract",verbis_consent:"VERBIS",nda:"NDA",bank_details:"Bank",emergency_contact:"Emergency",photo:"Photo"};
@@ -1581,7 +1678,7 @@ export default function Home(){
             <thead><tr style={{background:"var(--bg2)"}}>
               <th style={{padding:"10px 12px",textAlign:"left",fontWeight:700,color:"var(--fg)",borderBottom:"2px solid var(--border)"}}>Person</th>
               {docTypes.map(dt=><th key={dt} style={{padding:"10px 6px",textAlign:"center",fontWeight:600,color:"var(--fg2)",borderBottom:"2px solid var(--border)",fontSize:9}}>{docLabels[dt]}</th>)}
-              <th style={{padding:"10px 6px",textAlign:"center",fontWeight:600,color:"var(--fg2)",borderBottom:"2px solid var(--border)",fontSize:9}}>%</th>
+              <th style={{padding:"10px 6px",textAlign:"center",fontWeight:600,color:"var(--fg2)",borderBottom:"2px solid var(--border)",fontSize:9}}>Drive</th><th style={{padding:"10px 6px",textAlign:"center",fontWeight:600,color:"var(--fg2)",borderBottom:"2px solid var(--border)",fontSize:9}}>%</th>
             </tr></thead>
             <tbody>{people.map((person,pi)=>{
               const docs=byPerson[person]||{};const collected=Object.values(docs).filter(d=>d.status==="uploaded"||d.status==="verified").length;const verified=Object.values(docs).filter(d=>d.status==="verified").length;const total=Object.keys(docs).length||1;
@@ -1595,7 +1692,7 @@ export default function Home(){
                       <option value="missing">Missing</option><option value="uploaded">Uploaded</option><option value="verified">Verified</option>
                     </select>:<div style={{width:12,height:12,borderRadius:"50%",background:stC,margin:"0 auto"}} title={doc.status}/>}
                   </td>})}
-                <td style={{padding:4,textAlign:"center",borderBottom:"1px solid var(--border)",fontWeight:700,color:collected>=total?"#10B981":collected>0?"#F59E0B":"#EF4444",fontSize:10}}>{Math.round(collected/total*100)}%</td>
+                <td style={{padding:4,textAlign:"center",borderBottom:"1px solid var(--border)"}}>{(()=>{const ur=userRoles.find(r=>r.name===person);return ur&&ur.drive_folder?<a href={ur.drive_folder} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600}}>Open</a>:<span style={{fontSize:9,color:"var(--fg2)"}}>-</span>})()}</td><td style={{padding:4,textAlign:"center",borderBottom:"1px solid var(--border)",fontWeight:700,color:collected>=total?"#10B981":collected>0?"#F59E0B":"#EF4444",fontSize:10}}>{Math.round(collected/total*100)}%</td>
               </tr>})}
             </tbody>
           </table>
