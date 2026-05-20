@@ -1563,24 +1563,56 @@ export default function Home(){
         </div>
       </div>
 
-      {/* ─── TEAM LEAVE CALENDAR (this month) ─── */}
+      {/* ─── TEAM LEAVE CALENDAR (this month + holidays) ─── */}
       <div style={{marginBottom:20}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Team Leave Calendar — {new Date().toLocaleString('en-GB',{month:'long',year:'numeric'})}</div>
         {(()=>{const now=new Date();const y=now.getFullYear();const mo=now.getMonth();const dim=new Date(y,mo+1,0).getDate();
-          const monthLeaves=leaves.filter(l=>l.status==="approved"&&l.start_date&&l.end_date&&(l.start_date.slice(0,7)===`${y}-${String(mo+1).padStart(2,'0')}`||l.end_date.slice(0,7)===`${y}-${String(mo+1).padStart(2,'0')}`));
-          if(!monthLeaves.length)return <div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No approved leaves this month</div>;
+          const moStr=`${y}-${String(mo+1).padStart(2,'0')}`;
+          const moStart=moStr+"-01";const moEnd=moStr+"-"+String(dim).padStart(2,'0');
+          // Get all leaves that overlap this month
+          const monthLeaves=leaves.filter(l=>l.status==="approved"&&l.start_date&&l.end_date&&l.start_date<=moEnd&&l.end_date>=moStart);
+          // Get holidays this month
+          const monthHols=PUBLIC_HOLIDAYS.filter(h=>h.d.slice(0,7)===moStr);
+          // Day of week headers
+          const firstDay=new Date(y,mo,1).getDay();
+          const dayNames=["Su","Mo","Tu","We","Th","Fr","Sa"];
+          
           return <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
+            {/* Day headers */}
             <div style={{display:"flex",padding:"8px 12px",borderBottom:"1px solid var(--border)",background:"var(--bg3)"}}>
               <div style={{width:100,fontSize:10,fontWeight:600,color:"var(--fg2)",flexShrink:0}}>Person</div>
-              <div style={{flex:1,display:"flex"}}>{Array.from({length:dim},(_,i)=><div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:"var(--fg2)"}}>{i+1}</div>)}</div>
+              <div style={{flex:1,display:"flex"}}>{Array.from({length:dim},(_,i)=>{const d=new Date(y,mo,i+1);const isWeekend=d.getDay()===0||d.getDay()===6;const isToday=i+1===now.getDate();const hol=monthHols.find(h=>parseInt(h.d.split("-")[2])===i+1);
+                return <div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:isToday?"#EF4444":hol?"#6366F1":isWeekend?"var(--fg2)":"var(--fg2)",fontWeight:isToday?700:400,background:isToday?"rgba(239,68,68,.08)":hol?"rgba(99,102,241,.06)":isWeekend?"rgba(0,0,0,.03)":"transparent",borderRadius:2}} title={hol?hol.l+" ("+hol.c+")":""}>{i+1}</div>})}</div>
             </div>
-            {monthLeaves.map((l,idx)=>{const sd=parseInt(l.start_date.split("-")[2]);const ed=parseInt(l.end_date.split("-")[2]);
+            {/* Holiday row */}
+            {monthHols.length>0&&<div style={{display:"flex",padding:"4px 12px",borderBottom:"1px solid var(--border)",alignItems:"center",background:"rgba(99,102,241,.03)"}}>
+              <div style={{width:100,fontSize:9,fontWeight:600,color:"#6366F1",flexShrink:0}}>Holidays</div>
+              <div style={{flex:1,display:"flex",height:14}}>{Array.from({length:dim},(_,i)=>{const hol=monthHols.find(h=>parseInt(h.d.split("-")[2])===i+1);
+                return <div key={i} style={{flex:1,margin:"0 1px",borderRadius:2,background:hol?"#6366F1":"transparent",opacity:hol?.6:.05}} title={hol?hol.l:""}/>})}</div>
+            </div>}
+            {/* Leave rows per person */}
+            {monthLeaves.length===0&&monthHols.length===0?<div style={{padding:16,textAlign:"center",color:"var(--fg2)",fontSize:11}}>No approved leaves this month</div>
+            :monthLeaves.map((l,idx)=>{
+              // Calculate which days of THIS month are covered
+              const leaveStart=new Date(l.start_date+"T00:00:00");const leaveEnd=new Date(l.end_date+"T00:00:00");
               return <div key={idx} style={{display:"flex",padding:"6px 12px",borderBottom:"1px solid var(--border)",alignItems:"center"}}>
-                <div style={{width:100,fontSize:10,fontWeight:500,color:"var(--fg)",flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.person?.split(" ")[0]}</div>
-                <div style={{flex:1,display:"flex",height:16}}>{Array.from({length:dim},(_,i)=>{const d=i+1;const inRange=d>=sd&&d<=ed;
-                  return <div key={i} style={{flex:1,margin:"0 1px",borderRadius:2,background:inRange?(l.leave_type==="sick"?"#EF4444":l.leave_type==="wfh"?"#8B5CF6":"#3B82F6"):"transparent",opacity:inRange?.8:.1}}/>})}</div>
+                <div style={{width:100,fontSize:10,fontWeight:500,color:"var(--fg)",flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
+                  {l.person?.split(" ")[0]}
+                  <a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent((l.person||"")+" — "+l.leave_type+" leave")+"&dates="+l.start_date.replace(/-/g,"")+"T000000/"+((d)=>{const e=new Date(d);e.setDate(e.getDate()+1);return e.toISOString().split("T")[0].replace(/-/g,"")})(l.end_date)+"T000000&details="+encodeURIComponent("Leave type: "+l.leave_type+(l.reason?"\nReason: "+l.reason:""))} target="_blank" rel="noopener" style={{fontSize:7,color:"#3B82F6",textDecoration:"none",opacity:.7}} title="Add to Google Calendar">{I.calendar(8)}</a>
+                </div>
+                <div style={{flex:1,display:"flex",height:16}}>{Array.from({length:dim},(_,i)=>{const d=new Date(y,mo,i+1);
+                  const inRange=d>=leaveStart&&d<=leaveEnd;
+                  const bg=inRange?(l.leave_type==="sick"?"#EF4444":l.leave_type==="wfh"||l.leave_type==="personal"?"#8B5CF6":"#3B82F6"):"transparent";
+                  return <div key={i} style={{flex:1,margin:"0 1px",borderRadius:2,background:bg,opacity:inRange?.8:.05}} title={inRange?(l.person+" — "+l.leave_type):""}/>})}</div>
               </div>})}
           </div>})()}
+        <div style={{display:"flex",gap:12,marginTop:6,fontSize:9,color:"var(--fg2)"}}>
+          <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:10,height:10,borderRadius:2,background:"#3B82F6"}}/> Annual</span>
+          <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:10,height:10,borderRadius:2,background:"#EF4444"}}/> Sick</span>
+          <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:10,height:10,borderRadius:2,background:"#8B5CF6"}}/> Casual/WFH</span>
+          <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:10,height:10,borderRadius:2,background:"#6366F1"}}/> Holiday</span>
+          <span style={{display:"flex",alignItems:"center",gap:3}}><div style={{width:4,height:4,borderRadius:"50%",background:"#EF4444"}}/> Today</span>
+        </div>
       </div>
 
       {/* ─── STATUS BADGES ─── */}
@@ -1591,14 +1623,15 @@ export default function Home(){
       </div>
 
       {/* ─── LEAVE TABLE ─── */}
-      <Tbl headers={["Person","Type","Half Day","From","To","Days","Reason","Status","Approved By",""]} rows={leaves.map(l=>[
+      <Tbl headers={["Person","Type","Half Day","From","To","Days","Reason","Status","Approved By","Cal",""]} rows={leaves.map(l=>[
         <span style={{fontWeight:600}}>{l.person}</span>,
-        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:l.leave_type==="sick"?"#FEE2E2":l.leave_type==="annual"?"#DBEAFE":l.leave_type==="wfh"?"#F3E8FF":l.leave_type==="casual"?"#FEF3C7":"#F1F5F9",color:l.leave_type==="sick"?"#991B1B":l.leave_type==="annual"?"#1D4ED8":l.leave_type==="wfh"?"#7C3AED":l.leave_type==="casual"?"#92400E":"#475569"}}>{l.leave_type}</span>,
+        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:l.leave_type==="sick"?"#FEE2E2":l.leave_type==="annual"?"#DBEAFE":l.leave_type==="wfh"?"#F3E8FF":l.leave_type==="casual"||l.leave_type==="personal"?"#FEF3C7":"#F1F5F9",color:l.leave_type==="sick"?"#991B1B":l.leave_type==="annual"?"#1D4ED8":l.leave_type==="wfh"?"#7C3AED":l.leave_type==="casual"||l.leave_type==="personal"?"#92400E":"#475569"}}>{l.leave_type}</span>,
         <span style={{fontSize:10,color:l.half_day?"#F59E0B":"var(--fg2)"}}>{l.half_day?"Yes":"No"}</span>,
         fD(l.start_date),fD(l.end_date),<b>{l.half_day?"0.5":l.days}</b>,
         <span style={{fontSize:11}}>{l.reason}</span>,
         isLeaveApprover?<InEdit value={l.status} onChange={v=>{updateLeave(l.id,{status:v,approved_by:v==="approved"||v==="rejected"?user?.user_metadata?.full_name||user?.email:"",approved_by_email:user?.email||""})}} type="select" options={["pending","approved","rejected","cancelled"]}/>:<Bdg bg={l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7"} c={l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E"}>{l.status}</Bdg>,
         <span style={{fontSize:10,color:"var(--fg2)"}}>{l.approved_by}</span>,
+        l.status==="approved"&&l.start_date?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent((l.person||"")+" — "+l.leave_type+" leave")+"&dates="+l.start_date.replace(/-/g,"")+"T000000/"+((d)=>{const e=new Date(d);e.setDate(e.getDate()+1);return e.toISOString().split("T")[0].replace(/-/g,"")})(l.end_date||l.start_date)+"T000000"} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none"}}>{I.calendar(10)}</a>:null,
         <button onClick={()=>setConfirmDlg({msg:"Delete this leave record?",fn:()=>deleteLeave(l.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
     </div>}
