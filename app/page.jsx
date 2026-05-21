@@ -376,24 +376,28 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);const[decisions,setDecisions]=useState([]);const[onboarding,setOnboarding]=useState([]);const[hrDocs,setHrDocs]=useState([]);
-  // Gazetted public holidays — Turkey + Pakistan 2026 (official only)
+  // Gazetted public holidays — Turkey + Pakistan 2026 (official govt notification dates)
   const PUBLIC_HOLIDAYS=[
-    // PAKISTAN — Gazetted
-    {d:"2026-02-05",l:"Kashmir Day",c:"PK"},{d:"2026-03-23",l:"Pakistan Day",c:"PK"},
-    {d:"2026-04-27",l:"Eid al-Fitr Day 1",c:"PK"},{d:"2026-04-28",l:"Eid al-Fitr Day 2",c:"PK"},{d:"2026-04-29",l:"Eid al-Fitr Day 3",c:"PK"},
+    // PAKISTAN — Gazetted (Cabinet Division notification Jan 2026)
+    {d:"2026-02-05",l:"Kashmir Day",c:"PK"},
+    {d:"2026-03-21",l:"Eid-ul-Fitr Day 1",c:"PK"},{d:"2026-03-22",l:"Eid-ul-Fitr Day 2",c:"PK"},{d:"2026-03-23",l:"Pakistan Day / Eid-ul-Fitr Day 3",c:"PK"},
     {d:"2026-05-01",l:"Labour Day",c:"PK,TR"},
-    {d:"2026-07-03",l:"Hajj Day",c:"PK"},
-    {d:"2026-07-04",l:"Eid al-Adha Day 1",c:"PK,TR"},{d:"2026-07-05",l:"Eid al-Adha Day 2",c:"PK,TR"},{d:"2026-07-06",l:"Eid al-Adha Day 3",c:"PK"},{d:"2026-07-07",l:"Eid al-Adha Day 4",c:"PK"},
-    {d:"2026-07-25",l:"Muharram",c:"PK"},{d:"2026-08-14",l:"Independence Day",c:"PK"},
-    {d:"2026-10-03",l:"Eid Milad-un-Nabi",c:"PK,TR"},
-    {d:"2026-11-09",l:"Iqbal Day",c:"PK"},{d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
-    // TURKEY — Gazetted
+    {d:"2026-05-26",l:"Hajj Day",c:"PK"},
+    {d:"2026-05-27",l:"Eid-ul-Adha Day 1",c:"PK,TR"},{d:"2026-05-28",l:"Eid-ul-Adha Day 2",c:"PK,TR"},{d:"2026-05-29",l:"Eid-ul-Adha Day 3",c:"PK"},
+    {d:"2026-06-24",l:"9 Muharram",c:"PK"},{d:"2026-06-25",l:"Ashura (10 Muharram)",c:"PK"},
+    {d:"2026-08-14",l:"Independence Day",c:"PK"},
+    {d:"2026-08-25",l:"Eid Milad-un-Nabi",c:"PK,TR"},
+    {d:"2026-11-09",l:"Iqbal Day",c:"PK"},
+    {d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
+    // TURKEY — Gazetted (Law No. 2429)
     {d:"2026-01-01",l:"New Year's Day",c:"TR"},
+    {d:"2026-03-20",l:"Ramazan Bayramı Day 1",c:"TR"},{d:"2026-03-21",l:"Ramazan Bayramı Day 2",c:"TR"},{d:"2026-03-22",l:"Ramazan Bayramı Day 3",c:"TR"},
     {d:"2026-04-23",l:"National Sovereignty & Children's Day",c:"TR"},
     {d:"2026-05-19",l:"Commemoration of Atatürk / Youth Day",c:"TR"},
+    {d:"2026-05-30",l:"Kurban Bayramı Day 4",c:"TR"},
     {d:"2026-07-15",l:"Democracy & National Unity Day",c:"TR"},
     {d:"2026-08-30",l:"Victory Day",c:"TR"},
-    {d:"2026-10-29",l:"Republic Day",c:"TR"}
+    {d:"2026-10-29",l:"Republic Day",c:"TR"},
   ];
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);
