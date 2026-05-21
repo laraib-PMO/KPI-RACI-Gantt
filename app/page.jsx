@@ -428,11 +428,11 @@ export default function Home(){
       };
       map._allUsers=users;
       setSlackStatus(map);
-      // Auto-save avatars to DB for persistence
+      // Auto-save avatars to DB for persistence — always update from Slack
       for(const u of users){
         if(!u.avatar||!u.email)continue;
         const match=userRoles.find(r=>r.email?.toLowerCase()===u.email.toLowerCase())||userRoles.find(r=>norm(r.name)===norm(u.name))||userRoles.find(r=>norm(r.name).split(' ')[0]===norm(u.name).split(' ')[0]);
-        if(match&&!match.avatar_url){supabase.from('user_roles').update({avatar_url:u.avatar}).eq('id',match.id).then(()=>{setUserRoles(p=>p.map(r=>r.id===match.id?{...r,avatar_url:u.avatar}:r))})}
+        if(match&&match.avatar_url!==u.avatar){supabase.from('user_roles').update({avatar_url:u.avatar}).eq('id',match.id);setUserRoles(p=>p.map(r=>r.id===match.id?{...r,avatar_url:u.avatar}:r))}
       }
       setSlackStatus(map);
       // Detect new Slack members not in user_roles
