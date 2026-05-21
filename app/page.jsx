@@ -376,29 +376,27 @@ function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]
 
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);const[decisions,setDecisions]=useState([]);const[onboarding,setOnboarding]=useState([]);const[hrDocs,setHrDocs]=useState([]);
-  // Gazetted public holidays — Turkey + Pakistan 2026 (official govt notification dates)
-  const PUBLIC_HOLIDAYS=[
-    // PAKISTAN — Gazetted (Cabinet Division notification Jan 2026)
+  // Public holidays — fetched from Google Calendar API, hardcoded fallback
+  const HOLIDAYS_FALLBACK=[
+    {d:"2026-01-01",l:"New Year's Day",c:"TR"},
     {d:"2026-02-05",l:"Kashmir Day",c:"PK"},
-    {d:"2026-03-21",l:"Eid-ul-Fitr Day 1",c:"PK"},{d:"2026-03-22",l:"Eid-ul-Fitr Day 2",c:"PK"},{d:"2026-03-23",l:"Pakistan Day / Eid-ul-Fitr Day 3",c:"PK"},
+    {d:"2026-03-20",l:"Ramazan Bayramı Day 1",c:"TR"},{d:"2026-03-21",l:"Eid-ul-Fitr Day 1",c:"PK,TR"},{d:"2026-03-22",l:"Eid-ul-Fitr Day 2",c:"PK,TR"},{d:"2026-03-23",l:"Pakistan Day / Eid-ul-Fitr Day 3",c:"PK"},
+    {d:"2026-04-23",l:"National Sovereignty & Children's Day",c:"TR"},
     {d:"2026-05-01",l:"Labour Day",c:"PK,TR"},
+    {d:"2026-05-19",l:"Commemoration of Atatürk / Youth Day",c:"TR"},
     {d:"2026-05-26",l:"Hajj Day",c:"PK"},
-    {d:"2026-05-27",l:"Eid-ul-Adha Day 1",c:"PK,TR"},{d:"2026-05-28",l:"Eid-ul-Adha Day 2",c:"PK,TR"},{d:"2026-05-29",l:"Eid-ul-Adha Day 3",c:"PK"},
-    {d:"2026-06-24",l:"9 Muharram",c:"PK"},{d:"2026-06-25",l:"Ashura (10 Muharram)",c:"PK"},
+    {d:"2026-05-27",l:"Eid-ul-Adha Day 1",c:"PK,TR"},{d:"2026-05-28",l:"Eid-ul-Adha Day 2",c:"PK,TR"},{d:"2026-05-29",l:"Eid-ul-Adha Day 3",c:"PK"},{d:"2026-05-30",l:"Kurban Bayramı Day 4",c:"TR"},
+    {d:"2026-06-24",l:"9 Muharram",c:"PK"},{d:"2026-06-25",l:"Ashura",c:"PK"},
+    {d:"2026-07-15",l:"Democracy & National Unity Day",c:"TR"},
     {d:"2026-08-14",l:"Independence Day",c:"PK"},
     {d:"2026-08-25",l:"Eid Milad-un-Nabi",c:"PK,TR"},
-    {d:"2026-11-09",l:"Iqbal Day",c:"PK"},
-    {d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
-    // TURKEY — Gazetted (Law No. 2429)
-    {d:"2026-01-01",l:"New Year's Day",c:"TR"},
-    {d:"2026-03-20",l:"Ramazan Bayramı Day 1",c:"TR"},{d:"2026-03-21",l:"Ramazan Bayramı Day 2",c:"TR"},{d:"2026-03-22",l:"Ramazan Bayramı Day 3",c:"TR"},
-    {d:"2026-04-23",l:"National Sovereignty & Children's Day",c:"TR"},
-    {d:"2026-05-19",l:"Commemoration of Atatürk / Youth Day",c:"TR"},
-    {d:"2026-05-30",l:"Kurban Bayramı Day 4",c:"TR"},
-    {d:"2026-07-15",l:"Democracy & National Unity Day",c:"TR"},
     {d:"2026-08-30",l:"Victory Day",c:"TR"},
     {d:"2026-10-29",l:"Republic Day",c:"TR"},
+    {d:"2026-11-09",l:"Iqbal Day",c:"PK"},
+    {d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
   ];
+  const[publicHolidays,setPublicHolidays]=useState(HOLIDAYS_FALLBACK);const[holidaySource,setHolidaySource]=useState("fallback");
+  useEffect(()=>{fetch('/api/holidays').then(r=>r.json()).then(d=>{if(d.holidays?.length>0){setPublicHolidays(d.holidays);setHolidaySource(d.source)}}).catch(()=>{})},[]);
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
@@ -909,7 +907,7 @@ export default function Home(){
           </div>})()}
 
         {/* Next Holiday */}
-        {(()=>{const upcoming=PUBLIC_HOLIDAYS.filter(h=>h.d>=today).sort((a,b)=>a.d.localeCompare(b.d));const next=upcoming[0];
+        {(()=>{const upcoming=publicHolidays.filter(h=>h.d>=today).sort((a,b)=>a.d.localeCompare(b.d));const next=upcoming[0];
           if(!next)return null;
           const daysUntil=Math.ceil((new Date(next.d+"T00:00:00").getTime()-new Date(today+"T00:00:00").getTime())/86400000);
           return <div className="asl" style={{flex:1,minWidth:200,background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.2)",borderRadius:10,padding:12,display:"flex",alignItems:"center",gap:10,animationDelay:"60ms"}}>
@@ -1549,10 +1547,13 @@ export default function Home(){
 
       {/* ─── HOLIDAY CALENDAR (TR + PK) ─── */}
       <div style={{marginBottom:20}}>
-        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Public Holidays — {new Date().getFullYear()}</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontSize:12,fontWeight:700,color:"var(--fg)"}}>Public Holidays — {new Date().getFullYear()}</div>
+          <span style={{fontSize:8,padding:"2px 6px",borderRadius:99,background:holidaySource==="google_calendar"?"#DCFCE7":"#FEF3C7",color:holidaySource==="google_calendar"?"#166534":"#92400E",fontWeight:600}}>{holidaySource==="google_calendar"?"Live from Google Calendar":"Fallback — set GOOGLE_CALENDAR_API_KEY"}</span>
+        </div>
         <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:0}}>
-            {PUBLIC_HOLIDAYS.map((h,i)=>{const isPast=h.d<today;const isThisMonth=h.d.slice(0,7)===today.slice(0,7);
+            {publicHolidays.map((h,i)=>{const isPast=h.d<today;const isThisMonth=h.d.slice(0,7)===today.slice(0,7);
               return <div key={i} className="rh" style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",borderBottom:"1px solid var(--border)",opacity:isPast?.5:1,background:isThisMonth?"rgba(59,130,246,.04)":"transparent"}}>
                 <div style={{width:36,textAlign:"center",flexShrink:0}}>
                   <div style={{fontSize:14,fontWeight:800,color:isThisMonth?"#3B82F6":"var(--fg)"}}>{parseInt(h.d.split("-")[2])}</div>
@@ -1576,7 +1577,7 @@ export default function Home(){
           // Get all leaves that overlap this month
           const monthLeaves=leaves.filter(l=>l.status==="approved"&&l.start_date&&l.end_date&&l.start_date<=moEnd&&l.end_date>=moStart);
           // Get holidays this month
-          const monthHols=PUBLIC_HOLIDAYS.filter(h=>h.d.slice(0,7)===moStr);
+          const monthHols=publicHolidays.filter(h=>h.d.slice(0,7)===moStr);
           // Day of week headers
           const firstDay=new Date(y,mo,1).getDay();
           const dayNames=["Su","Mo","Tu","We","Th","Fr","Sa"];
@@ -1791,7 +1792,7 @@ export default function Home(){
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
     {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
     {addModal==="perf"&&<AddModal title="Add Performance Review" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha Mubeen"},{key:"period",label:"Period",placeholder:"e.g. Q2 2026"},{key:"goals",label:"Goals",placeholder:"Key objectives..."}]} onSave={addPerf} onClose={()=>setAddModal(null)}/>}
-    {addModal==="leave"&&<LeaveRequestModal user={user} isAdmin={role==="admin"} onSave={addLeave} onClose={()=>{setAddModal(null);setLeavePreFill(null)}} leaves={leaves} userRoles={userRoles} holidays={PUBLIC_HOLIDAYS} initialType={leavePreFill}/>}
+    {addModal==="leave"&&<LeaveRequestModal user={user} isAdmin={role==="admin"} onSave={addLeave} onClose={()=>{setAddModal(null);setLeavePreFill(null)}} leaves={leaves} userRoles={userRoles} holidays={publicHolidays} initialType={leavePreFill}/>}
     {addModal==="decision"&&<AddModal title="Add Decision" fields={[{key:"title",label:"Decision",placeholder:"What needs to be decided?"},{key:"owner",label:"Owner",placeholder:"Who decides?"},{key:"priority",label:"Priority",type:"select",options:["low","medium","high","critical"]},{key:"due_date",label:"Due Date",type:"date"},{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"context",label:"Context",placeholder:"Why it matters"}]} onSave={addDecision} onClose={()=>setAddModal(null)}/>}
 
     {/* Working Hours Modal */}
