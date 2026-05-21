@@ -423,9 +423,17 @@ export default function Home(){
         const email=(ur.email||'').toLowerCase();
         const name=norm(ur.name);
         const first=name.split(' ')[0];
-        return map['e:'+email]||map['n:'+name]||map['f:'+first]||null;
+        const last=name.split(' ').slice(1).join(' ');
+        return map['e:'+email]||map['n:'+name]||map['f:'+first]||(last?map['f:'+last]:null)||null;
       };
-      map._allUsers=users; // raw array for new member detection
+      map._allUsers=users;
+      setSlackStatus(map);
+      // Auto-save avatars to DB for persistence
+      for(const u of users){
+        if(!u.avatar||!u.email)continue;
+        const match=userRoles.find(r=>r.email?.toLowerCase()===u.email.toLowerCase())||userRoles.find(r=>norm(r.name)===norm(u.name))||userRoles.find(r=>norm(r.name).split(' ')[0]===norm(u.name).split(' ')[0]);
+        if(match&&!match.avatar_url){supabase.from('user_roles').update({avatar_url:u.avatar}).eq('id',match.id).then(()=>{setUserRoles(p=>p.map(r=>r.id===match.id?{...r,avatar_url:u.avatar}:r))})}
+      }
       setSlackStatus(map);
       // Detect new Slack members not in user_roles
       if(userRoles.length>0){const knownEmails=userRoles.map(r=>r.email?.toLowerCase());const newMembers=users.filter(u=>u.email&&!knownEmails.includes(u.email.toLowerCase())&&!u.email.includes('bot')&&!u.email.includes('slackbot'));if(newMembers.length>0)setNewSlackMembers(newMembers)}
