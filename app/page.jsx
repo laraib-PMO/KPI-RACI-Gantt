@@ -428,11 +428,18 @@ export default function Home(){
       };
       map._allUsers=users;
       setSlackStatus(map);
-      // Auto-save avatars to DB for persistence — always update from Slack
+      // Auto-save avatars to DB + batch update React state
+      const avatarUpdates={};
       for(const u of users){
-        if(!u.avatar||!u.email)continue;
-        const match=userRoles.find(r=>r.email?.toLowerCase()===u.email.toLowerCase())||userRoles.find(r=>norm(r.name)===norm(u.name))||userRoles.find(r=>norm(r.name).split(' ')[0]===norm(u.name).split(' ')[0]);
-        if(match&&match.avatar_url!==u.avatar){supabase.from('user_roles').update({avatar_url:u.avatar}).eq('id',match.id);setUserRoles(p=>p.map(r=>r.id===match.id?{...r,avatar_url:u.avatar}:r))}
+        if(!u.avatar)continue;
+        const match=userRoles.find(r=>r.email?.toLowerCase()===u.email?.toLowerCase())||userRoles.find(r=>norm(r.name)===norm(u.name))||userRoles.find(r=>norm(r.name).split(' ')[0]===norm(u.name).split(' ')[0])||(u.name?userRoles.find(r=>norm(r.name).includes(norm(u.name.split(' ')[0]))):null);
+        if(match&&match.avatar_url!==u.avatar){
+          avatarUpdates[match.id]=u.avatar;
+          supabase.from('user_roles').update({avatar_url:u.avatar}).eq('id',match.id);
+        }
+      }
+      if(Object.keys(avatarUpdates).length>0){
+        setUserRoles(p=>p.map(r=>avatarUpdates[r.id]?{...r,avatar_url:avatarUpdates[r.id]}:r));
       }
       setSlackStatus(map);
       // Detect new Slack members not in user_roles
@@ -844,7 +851,7 @@ export default function Home(){
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ur.name}</div>
                 <div style={{fontSize:9,color:"var(--fg2)"}}>{localTime} {slk?.tz_label||tz.split("/").pop().replace("_"," ")}</div>
-                <div style={{fontSize:8,color:stC,fontWeight:700,textTransform:"uppercase"}}>{onLeave?"ON LEAVE":st}{inHours&&st!=="off"&&!onLeave?" (in hours)":""}</div>
+                <div style={{fontSize:8,color:stC,fontWeight:700,textTransform:"uppercase"}}>{onLeave?"ON LEAVE":st==="offline"?"OFFLINE":st==="working"&&inHours?st+" (IN HOURS)":st}</div>
                 {slkText&&<div style={{fontSize:8,color:"var(--fg2)",marginTop:1}}>{stripSlackEmoji(slkText)}</div>}
               </div>
             </div>})}
