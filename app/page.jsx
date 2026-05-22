@@ -428,19 +428,21 @@ export default function Home(){
       };
       map._allUsers=users;
       setSlackStatus(map);
-      // Auto-save avatars to DB + batch update React state
+      // Auto-save avatars to DB — try EVERY matching strategy
       const avatarUpdates={};
+      const norm2=s=>(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[ışçğöü]/g,c=>({'ı':'i','ş':'s','ç':'c','ğ':'g','ö':'o','ü':'u'})[c]||c).trim();
       for(const u of users){
         if(!u.avatar)continue;
-        const match=userRoles.find(r=>r.email?.toLowerCase()===u.email?.toLowerCase())||userRoles.find(r=>norm(r.name)===norm(u.name))||userRoles.find(r=>norm(r.name).split(' ')[0]===norm(u.name).split(' ')[0])||(u.name?userRoles.find(r=>norm(r.name).includes(norm(u.name.split(' ')[0]))):null);
-        if(match&&match.avatar_url!==u.avatar){
-          avatarUpdates[match.id]=u.avatar;
-          supabase.from('user_roles').update({avatar_url:u.avatar}).eq('id',match.id);
-        }
+        // Try 5 matching strategies
+        const match=
+          userRoles.find(r=>r.email&&u.email&&r.email.toLowerCase()===u.email.toLowerCase()) // exact email
+          ||userRoles.find(r=>norm2(r.name)===norm2(u.name)) // exact name (normalized)
+          ||userRoles.find(r=>u.name&&norm2(r.name).split(' ')[0]===norm2(u.name).split(' ')[0]) // first name
+          ||userRoles.find(r=>u.name&&norm2(u.name).includes(norm2(r.name).split(' ')[0])&&norm2(r.name).split(' ')[0].length>2) // partial first name >2 chars
+          ||userRoles.find(r=>u.email&&r.email&&u.email.split('@')[0]===r.email.split('@')[0]); // email prefix
+        if(match){avatarUpdates[match.id]=u.avatar;if(match.avatar_url!==u.avatar)supabase.from('user_roles').update({avatar_url:u.avatar}).eq('id',match.id)}
       }
-      if(Object.keys(avatarUpdates).length>0){
-        setUserRoles(p=>p.map(r=>avatarUpdates[r.id]?{...r,avatar_url:avatarUpdates[r.id]}:r));
-      }
+      if(Object.keys(avatarUpdates).length>0)setUserRoles(p=>p.map(r=>avatarUpdates[r.id]?{...r,avatar_url:avatarUpdates[r.id]}:r));
       setSlackStatus(map);
       // Detect new Slack members not in user_roles
       if(userRoles.length>0){const knownEmails=userRoles.map(r=>r.email?.toLowerCase());const newMembers=users.filter(u=>u.email&&!knownEmails.includes(u.email.toLowerCase())&&!u.email.includes('bot')&&!u.email.includes('slackbot'));if(newMembers.length>0)setNewSlackMembers(newMembers)}
@@ -475,7 +477,7 @@ export default function Home(){
   const doLogin=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
   const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
 
-  useEffect(()=>{if(Object.keys(slackStatus).length===0)fetchSlackStatus()},[]);
+  useEffect(()=>{if(userRoles.length>0&&Object.keys(slackStatus).length===0)fetchSlackStatus()},[userRoles.length]);
   useEffect(()=>{if(typeof window!=='undefined'){const ls=localStorage.getItem('attimo_last_sync');if(ls)setLastSync(ls)}},[]);
 
   useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(""),3000);return()=>clearTimeout(t)}},[toast]);
