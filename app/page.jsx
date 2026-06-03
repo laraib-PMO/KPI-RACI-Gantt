@@ -343,6 +343,226 @@ function SmartAddTask({onSave,onClose}){
   </div>;
 }
 
+// Onboarding / Offboarding modal — tabbed, dynamic, dept-aware, interlinked
+function OnboardModal({initialMode,userRoles,onboarding,onboardCommon,onboardDept,offboardTemplate,onGenerate,onClose}){
+  const[mode,setMode]=useState(initialMode||"onboarding");
+  const[name,setName]=useState("");
+  const[dept,setDept]=useState("");
+  const[selPerson,setSelPerson]=useState("");
+  const[custom,setCustom]=useState([]);
+  const[newItem,setNewItem]=useState("");
+  const[newCat,setNewCat]=useState("general");
+  const[generating,setGenerating]=useState(false);
+  const depts=["Development","AI/Science","Design","Marketing","PMO","Leadership"];
+  // People already onboarded or in roster (for offboarding dropdown) — exclude already-offboarding
+  const offboardingNames=new Set(onboarding.filter(o=>o.person?.includes("(offboarding)")).map(o=>o.person.replace(" (offboarding)","")));
+  const activePeople=userRoles.filter(r=>r.name&&r.name!=="Efehan Maleri"&&!offboardingNames.has(r.name));
+  const selPersonDept=userRoles.find(r=>r.name===selPerson)?.dept||"";
+
+  // Build preview items
+  const onboardPreview=dept?[...onboardCommon,...(onboardDept[dept]||onboardDept['Development'])]:onboardCommon;
+  const theirGrants=selPerson?onboarding.filter(o=>o.person===selPerson&&(o.category==="accounts"||o.category==="tools")):[];
+  const offboardPreview=[...offboardTemplate,...theirGrants.map(o=>({item:"Revoke: "+o.item,category:"accounts",assigned_to:o.assigned_to}))];
+
+  const addCustom=()=>{if(!newItem.trim())return;setCustom(p=>[...p,{item:newItem.trim(),category:newCat,assigned_to:"Nil Ozdamar"}]);setNewItem("")};
+  const removeCustom=i=>setCustom(p=>p.filter((_,idx)=>idx!==i));
+
+  const submit=async()=>{
+    if(mode==="onboarding"){if(!name.trim()||!dept){return}setGenerating(true);await onGenerate(name.trim(),dept,false,custom)}
+    else{if(!selPerson){return}setGenerating(true);await onGenerate(selPerson,selPersonDept,true,custom)}
+    setGenerating(false);
+  };
+
+  const catColors={accounts:"#3B82F6",documents:"#F59E0B",orientation:"#10B981",tools:"#8B5CF6",general:"#64748B"};
+  const previewItems=mode==="onboarding"?[...onboardPreview,...custom]:[...offboardPreview,...custom];
+  const canSubmit=mode==="onboarding"?(name.trim()&&dept):selPerson;
+
+  return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
+    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(520px,95vw)",maxHeight:"88vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
+      {/* Header + tabs */}
+      <div style={{padding:"18px 20px 0",flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>{mode==="onboarding"?"Onboard New Hire":"Offboard Team Member"}</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
+        <div style={{display:"flex",gap:4,background:"var(--bg3)",borderRadius:10,padding:3,marginBottom:16}}>
+          <button onClick={()=>setMode("onboarding")} style={{flex:1,padding:"8px",borderRadius:7,border:"none",fontSize:12,fontWeight:700,cursor:"pointer",background:mode==="onboarding"?"#3B82F6":"transparent",color:mode==="onboarding"?"#fff":"var(--fg2)",transition:"all .2s"}}>Onboarding</button>
+          <button onClick={()=>setMode("offboarding")} style={{flex:1,padding:"8px",borderRadius:7,border:"none",fontSize:12,fontWeight:700,cursor:"pointer",background:mode==="offboarding"?"#EF4444":"transparent",color:mode==="offboarding"?"#fff":"var(--fg2)",transition:"all .2s"}}>Offboarding</button>
+        </div>
+      </div>
+
+      {/* Scrollable body */}
+      <div style={{flex:1,overflowY:"auto",padding:"0 20px 16px"}}>
+        {mode==="onboarding"?<>
+          <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>New Hire's Full Name *</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Ayşe Yılmaz" style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)",marginBottom:12}}/>
+          <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Department *</label>
+          <select value={dept} onChange={e=>setDept(e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",marginBottom:12}}>
+            <option value="">Select department...</option>
+            {depts.map(d=><option key={d} value={d}>{d}</option>)}
+          </select>
+        </>:<>
+          <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Select Team Member *</label>
+          <select value={selPerson} onChange={e=>setSelPerson(e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",marginBottom:12}}>
+            <option value="">Select person to offboard...</option>
+            {activePeople.map(p=><option key={p.id} value={p.name}>{p.name} — {p.dept}</option>)}
+          </select>
+          {selPerson&&theirGrants.length>0&&<div style={{fontSize:10,color:"#10B981",marginBottom:12,padding:"6px 10px",background:"#10B98110",borderRadius:8}}>Found {theirGrants.length} access grants from {selPerson.split(" ")[0]}'s onboarding — revocation steps added automatically.</div>}
+          {selPerson&&theirGrants.length===0&&<div style={{fontSize:10,color:"#F59E0B",marginBottom:12,padding:"6px 10px",background:"#F59E0B10",borderRadius:8}}>No onboarding record found — using standard offboarding checklist.</div>}
+        </>}
+
+        {/* Preview */}
+        {canSubmit&&<div style={{marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:"var(--fg)",marginBottom:6}}>Checklist Preview ({previewItems.length} items)</div>
+          <div style={{maxHeight:180,overflowY:"auto",background:"var(--bg2)",borderRadius:8,padding:8}}>
+            {previewItems.map((it,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0",fontSize:10,color:"var(--fg)"}}>
+              <span style={{width:6,height:6,borderRadius:"50%",background:catColors[it.category]||"#64748B",flexShrink:0}}/>
+              <span style={{flex:1}}>{it.item}</span>
+              <span style={{fontSize:8,color:"var(--fg2)"}}>{it.assigned_to?.split(" ")[0]}</span>
+            </div>)}
+          </div>
+        </div>}
+
+        {/* Add custom item */}
+        {canSubmit&&<div style={{marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:600,color:"var(--fg2)",marginBottom:4}}>Add custom step</div>
+          <div style={{display:"flex",gap:6}}>
+            <input value={newItem} onChange={e=>setNewItem(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addCustom()}} placeholder="e.g. Issue laptop" style={{flex:1,padding:6,border:"1px solid var(--border)",borderRadius:6,fontSize:11,background:"var(--bg2)",color:"var(--fg)"}}/>
+            <select value={newCat} onChange={e=>setNewCat(e.target.value)} style={{padding:6,border:"1px solid var(--border)",borderRadius:6,fontSize:10,background:"var(--bg2)",color:"var(--fg)"}}>{["accounts","documents","orientation","tools","general"].map(c=><option key={c}>{c}</option>)}</select>
+            <button onClick={addCustom} className="btn-pop" style={{padding:"6px 12px",borderRadius:6,border:"none",background:"var(--fg)",color:"var(--bg)",fontSize:11,fontWeight:700,cursor:"pointer"}}>Add</button>
+          </div>
+          {custom.length>0&&<div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:4}}>{custom.map((c,i)=><span key={i} style={{fontSize:9,padding:"2px 8px",borderRadius:99,background:"var(--bg3)",color:"var(--fg)",display:"inline-flex",alignItems:"center",gap:4}}>{c.item}<span onClick={()=>removeCustom(i)} style={{cursor:"pointer",color:"#EF4444",fontWeight:700}}>✕</span></span>)}</div>}
+        </div>}
+      </div>
+
+      {/* Footer */}
+      <div style={{padding:"12px 20px",borderTop:"1px solid var(--border)",flexShrink:0}}>
+        <button onClick={submit} disabled={!canSubmit||generating} className="btn-pop" style={{width:"100%",padding:10,background:!canSubmit?"var(--bg3)":mode==="onboarding"?"linear-gradient(135deg,#3B82F6,#8B5CF6)":"linear-gradient(135deg,#EF4444,#F97316)",color:!canSubmit?"var(--fg2)":"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:canSubmit&&!generating?"pointer":"not-allowed"}}>{generating?"Creating...":mode==="onboarding"?"Generate Onboarding Checklist":"Generate Offboarding Checklist"}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// Notification bell — pending leaves + active risks + decisions
+function NotificationBell({leaves,risks,decisions,isApprover,onNavigate}){
+  const[open,setOpen]=useState(false);
+  const pendingLeaves=isApprover?leaves.filter(l=>l.status==="pending"):[];
+  const activeRisks=risks.filter(r=>r.status==="ACTIVE"&&(r.impact==="HIGH"||r.impact==="CRITICAL"));
+  const openDecisions=decisions.filter(d=>d.status==="open"&&(d.priority==="high"||d.priority==="critical"));
+  const total=pendingLeaves.length+activeRisks.length+openDecisions.length;
+
+  return <div style={{position:"relative"}}>
+    <button onClick={()=>setOpen(!open)} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#94A3B8",position:"relative",display:"flex",alignItems:"center"}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      {total>0&&<span style={{position:"absolute",top:-4,right:-4,minWidth:16,height:16,background:"#EF4444",color:"#fff",borderRadius:99,fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{total}</span>}
+    </button>
+    {open&&<>
+      <div style={{position:"fixed",inset:0,zIndex:90}} onClick={()=>setOpen(false)}/>
+      <div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,minWidth:320,maxWidth:380,maxHeight:480,overflow:"auto",boxShadow:"0 12px 40px rgba(0,0,0,.3)",zIndex:100}}>
+        <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",fontSize:12,fontWeight:700,color:"var(--fg)"}}>Notifications {total>0&&`(${total})`}</div>
+        {total===0&&<div style={{padding:20,fontSize:11,color:"var(--fg2)",textAlign:"center"}}>All clear — no pending items.</div>}
+        {pendingLeaves.length>0&&<div>
+          <div style={{padding:"8px 14px",fontSize:9,fontWeight:700,color:"#F59E0B",textTransform:"uppercase",letterSpacing:.5,background:"#FEF3C720"}}>Pending Leave Approvals ({pendingLeaves.length})</div>
+          {pendingLeaves.map(l=><div key={l.id} onClick={()=>{onNavigate("leave");setOpen(false)}} className="rh" style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",cursor:"pointer"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{l.person}</div>
+            <div style={{fontSize:9,color:"var(--fg2)"}}>{l.leave_type} · {l.start_date}{l.start_date!==l.end_date?` → ${l.end_date}`:""} · {l.half_day?"0.5":l.days}d</div>
+          </div>)}
+        </div>}
+        {activeRisks.length>0&&<div>
+          <div style={{padding:"8px 14px",fontSize:9,fontWeight:700,color:"#EF4444",textTransform:"uppercase",letterSpacing:.5,background:"#FEE2E220"}}>High Risks ({activeRisks.length})</div>
+          {activeRisks.slice(0,5).map(r=><div key={r.id} onClick={()=>{onNavigate("vitals");setOpen(false)}} className="rh" style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",cursor:"pointer"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{r.description}</div>
+            <div style={{fontSize:9,color:"var(--fg2)"}}>{r.impact} · Owner: {r.owner||"unassigned"}</div>
+          </div>)}
+        </div>}
+        {openDecisions.length>0&&<div>
+          <div style={{padding:"8px 14px",fontSize:9,fontWeight:700,color:"#3B82F6",textTransform:"uppercase",letterSpacing:.5,background:"#DBEAFE40"}}>Open Decisions ({openDecisions.length})</div>
+          {openDecisions.slice(0,5).map(d=><div key={d.id} onClick={()=>{onNavigate("dashboard");setOpen(false)}} className="rh" style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",cursor:"pointer"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{d.title}</div>
+            <div style={{fontSize:9,color:"var(--fg2)"}}>{d.priority} · {d.owner||"unassigned"}</div>
+          </div>)}
+        </div>}
+      </div>
+    </>}
+  </div>;
+}
+
+// Full-featured Meeting modal — one-time or recurring, multi-attendee, Fireflies bot
+function MeetingModal({userRoles,onSave,onClose}){
+  const[v,setV]=useState({type:"One-time",cadence:"Weekly",date:"",time:"10:00",duration:30,attendees:[],description:"",fireflies:true,location:"Google Meet"});
+  const[saving,setSaving]=useState(false);
+  const[err,setErr]=useState("");
+  const set=(k,val)=>setV(p=>({...p,[k]:val}));
+  const durations=[15,30,45,60,90,120];
+  const toggleAttendee=email=>setV(p=>({...p,attendees:p.attendees.includes(email)?p.attendees.filter(e=>e!==email):[...p.attendees,email]}));
+  const submit=async()=>{
+    if(!v.name?.trim()){setErr("Meeting name required");return}
+    if(v.type==="One-time"&&!v.date){setErr("Date required for one-time meeting");return}
+    if(v.attendees.length===0){setErr("Add at least one attendee");return}
+    setErr("");setSaving(true);
+    await onSave(v);
+    setSaving(false);
+  };
+  return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
+    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(520px,95vw)",maxHeight:"90vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
+      <div style={{padding:"18px 20px 12px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between"}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>Schedule Meeting</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+        {err&&<div style={{background:"#FEE2E2",color:"#DC2626",padding:"8px 12px",borderRadius:8,fontSize:11,fontWeight:600,marginBottom:12}}>{err}</div>}
+
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Meeting Name *</label>
+        <input value={v.name||""} onChange={e=>set("name",e.target.value)} placeholder="e.g. Q3 Planning, Design Review" style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)",marginBottom:12}}/>
+
+        {/* Type toggle */}
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Meeting Type</label>
+        <div style={{display:"flex",gap:4,marginBottom:12,background:"var(--bg3)",borderRadius:8,padding:3}}>
+          {["One-time","Recurring"].map(t=><button key={t} onClick={()=>set("type",t)} style={{flex:1,padding:"6px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:v.type===t?"var(--fg)":"transparent",color:v.type===t?"var(--bg)":"var(--fg2)"}}>{t}</button>)}
+        </div>
+
+        {/* Date & Time + Cadence */}
+        <div style={{display:"grid",gridTemplateColumns:v.type==="Recurring"?"1fr 1fr":"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+          {v.type==="One-time"&&<div><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Date *</label>
+            <input type="date" value={v.date} onChange={e=>set("date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)"}}/></div>}
+          {v.type==="Recurring"&&<div><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Cadence</label>
+            <select value={v.cadence} onChange={e=>set("cadence",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)"}}>
+              {["Daily","Weekly","Bi-weekly","Monthly"].map(c=><option key={c}>{c}</option>)}
+            </select></div>}
+          <div><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Time</label>
+            <input type="time" value={v.time} onChange={e=>set("time",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)"}}/></div>
+          <div><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Duration</label>
+            <select value={v.duration} onChange={e=>set("duration",Number(e.target.value))} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)"}}>
+              {durations.map(d=><option key={d} value={d}>{d} min</option>)}
+            </select></div>
+        </div>
+
+        {/* Attendees */}
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Attendees * <span style={{color:"var(--fg2)",fontWeight:400}}>({v.attendees.length} selected)</span></label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8,maxHeight:120,overflowY:"auto",border:"1px solid var(--border)",borderRadius:8,padding:8,background:"var(--bg2)"}}>
+          {userRoles.map(u=>{const sel=v.attendees.includes(u.email);return <button key={u.id} onClick={()=>toggleAttendee(u.email)} className="btn-pop" style={{padding:"4px 10px",borderRadius:6,border:sel?"2px solid #3B82F6":"1px solid var(--border)",background:sel?"rgba(59,130,246,.1)":"var(--card)",color:sel?"#3B82F6":"var(--fg2)",fontSize:10,fontWeight:sel?700:500,cursor:"pointer"}}>{u.name?.split(" ")[0]}</button>})}
+        </div>
+
+        {/* Fireflies + Location */}
+        <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"var(--fg)"}}>
+            <input type="checkbox" checked={v.fireflies} onChange={e=>set("fireflies",e.target.checked)} style={{cursor:"pointer"}}/>
+            <span>Add Fireflies bot for notes</span>
+          </label>
+          <div style={{flex:1}}/>
+          <select value={v.location} onChange={e=>set("location",e.target.value)} style={{padding:6,border:"1px solid var(--border)",borderRadius:6,fontSize:10,background:"var(--bg2)",color:"var(--fg)"}}>
+            {["Google Meet","Zoom","In-person","Other"].map(l=><option key={l}>{l}</option>)}
+          </select>
+        </div>
+
+        {/* Description */}
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Description / Agenda</label>
+        <textarea value={v.description} onChange={e=>set("description",e.target.value)} placeholder="What's this meeting about?" rows={3} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:11,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)",resize:"vertical",fontFamily:"inherit"}}/>
+      </div>
+      <div style={{padding:"12px 20px",borderTop:"1px solid var(--border)",flexShrink:0}}>
+        <button onClick={submit} disabled={saving} className="btn-pop" style={{width:"100%",padding:10,background:saving?"var(--bg3)":"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:saving?"var(--fg2)":"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:saving?"wait":"pointer"}}>{saving?"Creating...":"Schedule & Send Invites"}</button>
+        <div style={{fontSize:9,color:"var(--fg2)",marginTop:6,textAlign:"center"}}>Creates Google Calendar event + sends invites to all attendees{v.fireflies?" + Fireflies bot":""}</div>
+      </div>
+    </div>
+  </div>;
+}
+
 function TicketPopup({task,tasks,onClose,onUpdate,onDelete,setConfirmDlg}){
   if(!task)return null;const cl=CL[task.dept]||"#94A3B8";const rc=RC[task.risk];const pc=PC[task.priority];
   const depN=(task.deps||[]).map(id=>tasks.find(t=>t.id===id)?.name||id);
@@ -462,8 +682,12 @@ export default function Home(){
     {d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
   ];
   const[publicHolidays,setPublicHolidays]=useState(HOLIDAYS_FALLBACK);const[holidaySource,setHolidaySource]=useState("fallback");
+  const[config,setConfig]=useState({cash_on_hand:0,monthly_burn:0,currency:"USD",launch_date:"2026-06-10",pitch_day:"2026-07-01"});
+  const[metricsData,setMetricsData]=useState(null);
+  const[driveFolders,setDriveFolders]=useState([]);
+  useEffect(()=>{supabase.from('config').select('*').then(({data})=>{if(data){const m={};data.forEach(r=>m[r.key]=r.value);setConfig(p=>({...p,...m}))}});supabase.from('metrics').select('*').order('computed_at',{ascending:false}).then(({data})=>{if(data&&data.length>0){const latest={};data.forEach(r=>{if(!latest[r.dept])latest[r.dept]=r});setMetricsData(latest)}});supabase.from('drive_folders').select('*').order('sort_order').then(({data})=>{if(data)setDriveFolders(data)})},[]);
   useEffect(()=>{fetch('/api/holidays').then(r=>r.json()).then(d=>{if(d.holidays?.length>0){setPublicHolidays(d.holidays);setHolidaySource(d.source)}}).catch(()=>{})},[]);
-  const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
+  const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[onboardModal,setOnboardModal]=useState(null);const[onboardTab,setOnboardTab]=useState("onboarding");const[deptFilter,setDeptFilter]=useState("all");const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);const[meetingNotes,setMeetingNotes]=useState(null);const[notesLoading,setNotesLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
@@ -517,7 +741,7 @@ export default function Home(){
   },[userRoles]);
 
   // Performance auto-fetch on tab open
-  useEffect(()=>{if(view==="perf"&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view]);
+  useEffect(()=>{if(((view==="perf")||(view==="vitals"&&vitalsTab==="people"))&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view,vitalsTab]);
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
   const roleRef=useRef(null);roleRef.current=role;
@@ -566,8 +790,11 @@ export default function Home(){
 
   useEffect(()=>{async function la(){const[t,r,ri,k,m,ro,su,ur,pf,lv,dc,ob,hd]=await Promise.all([supabase.from('tasks').select('*').order('sort_order,id'),supabase.from('raci').select('*').order('sort_order,dept,id'),supabase.from('risks').select('*').order('sort_order,id'),supabase.from('kpis').select('*').order('sort_order,dept,id'),supabase.from('meetings').select('*').order('sort_order,id'),supabase.from('roles').select('*').order('sort_order,id'),supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),supabase.from('user_roles').select('*').order('created_at'),supabase.from('performance').select('*').order('created_at',{ascending:false}),supabase.from('leaves').select('*').order('start_date',{ascending:false}),supabase.from('decisions').select('*').order('sort_order,id'),supabase.from('onboarding').select('*').order('sort_order,id'),supabase.from('hr_documents').select('*').order('person,doc_type')]);
     if(t.data)setTasks(t.data);if(r.data)setRaci(r.data);if(ri.data)setRisks(ri.data);if(k.data)setKpis(k.data);if(m.data)setMeetings(m.data);if(ro.data)setRoles(ro.data);if(su.data)setStandups(su.data);if(ur.data)setUserRoles(ur.data);if(pf.data)setPerf(pf.data);if(lv.data)setLeaves(lv.data);if(dc.data)setDecisions(dc.data);if(ob.data)setOnboarding(ob.data);if(hd.data)setHrDocs(hd.data);setLoading(false);
-    // Auto-sync linked Gantt tasks on every page load (background)
-    fetch('/api/sync',{method:'POST'}).then(()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).catch(()=>{});
+    // Auto-sync linked Gantt tasks + standups on every page load (background)
+    fetch('/api/sync',{method:'POST'}).then(()=>{
+      supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)});
+      supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)});
+    }).catch(()=>{});
     }la();
     const ch=supabase.channel('rt3').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>supabase.from('tasks').select('*').order('id').then(({data})=>{if(data)setTasks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'risks'},()=>supabase.from('risks').select('*').order('id').then(({data})=>{if(data)setRisks(data)})).on('postgres_changes',{event:'*',schema:'public',table:'kpis'},()=>supabase.from('kpis').select('*').order('dept,id').then(({data})=>{if(data)setKpis(data)})).on('postgres_changes',{event:'*',schema:'public',table:'raci'},()=>supabase.from('raci').select('*').order('dept,id').then(({data})=>{if(data)setRaci(data)})).on('postgres_changes',{event:'*',schema:'public',table:'roles'},()=>supabase.from('roles').select('*').order('id').then(({data})=>{if(data)setRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'meetings'},()=>supabase.from('meetings').select('*').order('id').then(({data})=>{if(data)setMeetings(data)})).on('postgres_changes',{event:'*',schema:'public',table:'standups'},()=>supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})).on('postgres_changes',{event:'*',schema:'public',table:'user_roles'},()=>supabase.from('user_roles').select('*').order('created_at').then(({data})=>{if(data)setUserRoles(data)})).on('postgres_changes',{event:'*',schema:'public',table:'performance'},()=>supabase.from('performance').select('*').order('created_at',{ascending:false}).then(({data})=>{if(data)setPerf(data)})).on('postgres_changes',{event:'*',schema:'public',table:'leaves'},()=>supabase.from('leaves').select('*').order('start_date',{ascending:false}).then(({data})=>{if(data)setLeaves(data)})).on('postgres_changes',{event:'*',schema:'public',table:'decisions'},()=>supabase.from('decisions').select('*').order('sort_order,id').then(({data})=>{if(data)setDecisions(data)})).subscribe();
     return()=>supabase.removeChannel(ch)},[]);
@@ -586,7 +813,51 @@ export default function Home(){
   const addRole=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const{data}=await supabase.from('roles').insert({title:v.title||"",status:v.status||"Not opened",trigger_blocker:v.trigger_blocker||"",target_date:v.target_date||""}).select();if(data)setRoles(p=>[...p,...data]);setAddModal(null)},[]);
   const updateRole=useCallback(async(id,u)=>{if(!isEditor())return;setRoles(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('roles').update(u).eq('id',id)},[]);
   const deleteRole=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setRoles(p=>p.filter(r=>r.id!==id));await supabase.from('roles').delete().eq('id',id)},[]);
-  const addMeeting=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const{data}=await supabase.from('meetings').insert({type:v.type||"Milestone",name:v.name||"",schedule:v.schedule||"",duration:v.duration||"",owner:v.owner||"",attendees:v.attendees||"",output:v.output||""}).select();if(data)setMeetings(p=>[...p,...data]);setAddModal(null)},[]);
+  const addMeeting=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}
+    // Build the rich record from MeetingModal output
+    const dateTime=v.type==="One-time"?(v.date+"T"+(v.time||"10:00")+":00"):null;
+    const attendeeNames=(v.attendees||[]).map(em=>userRoles.find(u=>u.email===em)?.name||em).join(", ");
+    const rec={
+      type:v.type==="Recurring"?(v.cadence||"Weekly"):"One-time",
+      name:v.name||"Untitled meeting",
+      schedule:v.type==="One-time"?(v.date||""):(v.cadence||"Weekly"),
+      duration:String(v.duration||30)+" min",
+      owner:user?.user_metadata?.full_name||user?.email||"",
+      attendees:attendeeNames,
+      attendees_emails:(v.attendees||[]).join(","),
+      location:v.location||"",
+      description:v.description||"",
+      fireflies:!!v.fireflies,
+      meeting_datetime:dateTime
+    };
+    const{data}=await supabase.from('meetings').insert(rec).select();
+    if(data){setMeetings(p=>[...p,...data]);showToast("Meeting created")}
+    // Fire-and-forget Google Calendar create + Slack DM invites
+    try{
+      const res=await fetch('/api/schedule-meeting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        title:rec.name,description:rec.description,
+        start:dateTime,duration_minutes:v.duration||30,
+        attendees:v.attendees||[],location:rec.location,
+        add_fireflies:!!v.fireflies,recurrence:v.type==="Recurring"?v.cadence:null
+      })});
+      const d=await res.json();
+      if(d?.htmlLink){await supabase.from('meetings').update({calendar_link:d.htmlLink,calendar_event_id:d.eventId}).eq('id',data[0].id);showToast("Google Calendar event created")}
+    }catch(e){console.error('schedule-meeting',e)}
+    setAddModal(null);
+  },[user,userRoles]);
+
+  // Send Slack reminder to all attendees of a meeting
+  const sendMeetingReminder=useCallback(async(m)=>{
+    if(!m.attendees_emails){showToast("No attendee emails saved","error");return}
+    try{
+      await fetch('/api/meeting-reminder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        meeting_id:m.id,meeting_name:m.name,when:m.schedule,duration:m.duration,
+        location:m.location,calendar_link:m.calendar_link,
+        attendees_emails:(m.attendees_emails||"").split(",").filter(Boolean)
+      })});
+      showToast("Reminder DM'd to attendees")
+    }catch(e){showToast("Reminder failed: "+e.message,"error")}
+  },[]);
   const deleteMeeting=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setMeetings(p=>p.filter(m=>m.id!==id));await supabase.from('meetings').delete().eq('id',id)},[]);
   const updateMeeting=useCallback(async(id,u)=>{if(!isEditor())return;setMeetings(p=>p.map(m=>m.id===id?{...m,...u}:m));await supabase.from('meetings').update(u).eq('id',id)},[]);
   const addStandup=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const{data}=await supabase.from('standups').insert({person:v.person||"",completed:v.completed||"",tomorrow:v.tomorrow||"",blockers:v.blockers||"None",standup_date:v.standup_date||today,source:"manual"}).select();if(data)setStandups(p=>[...data,...p]);setAddModal(null)},[]);
@@ -609,7 +880,10 @@ export default function Home(){
   const deletePerf=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
 
   // Leave CRUD
-  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data){setLeaves(p=>[...data,...p]);showToast("Leave request submitted — pending approval")}notify("requested","leave",(v.leave_type||"annual")+" "+s+(hd?" (half day)":""));setAddModal(null)},[user,userRoles]);
+  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data){setLeaves(p=>[...data,...p]);showToast("Leave request submitted — pending approval");
+    // Send Spock-style Slack card with Approve/Reject buttons
+    try{await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:v.person||user?.user_metadata?.full_name,action:"requested",table:"leave",leave:data[0]})})}catch{}
+  }setAddModal(null)},[user,userRoles]);
 
   // Decisions CRUD
   const addDecision=useCallback(async v=>{if(!isEditor())return;const{data}=await supabase.from('decisions').insert({title:v.title||'',owner:v.owner||'',priority:v.priority||'medium',due_date:v.due_date||null,context:v.context||'',dept:v.dept||'Team',status:'open'}).select();if(data)setDecisions(p=>[...data,...p]);showToast("Decision added");setAddModal(null)},[]);
@@ -680,15 +954,28 @@ export default function Home(){
     {item:"Knowledge transfer documentation",category:"general",assigned_to:"Laraib Haider"},
     {item:"Update team directory & user_roles",category:"general",assigned_to:"Laraib Haider"},
   ];
-  const generateOnboarding=useCallback(async(personName,dept,isOffboard=false)=>{if(!isEditor())return;const dueDate=new Date();dueDate.setDate(dueDate.getDate()+(isOffboard?7:3));const dueDateStr=dueDate.toISOString().split('T')[0];
-    const template=isOffboard?OFFBOARD_TEMPLATE:[...ONBOARD_COMMON,...(ONBOARD_DEPT[dept]||ONBOARD_DEPT['Development'])];
+  const generateOnboarding=useCallback(async(personName,dept,isOffboard=false,extraItems=[])=>{if(!isEditor())return;const dueDate=new Date();dueDate.setDate(dueDate.getDate()+(isOffboard?7:3));const dueDateStr=dueDate.toISOString().split('T')[0];
+    let template;
+    if(isOffboard){
+      // Interlink: derive offboarding from what this person was granted at onboarding
+      const theirOnboarding=onboarding.filter(o=>o.person===personName&&(o.category==="accounts"||o.category==="tools"));
+      const derived=theirOnboarding.map(o=>({item:o.item.replace(/^(Create|Invite to|Add to|Grant|Setup|Set up)/i,"Revoke").replace(/access$/i,"access").startsWith("Revoke")?o.item.replace(/^(Create|Invite to|Add to|Grant|Setup|Set up)/i,"Revoke"):"Revoke: "+o.item,category:"accounts",assigned_to:o.assigned_to}));
+      template=[...OFFBOARD_TEMPLATE,...derived];
+    }else{
+      template=[...ONBOARD_COMMON,...(ONBOARD_DEPT[dept]||ONBOARD_DEPT['Development'])];
+    }
+    template=[...template,...extraItems];
     const items=template.map((t,i)=>({...t,person:personName+(isOffboard?" (offboarding)":""),status:'pending',due_date:dueDateStr,sort_order:i}));const{data}=await supabase.from('onboarding').insert(items).select();if(data){setOnboarding(p=>[...p,...data]);showToast(data.length+(isOffboard?" offboarding":" onboarding")+" items created for "+personName)}
     if(!isOffboard){const docTypes=['id_copy','cv','contract','verbis_consent','bank_details','emergency_contact','photo'];const docs=docTypes.map(dt=>({person:personName,doc_type:dt,status:'missing'}));const{data:dd}=await supabase.from('hr_documents').insert(docs).select();if(dd)setHrDocs(p=>[...p,...dd])}
-  },[]);
+    setOnboardModal(null);
+  },[onboarding]);
   const updateOnboardItem=useCallback(async(id,u)=>{if(!isEditor())return;setOnboarding(p=>p.map(o=>o.id===id?{...o,...u}:o));await supabase.from('onboarding').update(u).eq('id',id)},[]);
   const deleteOnboardItem=useCallback(async id=>{if(!isAdmin())return;setOnboarding(p=>p.filter(o=>o.id!==id));await supabase.from('onboarding').delete().eq('id',id)},[]);
   const updateHrDoc=useCallback(async(id,u)=>{if(!isEditor())return;setHrDocs(p=>p.map(d=>d.id===id?{...d,...u}:d));await supabase.from('hr_documents').update(u).eq('id',id)},[]);
-  const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access","error");return}const leave=leaves.find(l=>l.id===id);setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status){notify(u.status,"leave",leave?.person+" — "+u.status);showToast("Leave "+u.status+" for "+(leave?.person||"employee"))}},[leaves]);
+  const updateLeave=useCallback(async(id,u)=>{if(!isEditor()){showToast("View-only access","error");return}const leave=leaves.find(l=>l.id===id);setLeaves(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('leaves').update(u).eq('id',id);if(u.status){
+    try{await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:user?.user_metadata?.full_name||user?.email,action:u.status,table:"leave",leave:{...leave,...u}})})}catch{}
+    showToast("Leave "+u.status+" for "+(leave?.person||"employee"))
+  }},[leaves,user]);
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
 
   // Profile picture upload
@@ -759,7 +1046,8 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"},{id:"onboard",l:"Onboarding",icon:"◑"},{id:"hrdocs",l:"Documents",icon:"◪"}];
+  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"vitals",l:"Vitals",icon:"♥"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"meet",l:"Meetings",icon:"◈"},{id:"leave",l:"Leave",icon:"◇"},{id:"onboard",l:"Onboarding",icon:"◑"},{id:"hrdocs",l:"Documents",icon:"◪"}];
+  const[vitalsTab,setVitalsTab]=useState("overview");
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -855,6 +1143,7 @@ export default function Home(){
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <NotificationBell leaves={leaves} risks={risks} decisions={decisions} isApprover={['nil@attimo.com','laraib@attimo.com','efehan@attimo.com'].includes((user?.email||'').toLowerCase())} onNavigate={setView}/>
         <label style={{cursor:"pointer",position:"relative"}}>
           <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const me=userRoles.find(r=>r.email===user?.email);if(me)uploadAvatar(me.id,f);else showToast("Your email not in user roles yet","error")}}/>
           {(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.avatar_url?<img src={me.avatar_url} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.2)"}}/>:<span style={{width:26,height:26,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",border:"2px solid rgba(255,255,255,.2)"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>})()}
@@ -881,6 +1170,67 @@ export default function Home(){
     {/* ═══ DASHBOARD ═══ */}
     {view==="dashboard"&&<div className="af">
       <div style={{fontSize:16,fontWeight:800,color:"var(--fg)",marginBottom:16}}>Dashboard Overview</div>
+
+      {/* ─── CEO HERO ROW: Runway · Launch Readiness · Company Acceleration ─── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12,marginBottom:16}}>
+        {/* Runway */}
+        {(()=>{const cash=Number(config.cash_on_hand||0);const burn=Number(config.monthly_burn||0);const months=burn>0?cash/burn:null;const c=months==null?"#94A3B8":months<3?"#EF4444":months<6?"#F59E0B":"#10B981";
+          return <div className="stat-card asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,borderLeft:"4px solid "+c}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <span style={{fontSize:10,color:"var(--fg2)",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Runway</span>
+              <span style={{color:c}}>{I.fire(16)}</span>
+            </div>
+            {months==null?<div><div style={{fontSize:22,fontWeight:800,color:"var(--fg2)"}}>—</div><div style={{fontSize:9,color:"var(--fg2)"}}>Set cash + burn in Settings</div></div>
+            :<><div style={{fontSize:24,fontWeight:800,color:c}}>{months.toFixed(1)} <span style={{fontSize:12,fontWeight:500,color:"var(--fg2)"}}>months</span></div>
+              <div style={{fontSize:9,color:"var(--fg2)"}}>${(cash/1000).toFixed(0)}k cash · ${(burn/1000).toFixed(1)}k/mo burn</div></>}
+            {role==="admin"&&<button onClick={()=>{const newCash=prompt("Cash on hand ("+config.currency+"):",cash);if(newCash==null)return;const newBurn=prompt("Monthly burn ("+config.currency+"):",burn);if(newBurn==null)return;Promise.all([supabase.from('config').upsert({key:'cash_on_hand',value:String(Number(newCash)),updated_at:new Date().toISOString(),updated_by:user?.email}),supabase.from('config').upsert({key:'monthly_burn',value:String(Number(newBurn)),updated_at:new Date().toISOString(),updated_by:user?.email})]).then(()=>{setConfig(p=>({...p,cash_on_hand:newCash,monthly_burn:newBurn}));showToast("Runway updated")})}} style={{marginTop:6,padding:"3px 8px",borderRadius:5,border:"1px solid var(--border)",background:"transparent",color:"var(--fg2)",fontSize:9,cursor:"pointer"}}>Edit</button>}
+          </div>;
+        })()}
+
+        {/* Launch Readiness */}
+        {(()=>{const ld=config.launch_date;const launchTasks=tasks.filter(t=>t.end_date&&String(t.end_date).split('T')[0]<=ld);const done=launchTasks.filter(t=>t.status==="Done").length;const pct=launchTasks.length>0?Math.round((done/launchTasks.length)*100):0;const daysLeft=Math.ceil((new Date(ld+"T00:00:00").getTime()-Date.now())/86400000);const c=pct>=80?"#10B981":pct>=50?"#F59E0B":"#EF4444";
+          return <div className="stat-card asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,borderLeft:"4px solid "+c}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <span style={{fontSize:10,color:"var(--fg2)",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Launch Readiness</span>
+              <span style={{color:c}}>{I.zap(16)}</span>
+            </div>
+            <div style={{fontSize:24,fontWeight:800,color:c}}>{pct}<span style={{fontSize:12,fontWeight:500,color:"var(--fg2)"}}>%</span></div>
+            <div style={{fontSize:9,color:"var(--fg2)"}}>{done}/{launchTasks.length} tasks · {daysLeft>0?daysLeft+" days to launch":"Launch passed"}</div>
+            <div style={{height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden",marginTop:6}}><div className="bar-g" style={{height:"100%",width:pct+"%",borderRadius:2,background:c}}/></div>
+          </div>;
+        })()}
+
+        {/* Company Acceleration (from metrics table) */}
+        {(()=>{const depts=metricsData?Object.values(metricsData):[];const totalCurrent=depts.reduce((s,d)=>s+(d.tasks_current||0),0);const totalPrior=depts.reduce((s,d)=>s+(d.tasks_prior||0),0);const accel=totalPrior===0?(totalCurrent>0?100:0):Math.round(((totalCurrent-totalPrior)/totalPrior)*100);const c=accel>5?"#10B981":accel<-5?"#EF4444":"#94A3B8";const arrow=accel>5?"↗":accel<-5?"↘":"→";
+          return <div className="stat-card asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,borderLeft:"4px solid "+c}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <span style={{fontSize:10,color:"var(--fg2)",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Company Acceleration</span>
+              <span style={{color:c,fontSize:18,fontWeight:800}}>{arrow}</span>
+            </div>
+            {!metricsData?<div><div style={{fontSize:22,fontWeight:800,color:"var(--fg2)"}}>—</div><div style={{fontSize:9,color:"var(--fg2)"}}>Awaiting first compute (8am UTC)</div></div>
+            :<><div style={{fontSize:24,fontWeight:800,color:c}}>{accel>0?"+":""}{accel}<span style={{fontSize:12,fontWeight:500,color:"var(--fg2)"}}>%</span></div>
+              <div style={{fontSize:9,color:"var(--fg2)"}}>{totalCurrent} done this fortnight · {totalPrior} prior</div></>}
+          </div>;
+        })()}
+      </div>
+
+      {/* Department acceleration sub-row */}
+      {metricsData&&Object.keys(metricsData).length>0&&<div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:14,marginBottom:16}}>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Departments — Acceleration This Fortnight</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
+          {Object.entries(metricsData).sort((a,b)=>(b[1].acceleration_pct||0)-(a[1].acceleration_pct||0)).map(([dept,d])=>{const accel=d.acceleration_pct||0;const c=accel>5?"#10B981":accel<-5?"#EF4444":"#94A3B8";const arrow=accel>5?"↗":accel<-5?"↘":"→";const cl=CL[dept]||"#6366F1";
+            return <div key={dept} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,background:"var(--bg2)",borderLeft:"2px solid "+cl}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{dept}</div>
+                <div style={{fontSize:8,color:"var(--fg2)"}}>{(d.velocity||0).toFixed(1)}/wk</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:13,fontWeight:800,color:c}}>{accel>0?"+":""}{accel}% {arrow}</div>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>}
 
       {/* ─── TEAM AVAILABILITY (TOP OF DASHBOARD) ─── */}
       <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:16}}>
@@ -1185,83 +1535,142 @@ export default function Home(){
           </div>})}
       </div>})}</div>}
 
-      {/* DEPARTMENT VIEW */}
+      {/* DEPARTMENT VIEW — grouped by ACTUAL department, not Linear/Asana project */}
       {ganttMode==="department"&&<div>
         {deptLoading&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Loading from Linear + Asana...</div>}
         {!deptLoading&&!deptTasks&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>Click "Department" to load tickets</div>}
-        {!deptLoading&&deptTasks&&<div>
-          <div style={{display:"flex",gap:4,marginBottom:16,background:"var(--bg3)",borderRadius:8,padding:2,width:"fit-content"}}>
-            {["list","gantt"].map(m=><button key={m} onClick={()=>setDvm(m)} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:dvm===m?"var(--fg)":"transparent",color:dvm===m?"var(--bg)":"var(--fg2)",transition:"all .2s",textTransform:"capitalize"}}>{m}</button>)}
-          </div>
-          {Object.entries(deptTasks.projects||{}).map(([project,tickets])=>{
-          const src=deptTasks.sources?.[project]||'Linear';
-          const cl=project.includes("Phase 0")?"#14B8A6":project.includes("Phase 1")?"#10B981":project.includes("Phase 2")?"#3B82F6":project.includes("Phase 3")?"#8B5CF6":project.includes("Phase 4")?"#EC4899":project.includes("AEC")?"#F59E0B":project.includes("Marketing")?"#EC4899":project.includes("Design")?"#8B5CF6":"#6366F1";
-          const allT=tickets.filter(t=>personFilter==="all"||rN(t.person)===personFilter);
-          const doing=allT.filter(t=>t.status==="Doing").length;
-          const done=allT.filter(t=>t.status==="Done").length;
-          const overdue=allT.filter(t=>t.isOverdue).length;
-          if(allT.length===0)return null;
-          return <div key={project} className="asl" style={{marginBottom:16}}>
-            <div style={{background:cl+"15",color:cl,padding:"10px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+cl,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}><span>{project}</span><span style={{fontSize:9,padding:"2px 6px",borderRadius:99,background:src==="Asana"?"#F472B620":"#6366F120",color:src==="Asana"?"#EC4899":"#6366F1",fontWeight:700}}>{src}</span></div>
-              <div style={{display:"flex",gap:8,fontSize:11}}>
-                <span style={{color:"var(--fg2)"}}>{allT.length} total</span>
-                <span style={{color:"#F59E0B"}}>{doing} doing</span>
-                <span style={{color:"#10B981"}}>{done} done</span>
-                {overdue>0&&<span style={{color:"#EF4444",fontWeight:700}}>{overdue} overdue</span>}
+        {!deptLoading&&deptTasks&&(()=>{
+          // Map project name → department fallback
+          const projectToDept=(p)=>{
+            if(/marketing/i.test(p))return"Marketing";
+            if(/design/i.test(p))return"Design";
+            if(/(ai|ml|research|science)/i.test(p))return"AI/Science";
+            if(/(ops|pmo)/i.test(p))return"PMO";
+            if(/(phase|attimo-core|aec|sdk|dev|core)/i.test(p))return"Development";
+            return"Other";
+          };
+          // Re-group all tickets by department
+          const byDept={};
+          Object.entries(deptTasks.projects||{}).forEach(([proj,tickets])=>{
+            tickets.forEach(t=>{
+              const personName=rN(t.person);
+              const dept=N2D[personName]||projectToDept(proj);
+              if(!byDept[dept])byDept[dept]=[];
+              byDept[dept].push({...t,_project:proj,_source:deptTasks.sources?.[proj]||'Linear'});
+            });
+          });
+          // Available departments (with tickets)
+          const availableDepts=Object.keys(byDept).sort();
+          // Apply person + dept filter
+          const filterTickets=arr=>arr.filter(t=>personFilter==="all"||rN(t.person)===personFilter);
+          const visibleDepts=deptFilter==="all"?availableDepts:availableDepts.filter(d=>d===deptFilter);
+
+          return <div>
+            {/* Top control row: view mode + dept filter */}
+            <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+              <div style={{display:"flex",gap:4,background:"var(--bg3)",borderRadius:8,padding:2,width:"fit-content"}}>
+                {["list","gantt"].map(m=><button key={m} onClick={()=>setDvm(m)} style={{padding:"6px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:dvm===m?"var(--fg)":"transparent",color:dvm===m?"var(--bg)":"var(--fg2)",transition:"all .2s",textTransform:"capitalize"}}>{m}</button>)}
+              </div>
+              <select value={deptFilter} onChange={e=>setDeptFilter(e.target.value)} style={{padding:"6px 12px",borderRadius:6,border:"1px solid var(--border)",fontSize:11,background:"var(--bg2)",color:"var(--fg)",fontWeight:600,cursor:"pointer"}}>
+                <option value="all">All Departments ({availableDepts.length})</option>
+                {availableDepts.map(d=>{const c=byDept[d].filter(t=>personFilter==="all"||rN(t.person)===personFilter).length;return <option key={d} value={d}>{d} ({c})</option>})}
+              </select>
+            </div>
+
+            {/* Department Progress Summary */}
+            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{I.chart(14)} Progress by Department</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+                {availableDepts.map(dept=>{
+                  const allT=filterTickets(byDept[dept]);
+                  if(allT.length===0)return null;
+                  const done=allT.filter(t=>t.status==="Done").length;
+                  const doing=allT.filter(t=>t.status==="Doing").length;
+                  const overdue=allT.filter(t=>t.isOverdue).length;
+                  const pct=Math.round((done/allT.length)*100);
+                  const cl=CL[dept]||"#6366F1";
+                  return <div key={dept} onClick={()=>setDeptFilter(deptFilter===dept?"all":dept)} className="ch" style={{background:"var(--bg2)",borderRadius:10,padding:12,borderLeft:"3px solid "+cl,cursor:"pointer",outline:deptFilter===dept?"2px solid "+cl:"none"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"var(--fg)",marginBottom:6}}>{dept}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--fg2)",marginBottom:4}}><span>{done}/{allT.length} done</span><span style={{fontWeight:700,color:cl}}>{pct}%</span></div>
+                    <div style={{height:6,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}><div className="bar-g" style={{height:"100%",width:pct+"%",borderRadius:3,background:cl}}/></div>
+                    <div style={{display:"flex",gap:8,marginTop:6,fontSize:8,color:"var(--fg2)"}}><span style={{color:"#F59E0B"}}>{doing} doing</span>{overdue>0&&<span style={{color:"#EF4444",fontWeight:700}}>{overdue} overdue</span>}</div>
+                  </div>;
+                })}
               </div>
             </div>
-            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
-              {dvm==="gantt"?STS.map(st=>{const items=allT.filter(t=>t.status===st);if(!items.length)return null;return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
-                <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
-                {items.slice(0,20).map((t,idx)=>{const od=t.isOverdue;const dn=rN(t.person);
-                  const hasDue=!!t.dueDate;
-                  let leftPct,widthPct,dateLabel="";
-                  if(hasDue){
-                    const endStr=t.dueDate;
-                    const startStr=t.startDate||(()=>{const d2=pD(t.dueDate);d2.setDate(d2.getDate()-21);return d2.toISOString().split('T')[0]})();
-                    const sOff=Math.max(0,daysB(TL_START,startStr));const dur=Math.max(3,daysB(startStr,endStr)+1);
-                    leftPct=(sOff/TL_DAYS)*100;widthPct=Math.max((dur/TL_DAYS)*100,2);dateLabel=fD(t.dueDate);
-                  }else{
-                    // No date: spread evenly across timeline based on index
-                    leftPct=(idx/Math.max(items.length,1))*70+5;widthPct=8;dateLabel="no date";
-                  }
-                  const noDate=!hasDue&&t.status!=="Done";
-                  return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")+(noDate?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>t.url&&window.open(t.url,'_blank')}>
-                    <div style={{width:"clamp(120px,25vw,220px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                      <div style={{width:20,height:20,borderRadius:"50%",background:noDate?"#EF4444":cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{dn?.[0]}</span></div>
-                      <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:noDate?"#EF4444":"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.title}</span>
-                      {noDate&&<span style={{fontSize:7,color:"#EF4444",background:"#FEE2E2",padding:"1px 4px",borderRadius:3,flexShrink:0,fontWeight:700}}>NO DATE</span>}
-                      {t.identifier&&<span style={{fontSize:7,color:"var(--fg2)",background:"var(--bg3)",padding:"1px 3px",borderRadius:3,flexShrink:0,fontFamily:"monospace"}}>{t.identifier}</span>}
-                    </div>
-                    <div style={{flex:1,height:26,background:"var(--bg3)",borderRadius:6,position:"relative",overflow:"hidden"}}>
-                      <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:noDate?"linear-gradient(90deg,#EF4444,#F87171)":od?"linear-gradient(90deg,#EF4444,#F87171)":t.status==="Done"?"linear-gradient(90deg,#10B981,#34D399)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:hasDue?(t.status==="Done"?.3:.9):(t.status==="Done"?.15:.6),display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
-                        <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden"}}>{dateLabel}</span>
+
+            {/* Department groups — main rendering */}
+            {visibleDepts.map(dept=>{
+              const cl=CL[dept]||"#6366F1";
+              const allT=filterTickets(byDept[dept]);
+              if(allT.length===0)return null;
+              const doing=allT.filter(t=>t.status==="Doing").length;
+              const done=allT.filter(t=>t.status==="Done").length;
+              const overdue=allT.filter(t=>t.isOverdue).length;
+              return <div key={dept} className="asl" style={{marginBottom:16}}>
+                <div style={{background:cl+"15",color:cl,padding:"10px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+cl,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span>{dept}</span>
+                  <div style={{display:"flex",gap:8,fontSize:11}}>
+                    <span style={{color:"var(--fg2)"}}>{allT.length} total</span>
+                    <span style={{color:"#F59E0B"}}>{doing} doing</span>
+                    <span style={{color:"#10B981"}}>{done} done</span>
+                    {overdue>0&&<span style={{color:"#EF4444",fontWeight:700}}>{overdue} overdue</span>}
+                  </div>
+                </div>
+                <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
+                  {dvm==="gantt"?STS.map(st=>{const items=allT.filter(t=>t.status===st);if(!items.length)return null;return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
+                    <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
+                    {items.slice(0,20).map((t,idx)=>{const od=t.isOverdue;const dn=rN(t.person);
+                      const hasDue=!!t.dueDate;
+                      let leftPct,widthPct,dateLabel="";
+                      if(hasDue){
+                        const endStr=t.dueDate;
+                        const startStr=t.startDate||(()=>{const d2=pD(t.dueDate);d2.setDate(d2.getDate()-21);return d2.toISOString().split('T')[0]})();
+                        const sOff=Math.max(0,daysB(TL_START,startStr));const dur=Math.max(3,daysB(startStr,endStr)+1);
+                        leftPct=(sOff/TL_DAYS)*100;widthPct=Math.max((dur/TL_DAYS)*100,2);dateLabel=fD(t.dueDate);
+                      }else{
+                        leftPct=(idx/Math.max(items.length,1))*70+5;widthPct=8;dateLabel="no date";
+                      }
+                      const noDate=!hasDue&&t.status!=="Done";
+                      return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")+(noDate?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 8px",cursor:"pointer",borderRadius:6,animationDelay:idx*25+"ms"}} onClick={()=>t.url&&window.open(t.url,'_blank')}>
+                        <div style={{width:"clamp(120px,25vw,220px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                          <div style={{width:20,height:20,borderRadius:"50%",background:noDate?"#EF4444":cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{dn?.[0]}</span></div>
+                          <span style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:noDate?"#EF4444":"var(--fg)",textDecoration:t.status==="Done"?"line-through":"none"}}>{t.title}</span>
+                          {noDate&&<span style={{fontSize:7,color:"#EF4444",background:"#FEE2E2",padding:"1px 4px",borderRadius:3,flexShrink:0,fontWeight:700}}>NO DATE</span>}
+                          {t.identifier&&<span style={{fontSize:7,color:"var(--fg2)",background:"var(--bg3)",padding:"1px 3px",borderRadius:3,flexShrink:0,fontFamily:"monospace"}}>{t.identifier}</span>}
+                          <span style={{fontSize:7,padding:"1px 4px",borderRadius:3,background:t._source==="Asana"?"#F472B620":"#6366F120",color:t._source==="Asana"?"#EC4899":"#6366F1",fontWeight:700,flexShrink:0}}>{t._source==="Asana"?"A":"L"}</span>
+                        </div>
+                        <div style={{flex:1,height:26,background:"var(--bg3)",borderRadius:6,position:"relative",overflow:"hidden"}}>
+                          <div className="bar-g" style={{position:"absolute",left:leftPct+"%",width:widthPct+"%",top:2,bottom:2,borderRadius:4,background:noDate?"linear-gradient(90deg,#EF4444,#F87171)":od?"linear-gradient(90deg,#EF4444,#F87171)":t.status==="Done"?"linear-gradient(90deg,#10B981,#34D399)":"linear-gradient(90deg,"+cl+","+cl+"CC)",opacity:hasDue?(t.status==="Done"?.3:.9):(t.status==="Done"?.15:.6),display:"flex",alignItems:"center",paddingLeft:6,animationDelay:idx*40+"ms"}}>
+                            <span style={{color:"#fff",fontSize:9,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden"}}>{dateLabel}</span>
+                          </div>
+                        </div>
+                        <span style={{fontSize:10,color:"var(--fg2)",flexShrink:0,width:80,textAlign:"right"}}>{dn==="Unassigned"?"":dn}</span>
+                        {od&&<div className="pulse-dot" style={{width:10,height:10,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
+                      </div>;})}
+                    {items.length>20&&<div style={{padding:"6px 12px",fontSize:10,color:"var(--fg2)",textAlign:"center"}}>...and {items.length-20} more</div>}
+                  </div>;})
+                  :allT.slice(0,25).map((t,idx)=>{const od=t.isOverdue;const dn=rN(t.person);const dnd=rND(t.person);
+                    return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 12px",borderBottom:"1px solid var(--border)",animationDelay:idx*20+"ms"}}>
+                      <div style={{width:"clamp(120px,25vw,240px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                        <div style={{width:18,height:18,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:7,fontWeight:700}}>{dn?.[0]}</span></div>
+                        {t.url?<a href={t.url} target="_blank" rel="noopener" style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:"none"}} onMouseEnter={e=>e.target.style.color="#3B82F6"} onMouseLeave={e=>e.target.style.color="var(--fg)"}>{t.title}</a>:<span style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)"}}>{t.title}</span>}
+                        {t.identifier&&<span style={{fontSize:8,color:"var(--fg2)",background:"var(--bg3)",padding:"1px 4px",borderRadius:4,flexShrink:0,fontFamily:"monospace"}}>{t.identifier}</span>}
+                        <span style={{fontSize:7,padding:"1px 4px",borderRadius:3,background:t._source==="Asana"?"#F472B620":"#6366F120",color:t._source==="Asana"?"#EC4899":"#6366F1",fontWeight:700,flexShrink:0}}>{t._source==="Asana"?"A":"L"}</span>
                       </div>
-                    </div>
-                    <span style={{fontSize:10,color:"var(--fg2)",flexShrink:0,width:80,textAlign:"right"}}>{dn==="Unassigned"?"":dn}</span>
-                    {od&&<div className="pulse-dot" style={{width:10,height:10,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
-                  </div>})}
-                {items.length>20&&<div style={{padding:"6px 12px",fontSize:10,color:"var(--fg2)",textAlign:"center"}}>...and {items.length-20} more</div>}
-              </div>})
-              :allT.slice(0,25).map((t,idx)=>{const od=t.isOverdue;const dn=rN(t.person);const dnd=rND(t.person);
-                return <div key={t.id} className={"rh asl"+(od?" overdue-row":"")} style={{display:"flex",alignItems:"center",gap:12,padding:"5px 12px",borderBottom:"1px solid var(--border)",animationDelay:idx*20+"ms"}}>
-                  <div style={{width:"clamp(120px,25vw,240px)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                    <div style={{width:18,height:18,borderRadius:"50%",background:cl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{color:"#fff",fontSize:7,fontWeight:700}}>{dn?.[0]}</span></div>
-                    {t.url?<a href={t.url} target="_blank" rel="noopener" style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)",textDecoration:"none"}} onMouseEnter={e=>e.target.style.color="#3B82F6"} onMouseLeave={e=>e.target.style.color="var(--fg)"}>{t.title}</a>:<span style={{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)"}}>{t.title}</span>}
-                    {t.identifier&&<span style={{fontSize:8,color:"var(--fg2)",background:"var(--bg3)",padding:"1px 4px",borderRadius:4,flexShrink:0,fontFamily:"monospace"}}>{t.identifier}</span>}
-                  </div>
-                  <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:t.status==="Done"?"#DCFCE7":t.status==="Doing"?"#FEF3C7":"#E0E7FF",color:t.status==="Done"?"#166534":t.status==="Doing"?"#92400E":"#3730A3"}}>{t.status}</span>
-                    {t.dueDate&&<span style={{fontSize:10,color:od?"#EF4444":"var(--fg2)"}}>{od?"Overdue: ":"Due: "}{fD(t.dueDate)}</span>}
-                  </div>
-                  <span style={{fontSize:10,color:"var(--fg2)",flexShrink:0}}>{dnd}</span>
-                  {od&&<div className="pulse-dot" style={{width:8,height:8,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
-                </div>})}
-              {dvm==="list"&&allT.length>25&&<div style={{padding:"8px 12px",fontSize:11,color:"var(--fg2)",textAlign:"center"}}>...and {allT.length-25} more tickets</div>}
-            </div>
-          </div>})}
-        </div>}
+                      <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,background:t.status==="Done"?"#DCFCE7":t.status==="Doing"?"#FEF3C7":"#E0E7FF",color:t.status==="Done"?"#166534":t.status==="Doing"?"#92400E":"#3730A3"}}>{t.status}</span>
+                        {t.dueDate&&<span style={{fontSize:10,color:od?"#EF4444":"var(--fg2)"}}>{od?"Overdue: ":"Due: "}{fD(t.dueDate)}</span>}
+                      </div>
+                      <span style={{fontSize:10,color:"var(--fg2)",flexShrink:0}}>{dnd}</span>
+                      {od&&<div className="pulse-dot" style={{width:8,height:8,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>}
+                    </div>;})}
+                  {dvm==="list"&&allT.length>25&&<div style={{padding:"8px 12px",fontSize:11,color:"var(--fg2)",textAlign:"center"}}>...and {allT.length-25} more tickets</div>}
+                </div>
+              </div>;
+            })}
+          </div>;
+        })()}
       </div>}
     </div>}
 
@@ -1347,7 +1756,74 @@ export default function Home(){
     </div>}
 
     {/* ═══ RACI ═══ */}
-    {view==="raci"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
+    {/* ─── VITALS TAB — unified org health hub (replaces KPIs/RACI/Risks/Performance/Open Roles) ─── */}
+    {view==="vitals"&&<div className="af" style={{marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:800,color:"var(--fg)"}}>Vitals</div>
+          <div style={{fontSize:11,color:"var(--fg2)"}}>Company health, accountability, and signals — all in one place</div>
+        </div>
+        <button onClick={async()=>{showToast("Computing metrics...");try{const r=await fetch('/api/compute-metrics');const d=await r.json();if(d.ok){showToast("Metrics refreshed");const{data}=await supabase.from('metrics').select('*').order('computed_at',{ascending:false});if(data){const latest={};data.forEach(r=>{if(!latest[r.dept])latest[r.dept]=r});setMetricsData(latest)}}else showToast("Compute failed","error")}catch(e){showToast("Compute failed","error")}}} className="btn-pop" style={{padding:"7px 14px",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>↻ Recompute Now</button>
+      </div>
+      <div style={{display:"flex",gap:4,background:"var(--bg3)",borderRadius:8,padding:3,marginBottom:16,flexWrap:"wrap"}}>
+        {[{id:"overview",l:"Overview"},{id:"departments",l:"Departments"},{id:"people",l:"People"},{id:"accountability",l:"Accountability"},{id:"risks",l:"Risks"},{id:"hiring",l:"Hiring"}].map(t=><button key={t.id} onClick={()=>setVitalsTab(t.id)} style={{padding:"7px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:vitalsTab===t.id?"var(--fg)":"transparent",color:vitalsTab===t.id?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>{t.l}</button>)}
+      </div>
+    </div>}
+
+    {/* VITALS · OVERVIEW — company acceleration + dept health summary */}
+    {view==="vitals"&&vitalsTab==="overview"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Big company acceleration */}
+      {(()=>{const depts=metricsData?Object.values(metricsData):[];const totalCurrent=depts.reduce((s,d)=>s+(d.tasks_current||0),0);const totalPrior=depts.reduce((s,d)=>s+(d.tasks_prior||0),0);const accel=totalPrior===0?(totalCurrent>0?100:0):Math.round(((totalCurrent-totalPrior)/totalPrior)*100);const c=accel>5?"#10B981":accel<-5?"#EF4444":"#94A3B8";const arrow=accel>5?"↗":accel<-5?"↘":"→";
+        return <div style={{background:"linear-gradient(135deg,var(--card),var(--bg2))",border:"1px solid var(--border)",borderRadius:14,padding:24}}>
+          <div style={{fontSize:11,color:"var(--fg2)",fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Company Acceleration · This Fortnight</div>
+          {!metricsData?<div style={{fontSize:28,color:"var(--fg2)"}}>Awaiting first compute (runs daily at 9am UTC)</div>
+          :<div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap"}}>
+            <div style={{fontSize:48,fontWeight:800,color:c,lineHeight:1}}>{accel>0?"+":""}{accel}%</div>
+            <div style={{fontSize:32,color:c,fontWeight:700}}>{arrow}</div>
+            <div style={{fontSize:13,color:"var(--fg2)"}}>{totalCurrent} tasks done · {totalPrior} prior · {Object.keys(metricsData).length} depts tracked</div>
+          </div>}
+        </div>;
+      })()}
+
+      {/* Per-department health cards (ranked by accel) */}
+      {metricsData&&<div>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Departments — Ranked by Acceleration</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+          {Object.entries(metricsData).sort((a,b)=>(b[1].acceleration_pct||0)-(a[1].acceleration_pct||0)).map(([dept,d])=>{
+            const accel=d.acceleration_pct||0;const c=accel>5?"#10B981":accel<-5?"#EF4444":"#94A3B8";const arrow=accel>5?"↗":accel<-5?"↘":"→";const cl=CL[dept]||"#6366F1";
+            const deptRisks=risks.filter(r=>r.status==="ACTIVE"&&r.description?.toLowerCase().includes(dept.toLowerCase()));
+            const accountable=raci.find(r=>r.dept===dept&&r.a)?.a||"—";
+            return <div key={dept} onClick={()=>{setVitalsTab("departments")}} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderLeft:"3px solid "+cl,borderRadius:12,padding:14,cursor:"pointer"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div style={{fontSize:13,fontWeight:700,color:"var(--fg)"}}>{dept}</div>
+                <div style={{fontSize:16,fontWeight:800,color:c}}>{accel>0?"+":""}{accel}% {arrow}</div>
+              </div>
+              <div style={{fontSize:10,color:"var(--fg2)",marginBottom:6}}>{(d.velocity||0).toFixed(1)} tasks/wk this fortnight · {(d.prior_velocity||0).toFixed(1)} prior</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:9,marginTop:8}}>
+                <span style={{padding:"2px 6px",borderRadius:4,background:"var(--bg3)",color:"var(--fg2)"}}>Lead: {accountable}</span>
+                {deptRisks.length>0&&<span style={{padding:"2px 6px",borderRadius:4,background:"#FEE2E2",color:"#DC2626",fontWeight:700}}>{deptRisks.length} risk{deptRisks.length>1?"s":""}</span>}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>}
+
+      {/* Top active risks */}
+      {(()=>{const top=risks.filter(r=>r.status==="ACTIVE"&&(r.impact==="HIGH"||r.impact==="CRITICAL")).slice(0,5);if(top.length===0)return null;
+        return <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--fg)"}}>Top Active Risks</div>
+            <button onClick={()=>setVitalsTab("risks")} style={{background:"none",border:"none",color:"#3B82F6",fontSize:10,fontWeight:600,cursor:"pointer"}}>View all →</button>
+          </div>
+          {top.map(r=><div key={r.id} className="rh" style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
+            <div><div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{r.description}</div><div style={{fontSize:9,color:"var(--fg2)"}}>Owner: {r.owner||"unassigned"}</div></div>
+            <span style={{fontSize:9,padding:"3px 8px",borderRadius:99,background:r.impact==="CRITICAL"?"#7F1D1D":"#FEE2E2",color:r.impact==="CRITICAL"?"#fff":"#DC2626",fontWeight:700}}>{r.impact}</span>
+          </div>)}
+        </div>;
+      })()}
+    </div>}
+
+    {view==="vitals"&&vitalsTab==="accountability"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><button onClick={()=>setAddModal("raci")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add</button></div>
       <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)"}}><b>R</b>=Responsible <b>A</b>=Accountable <b>C</b>=Consulted <b>I</b>=Informed <span style={{color:"#3B82F6"}}>[Suggest]</span>=PMO suggestion</div>
       {/* RACI Conflict Detection */}
@@ -1375,7 +1851,7 @@ export default function Home(){
     </div>}
 
     {/* ═══ KPIs ═══ */}
-    {view==="kpi"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto"}}>
+    {view==="vitals"&&vitalsTab==="departments"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto"}}>
       <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>KPIs</div><button onClick={()=>setAddModal("kpi")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add KPI</button></div>
       <KpiChart kpis={kpis}/>
       {Object.entries(kpiByDept).map(([dept,items])=><div key={dept} className="asl"><DeptHdr dept={dept}/>
@@ -1389,7 +1865,7 @@ export default function Home(){
     </div>}
 
     {/* ═══ RISKS ═══ */}
-    {view==="risk"&&<div className="af">
+    {view==="vitals"&&vitalsTab==="risks"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Risk Register</div><button onClick={()=>setAddModal("risk")} className="act-add btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Risk</button></div>
       {risks.length===0?<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}><div style={{color:"var(--fg2)",marginBottom:4}}>{I.shield(24)}</div><div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No risks logged</div><div style={{fontSize:11,color:"var(--fg2)"}}>Click "+ Add Risk" to start tracking project risks.</div></div>
       :<Tbl headers={["#","Risk","Impact","Status","Mitigation","Stage","Owner","Age","Linked",""]} ids={risks.map(r=>r.id)} onReorder={(a,b)=>reorder("risks",risks,setRisks,a,b)} rows={risks.map(r=>{
@@ -1398,7 +1874,7 @@ export default function Home(){
     </div>}
 
     {/* ═══ OPEN ROLES (dynamic from DB) ═══ */}
-    {view==="roles"&&<div className="af">
+    {view==="vitals"&&vitalsTab==="hiring"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Open Hiring Positions</div><button onClick={()=>setAddModal("role")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Role</button></div>
       <Tbl headers={["Role","Status","Trigger / Blocker","Target",""]} ids={roles.map(r=>r.id)} onReorder={(a,b)=>reorder("roles",roles,setRoles,a,b)} rows={roles.map(r=>[
         <InEdit value={r.title} onChange={v=>updateRole(r.id,{title:v})}/>,
@@ -1440,7 +1916,7 @@ export default function Home(){
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,<InEdit value={m.meeting_link||""} onChange={v=>updateMeeting(m.id,{meeting_link:v})} />,
-          (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{m.calendar_link?<a href={m.calendar_link} target="_blank" rel="noopener" style={{fontSize:9,color:"#10B981",fontWeight:600,textDecoration:"none",background:"rgba(16,185,129,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Cal</a>:(role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add</a>:null}{m.attendees_emails&&isEditor()&&<button onClick={()=>sendMeetingReminder(m)} style={{fontSize:9,color:"#8B5CF6",fontWeight:600,border:"none",cursor:"pointer",background:"rgba(139,92,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>↗ Remind</button>}</div>,
           <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
@@ -1454,7 +1930,7 @@ export default function Home(){
           <InEdit value={m.duration} onChange={v=>updateMeeting(m.id,{duration:v})}/>,
           <InEdit value={m.owner} onChange={v=>updateMeeting(m.id,{owner:v})}/>,
           <InEdit value={m.attendees} onChange={v=>updateMeeting(m.id,{attendees:v})}/>,<InEdit value={m.meeting_link||""} onChange={v=>updateMeeting(m.id,{meeting_link:v})} />,
-          (role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add to Cal</a>:null,
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{m.calendar_link?<a href={m.calendar_link} target="_blank" rel="noopener" style={{fontSize:9,color:"#10B981",fontWeight:600,textDecoration:"none",background:"rgba(16,185,129,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Cal</a>:(role==="admin"||userRoles.find(r=>r.email===user?.email)?.name==="Mesude Gökpınar")?<a href={"https://calendar.google.com/calendar/r/eventedit?text="+encodeURIComponent(m.name||"")+"&details="+encodeURIComponent("Owner: "+(m.owner||"")+"\nAttendees: "+(m.attendees||""))} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"rgba(59,130,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{I.calendar(10)} Add</a>:null}{m.attendees_emails&&isEditor()&&<button onClick={()=>sendMeetingReminder(m)} style={{fontSize:9,color:"#8B5CF6",fontWeight:600,border:"none",cursor:"pointer",background:"rgba(139,92,246,.08)",padding:"4px 8px",borderRadius:6,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>↗ Remind</button>}</div>,
           <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
@@ -1516,7 +1992,7 @@ export default function Home(){
     </div>}
 
     {/* ═══ PERFORMANCE ═══ */}
-    {view==="perf"&&<div className="af">
+    {view==="vitals"&&vitalsTab==="people"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Performance</div>
         <div style={{display:"flex",gap:8}}>
@@ -1762,13 +2238,21 @@ export default function Home(){
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Onboarding Tracker</div>
         {canEdit&&<div style={{display:"flex",gap:8}}>
-          <button onClick={()=>{const name=prompt("New hire's full name:");if(!name?.trim())return;const dept=prompt("Department?\n(Development, AI/Science, Design, Marketing, PMO, Leadership)","Development");if(!dept)return;generateOnboarding(name.trim(),dept.trim())}} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Onboarding</button>
-          <button onClick={()=>{const name=prompt("Departing person's full name:");if(!name?.trim())return;generateOnboarding(name.trim(),"",true)}} className="btn-pop" style={{background:"linear-gradient(135deg,#EF4444,#F97316)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Offboarding</button>
+          <button onClick={()=>setOnboardModal("onboarding")} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Onboarding</button>
+          <button onClick={()=>setOnboardModal("offboarding")} className="btn-pop" style={{background:"linear-gradient(135deg,#EF4444,#F97316)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Offboarding</button>
         </div>}
       </div>
 
-      {/* Group by person */}
-      {(()=>{const byPerson={};onboarding.forEach(o=>{if(!byPerson[o.person])byPerson[o.person]=[];byPerson[o.person].push(o)});
+      {/* Sub-tabs: Onboarding | Offboarding */}
+      <div style={{display:"flex",gap:4,marginBottom:16,background:"var(--bg3)",borderRadius:10,padding:3,width:"fit-content"}}>
+        {[{id:"onboarding",l:"Onboarding"},{id:"offboarding",l:"Offboarding"}].map(t=>{
+          const count=t.id==="offboarding"?[...new Set(onboarding.filter(o=>o.person?.includes("(offboarding)")).map(o=>o.person))].length:[...new Set(onboarding.filter(o=>!o.person?.includes("(offboarding)")).map(o=>o.person))].length;
+          return <button key={t.id} onClick={()=>setOnboardTab(t.id)} style={{padding:"8px 16px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",background:onboardTab===t.id?(t.id==="offboarding"?"#EF4444":"#3B82F6"):"transparent",color:onboardTab===t.id?"#fff":"var(--fg2)"}}>{t.l}<span style={{marginLeft:6,background:onboardTab===t.id?"rgba(255,255,255,.25)":"var(--border)",borderRadius:99,padding:"1px 6px",fontSize:10}}>{count}</span></button>;
+        })}
+      </div>
+
+      {/* Group by person (filtered by sub-tab) */}
+      {(()=>{const byPerson={};onboarding.filter(o=>onboardTab==="offboarding"?o.person?.includes("(offboarding)"):!o.person?.includes("(offboarding)")).forEach(o=>{if(!byPerson[o.person])byPerson[o.person]=[];byPerson[o.person].push(o)});
         return Object.keys(byPerson).length===0?<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}>
           <div style={{color:"var(--fg2)",marginBottom:4}}>{I.users(24)}</div>
           <div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No onboarding in progress</div>
@@ -1813,8 +2297,39 @@ export default function Home(){
     {view==="hrdocs"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Company Documents</div>
+        {role==="admin"&&<button onClick={()=>setAddModal("drivefolder")} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"5px 12px",borderRadius:6,fontWeight:600,fontSize:10,cursor:"pointer"}}>+ Add Folder</button>}
       </div>
-      <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16}}>Track collected documents per team member. Red = missing, Yellow = uploaded, Green = verified. Link Drive folder per person.</div>
+
+      {/* Google Drive folder mirror — live links to actual Drive folders */}
+      {driveFolders.length>0&&<div style={{marginBottom:24}}>
+        <div style={{fontSize:11,color:"var(--fg2)",marginBottom:10}}>Live mirror of Google Drive — folders organized by department. Click any folder to open in Drive.</div>
+        {(()=>{const byDept={};driveFolders.forEach(f=>{if(!byDept[f.dept])byDept[f.dept]=[];byDept[f.dept].push(f)});
+          return Object.entries(byDept).map(([dept,folders])=>{const cl=CL[dept]||"#6366F1";
+            return <div key={dept} style={{marginBottom:16}}>
+              <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:3,height:14,borderRadius:2,background:cl}}/>{dept}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
+                {folders.map(f=><div key={f.id} className="ch" style={{background:"var(--card)",border:"1px solid var(--border)",borderLeft:"3px solid "+cl,borderRadius:10,padding:12,position:"relative"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                    <div style={{fontSize:18,color:cl,flexShrink:0}}>📁</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:2}}>{f.folder_name}</div>
+                      {f.description&&<div style={{fontSize:9,color:"var(--fg2)",marginBottom:6}}>{f.description}</div>}
+                      {f.folder_url?<a href={f.folder_url} target="_blank" rel="noopener" style={{fontSize:10,color:"#3B82F6",fontWeight:600,textDecoration:"none"}}>Open in Drive →</a>:<span style={{fontSize:10,color:"#F59E0B",fontWeight:600}}>⚠ URL not set</span>}
+                    </div>
+                    {role==="admin"&&<button onClick={async()=>{const url=prompt("Google Drive folder URL:",f.folder_url||"");if(url==null)return;await supabase.from('drive_folders').update({folder_url:url}).eq('id',f.id);const{data}=await supabase.from('drive_folders').select('*').order('sort_order');if(data)setDriveFolders(data);showToast("Folder URL updated")}} style={{background:"none",border:"none",color:"var(--fg2)",cursor:"pointer",fontSize:11,padding:2}}>✎</button>}
+                  </div>
+                </div>)}
+              </div>
+            </div>;
+          });
+        })()}
+      </div>}
+
+      {/* HR Documents tracker — per-person, existing */}
+      <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,marginTop:24}}>HR Document Tracker</div>
+      <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16}}>Track collected documents per team member. Red = missing, Yellow = uploaded, Green = verified.</div>
 
       {(()=>{const docTypes=['id_copy','cv','contract','verbis_consent','nda','bank_details','emergency_contact','photo'];
         const docLabels={id_copy:"ID Copy",cv:"CV",contract:"Contract",verbis_consent:"VERBIS",nda:"NDA",bank_details:"Bank",emergency_contact:"Emergency",photo:"Photo"};
@@ -1899,13 +2414,15 @@ export default function Home(){
     </div>
     <TicketPopup task={sel} tasks={tasks} onClose={()=>setSel(null)} onUpdate={updateTask} onDelete={deleteTask} setConfirmDlg={setConfirmDlg}/>
     {addModal==="task"&&<SmartAddTask onSave={addTask} onClose={()=>setAddModal(null)}/>}
+    {onboardModal&&<OnboardModal initialMode={onboardModal} userRoles={userRoles} onboarding={onboarding} onboardCommon={ONBOARD_COMMON} onboardDept={ONBOARD_DEPT} offboardTemplate={OFFBOARD_TEMPLATE} onGenerate={generateOnboarding} onClose={()=>setOnboardModal(null)}/>}
     {addModal==="raci"&&<AddModal title="Add RACI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"task",label:"Task"},{key:"responsible",label:"R"},{key:"accountable",label:"A"},{key:"consulted",label:"C"},{key:"informed",label:"I"},{key:"notes",label:"Notes"},{key:"is_suggestion",label:"PMO Suggestion?",type:"select",options:["false","true"]}]} onSave={addRaci} onClose={()=>setAddModal(null)}/>}
     {addModal==="risk"&&<AddModal title="Add Risk" fields={[{key:"description",label:"Risk"},{key:"impact",label:"Impact",type:"select",options:IMP_OPT},{key:"owner",label:"Owner"},{key:"mitigation",label:"Mitigation"},{key:"linked_to",label:"Linked Task (name or ID)"}]} onSave={addRisk} onClose={()=>setAddModal(null)}/>}
     {addModal==="kpi"&&<AddModal title="Add KPI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"name",label:"KPI"},{key:"target",label:"Target"},{key:"current_value",label:"Current"},{key:"flag",label:"Status",type:"select",options:["green","yellow","red"]},{key:"review_rhythm",label:"Review",type:"select",options:["Weekly","Bi-Weekly","Monthly"]}]} onSave={addKpi} onClose={()=>setAddModal(null)}/>}
     {addModal==="role"&&<AddModal title="Add Role" fields={[{key:"title",label:"Role Title"},{key:"status",label:"Status",type:"select",options:["Not opened","Interviewing","Blocked","Filled"]},{key:"trigger_blocker",label:"Trigger / Blocker"},{key:"target_date",label:"Target Date"}]} onSave={addRole} onClose={()=>setAddModal(null)}/>}
-    {addModal==="meeting"&&<AddModal title="Add Meeting" fields={[{key:"type",label:"Type",type:"select",options:["Weekly","Milestone","Bi-weekly","Monthly"]},{key:"name",label:"Meeting Name"},{key:"schedule",label:"When"},{key:"duration",label:"Duration"},{key:"owner",label:"Owner"},{key:"attendees",label:"Attendees"}]} onSave={addMeeting} onClose={()=>setAddModal(null)}/>}
+    {addModal==="meeting"&&<MeetingModal userRoles={userRoles} onSave={addMeeting} onClose={()=>setAddModal(null)}/>}
     {addModal==="standup"&&<AddModal title="Add Standup Update" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha"},{key:"completed",label:"What did you complete today?",placeholder:"Finished the API endpoints..."},{key:"tomorrow",label:"What are you working on tomorrow?",placeholder:"Starting the frontend..."},{key:"blockers",label:"Any blockers?",placeholder:"None"},{key:"standup_date",label:"Date",type:"date"}]} onSave={addStandup} onClose={()=>setAddModal(null)}/>}
     {addModal==="userrole"&&<AddModal title="Add User" fields={[{key:"email",label:"Google Email",placeholder:"name@attimo.com"},{key:"name",label:"Full Name"},{key:"role",label:"Role",type:"select",options:["admin","editor","viewer"]},{key:"dept",label:"Department",type:"select",options:DEPT_OPT}]} onSave={addUserRole} onClose={()=>setAddModal(null)}/>}
+    {addModal==="drivefolder"&&<AddModal title="Add Drive Folder" fields={[{key:"dept",label:"Department",type:"select",options:["Leadership","Product","Development","Design","Marketing","AI/Science","PMO","HR","Finance"]},{key:"folder_name",label:"Folder Name"},{key:"folder_url",label:"Google Drive URL",placeholder:"https://drive.google.com/drive/folders/..."},{key:"description",label:"Description (optional)"}]} onSave={async v=>{if(!v.folder_name||!v.dept){showToast("Folder name and department required","error");return}const{data}=await supabase.from('drive_folders').insert({dept:v.dept,folder_name:v.folder_name,folder_url:v.folder_url||"",description:v.description||"",sort_order:driveFolders.length+1}).select();if(data)setDriveFolders(p=>[...p,...data]);showToast("Folder added");setAddModal(null)}} onClose={()=>setAddModal(null)}/>}
     {addModal==="perf"&&<AddModal title="Add Performance Review" fields={[{key:"person",label:"Person",placeholder:"e.g. Talha Mubeen"},{key:"period",label:"Period",placeholder:"e.g. Q2 2026"},{key:"goals",label:"Goals",placeholder:"Key objectives..."}]} onSave={addPerf} onClose={()=>setAddModal(null)}/>}
     {addModal==="leave"&&<LeaveRequestModal user={user} isAdmin={role==="admin"} onSave={addLeave} onClose={()=>{setAddModal(null);setLeavePreFill(null)}} leaves={leaves} userRoles={userRoles} holidays={publicHolidays} initialType={leavePreFill}/>}
     {addModal==="decision"&&<AddModal title="Add Decision" fields={[{key:"title",label:"Decision",placeholder:"What needs to be decided?"},{key:"owner",label:"Owner",placeholder:"Who decides?"},{key:"priority",label:"Priority",type:"select",options:["low","medium","high","critical"]},{key:"due_date",label:"Due Date",type:"date"},{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"context",label:"Context",placeholder:"Why it matters"}]} onSave={addDecision} onClose={()=>setAddModal(null)}/>}
