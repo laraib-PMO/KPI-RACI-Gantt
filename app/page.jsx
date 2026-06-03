@@ -398,7 +398,7 @@ export default function Home(){
   const[publicHolidays,setPublicHolidays]=useState(HOLIDAYS_FALLBACK);const[holidaySource,setHolidaySource]=useState("fallback");
   useEffect(()=>{fetch('/api/holidays').then(r=>r.json()).then(d=>{if(d.holidays?.length>0){setPublicHolidays(d.holidays);setHolidaySource(d.source)}}).catch(()=>{})},[]);
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);const[meetingNotes,setMeetingNotes]=useState(null);const[notesLoading,setNotesLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
 
@@ -508,7 +508,7 @@ export default function Home(){
 
   const updateTask=useCallback(async(id,u)=>{if(!isEditor())return;notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
   const deleteTask=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
-  const addTask=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
+  const addTask=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}try{const res=await fetch('/api/create-task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",priority:v.priority||"Medium",start_date:v.start_date||today,end_date:v.end_date||today})});const r=await res.json();if(r.ok&&r.task){setTasks(p=>[...p,r.task]);showToast("Created in "+(r.source==="linear"?"Linear":"Asana"));setAddModal(null);return}if(r.ok){showToast("Created in "+(r.source||"external"));setAddModal(null);return}showToast("Sync failed, saving locally","error")}catch(e){console.error(e)}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
   const addRaci=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}notify("added","raci",v.task);const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteRaci=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
   const updateRaci=useCallback(async(id,u)=>{if(!isEditor())return;setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
@@ -693,7 +693,7 @@ export default function Home(){
   const stats=useMemo(()=>({total:tasks.length,todo:tasks.filter(t=>t.status==="To Do").length,doing:tasks.filter(t=>t.status==="Doing").length,done:tasks.filter(t=>t.status==="Done").length,risk:tasks.filter(t=>t.risk!=="On track").length,overdue:tasks.filter(t=>isOverdue(t)).length}),[tasks]);
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
-  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"},{id:"onboard",l:"Onboarding",icon:"◑"},{id:"hrdocs",l:"HR Docs",icon:"◪"}];
+  const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"raci",l:"RACI",icon:"▤"},{id:"kpi",l:"KPIs",icon:"◎"},{id:"risk",l:"Risks",icon:"△"},{id:"roles",l:"Open Roles",icon:"◇"},{id:"meet",l:"Meetings",icon:"◈"},{id:"perf",l:"Performance",icon:"★"},{id:"leave",l:"Leave",icon:"◇"},{id:"onboard",l:"Onboarding",icon:"◑"},{id:"hrdocs",l:"Documents",icon:"◪"}];
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
@@ -1080,7 +1080,7 @@ export default function Home(){
       </div>
 
       {/* COMPANY GANTT */}
-      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)"}}>{STS.map(st=>{const items=tasks.filter(t=>t.status===st&&(personFilter==="all"||t.owner===personFilter));return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
+      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)",position:"relative"}}>{(()=>{const tOff=Math.max(0,daysB(TL_START,today));const tPct=25+(tOff/TL_DAYS)*75;return tPct>25&&tPct<100?<div style={{position:"absolute",top:0,bottom:0,left:tPct+"%",width:2,background:"#EF4444",zIndex:10,pointerEvents:"none",opacity:.7}}><div style={{position:"absolute",top:-1,left:-14,background:"#EF4444",color:"#fff",fontSize:7,fontWeight:700,padding:"1px 4px",borderRadius:3,whiteSpace:"nowrap"}}>Today</div></div>:null})()}{STS.map(st=>{const items=tasks.filter(t=>t.status===st&&(personFilter==="all"||t.owner===personFilter));return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
         <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
         {items.map((t,idx)=>{const cl=CL[t.dept]||"#94A3B8";
           const startStr=String(t.start_date).split('T')[0];const endStr=String(t.end_date).split('T')[0];
@@ -1382,6 +1382,28 @@ export default function Home(){
           <button onClick={()=>setConfirmDlg({msg:"Delete this meeting?",fn:()=>deleteMeeting(m.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
         ])}/>
       </div>}
+
+      {/* ─── MEETING NOTES (from Fireflies) ─── */}
+      <div style={{marginTop:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",display:"flex",alignItems:"center",gap:6}}>{I.list(14)} Meeting Notes</div>
+          <button onClick={()=>{setNotesLoading(true);fetch('/api/fireflies-sync').then(r=>r.json()).then(d=>{setMeetingNotes(d);setNotesLoading(false)}).catch(()=>{setNotesLoading(false);showToast("Failed to load notes","error")})}} className="btn-pop" style={{padding:"4px 12px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg3)",color:"var(--fg2)",fontSize:10,fontWeight:600,cursor:"pointer"}}>{notesLoading?"Loading...":"Sync from Fireflies"}</button>
+        </div>
+        {!meetingNotes&&<div style={{fontSize:10,color:"var(--fg2)",textAlign:"center",padding:16}}>Click "Sync from Fireflies" to pull meeting transcripts and action items. Set FIREFLIES_API_KEY in Vercel first.</div>}
+        {meetingNotes&&meetingNotes.meetings?.length===0&&<div style={{fontSize:10,color:"var(--fg2)",textAlign:"center",padding:16}}>No recent meeting notes found.</div>}
+        {meetingNotes&&meetingNotes.meetings?.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
+          {meetingNotes.meetings.slice(0,6).map((m,i)=><div key={m.id||i} className="ch asl" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:12,animationDelay:i*40+"ms"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:4}}>{m.title}</div>
+            <div style={{fontSize:9,color:"var(--fg2)",marginBottom:6}}>{m.date} · {m.duration} · {m.speakers?.length||0} speakers</div>
+            {m.summary&&<div style={{fontSize:10,color:"var(--fg)",marginBottom:8,lineHeight:1.4}}>{m.summary.slice(0,200)}...</div>}
+            {m.actionItems?.length>0&&<div style={{marginBottom:6}}>
+              <div style={{fontSize:9,fontWeight:700,color:"#3B82F6",marginBottom:3}}>Action Items ({m.actionItems.length})</div>
+              {m.actionItems.slice(0,3).map((a,ai)=><div key={ai} style={{fontSize:9,color:"var(--fg2)",paddingLeft:8,borderLeft:"2px solid #3B82F6",marginBottom:2}}>{a.speaker}: {a.text?.slice(0,80)}</div>)}
+            </div>}
+            {m.firefliesUrl&&<a href={m.firefliesUrl} target="_blank" rel="noopener" style={{fontSize:9,color:"#3B82F6",textDecoration:"none",fontWeight:600,marginTop:6,display:"inline-block"}}>Open full transcript →</a>}
+          </div>)}
+        </div>}
+      </div>
 
       {/* ─── MEETING SLOT FINDER ─── */}
       <div style={{marginTop:16,background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16}}>
@@ -1714,7 +1736,7 @@ export default function Home(){
     {/* ═══ HR DOCUMENTS ═══ */}
     {view==="hrdocs"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>HR Document Tracker</div>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Company Documents</div>
       </div>
       <div style={{fontSize:10,color:"var(--fg2)",marginBottom:16}}>Track collected documents per team member. Red = missing, Yellow = uploaded, Green = verified. Link Drive folder per person.</div>
 
