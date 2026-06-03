@@ -292,13 +292,14 @@ async function syncLinkedProjects() {
 
         // ── Asana task URL ──
         } else if (task.linked_task_url?.includes('asana.com') && asanaToken) {
-          const match = task.linked_task_url.match(/\/(\d+)(?:\/|\?|$)/);
-          if (!match) {
+          // Asana URL = app.asana.com/0/{board}/{task} — TASK gid is LAST numeric segment
+          const segs = task.linked_task_url.split(/[/?#]/).filter(s => /^\d+$/.test(s));
+          const taskGid = segs[segs.length - 1];
+          if (!taskGid) {
             debug.push({ task: task.name, error: 'No task GID found in Asana URL', url: task.linked_task_url });
             continue;
           }
 
-          const taskGid = match[1];
           const res = await fetch(
             `https://app.asana.com/api/1.0/tasks/${taskGid}?opt_fields=completed,due_on,start_on,name`,
             { headers: { 'Authorization': `Bearer ${asanaToken}` } }
