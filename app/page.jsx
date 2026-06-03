@@ -454,8 +454,8 @@ function NotificationBell({leaves,risks,decisions,isApprover,onNavigate}){
       {total>0&&<span style={{position:"absolute",top:-4,right:-4,minWidth:16,height:16,background:"#EF4444",color:"#fff",borderRadius:99,fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{total}</span>}
     </button>
     {open&&<>
-      <div style={{position:"fixed",inset:0,zIndex:90}} onClick={()=>setOpen(false)}/>
-      <div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,minWidth:320,maxWidth:380,maxHeight:480,overflow:"auto",boxShadow:"0 12px 40px rgba(0,0,0,.3)",zIndex:100}}>
+      <div style={{position:"fixed",inset:0,zIndex:9998}} onClick={()=>setOpen(false)}/>
+      <div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,minWidth:320,maxWidth:380,maxHeight:480,overflow:"auto",boxShadow:"0 12px 40px rgba(0,0,0,.3)",zIndex:9999}}>
         <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",fontSize:12,fontWeight:700,color:"var(--fg)"}}>Notifications {total>0&&`(${total})`}</div>
         {total===0&&<div style={{padding:20,fontSize:11,color:"var(--fg2)",textAlign:"center"}}>All clear — no pending items.</div>}
         {pendingLeaves.length>0&&<div>
@@ -1123,7 +1123,7 @@ export default function Home(){
     <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden"}}>
 
     {/* Header — animated ticker */}
-    <div style={{background:"var(--hdr)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,overflow:"hidden"}}>
+    <div style={{background:"var(--hdr)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,position:"relative",zIndex:50}}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
         <button onClick={doSync} disabled={syncing} className="btn-pop" style={{background:syncing?"rgba(255,255,255,.15)":"linear-gradient(135deg,#3B82F6,#6366F1)",color:"#fff",border:"none",padding:"6px 16px",borderRadius:8,fontWeight:700,fontSize:11,cursor:syncing?"wait":"pointer",display:"flex",alignItems:"center",gap:6,minWidth:90,justifyContent:"center"}}>
           {syncing?<><span style={{display:"inline-block",animation:"spin .8s linear infinite",fontSize:12}}>◌</span> Syncing</>:<>{I.zap(12)} Sync All</>}
@@ -1154,7 +1154,7 @@ export default function Home(){
             <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:role==="admin"?"#3B82F630":role==="editor"?"#F59E0B30":"#64748B30",color:role==="admin"?"#93C5FD":role==="editor"?"#FDE68A":"#94A3B8"}}>{role}</span>
             <span style={{fontSize:8,transition:"transform .2s",transform:userMenu?"rotate(180deg)":"rotate(0)"}}>▾</span>
           </button>
-          {userMenu&&<div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:6,minWidth:180,boxShadow:"0 12px 40px rgba(0,0,0,.25)",zIndex:100}}>
+          {userMenu&&<div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:6,minWidth:180,boxShadow:"0 12px 40px rgba(0,0,0,.25)",zIndex:9999}}>
             <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);if(me){const slk=slackStatus._match?slackStatus._match(me):null;setProfileCard({ur:me,slk})}setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8,transition:"background .15s"}} className="rh">{ I.user(14)} My Profile</div>
             <div onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setMyNameVal(me?.name||user?.user_metadata?.full_name||"");setEditMyName(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">{ I.edit(14)} Edit Name</div>
             <div onClick={()=>{setShowHoursModal(true);setUserMenu(false)}} style={{padding:"8px 12px",borderRadius:6,cursor:"pointer",fontSize:11,color:"var(--fg)",fontWeight:500,display:"flex",alignItems:"center",gap:8}} className="rh">{ I.clock(14)} Working Hours</div>
@@ -2622,7 +2622,7 @@ export default function Home(){
     {confirmDlg&&<ConfirmDialog message={confirmDlg.msg} onConfirm={()=>{confirmDlg.fn();setConfirmDlg(null)}} onCancel={()=>setConfirmDlg(null)}/>}
 
     {/* Close user menu on outside click */}
-    {userMenu&&<div style={{position:"fixed",inset:0,zIndex:90}} onClick={()=>setUserMenu(false)}/>}
+    {userMenu&&<div style={{position:"fixed",inset:0,zIndex:9998}} onClick={()=>setUserMenu(false)}/>}
 
     {/* Toast notification */}
     {toast&&<div className={"asd "+(toast.type==="error"?"toast-error":"toast-success")} style={{position:"fixed",bottom:24,right:24,color:toast.type==="error"?"#fff":"var(--bg)",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(0,0,0,.25)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}>{toast.type==="error"?I.alert(14):I.check(14)}{toast.msg||toast}</div>}
