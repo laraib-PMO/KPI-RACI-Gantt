@@ -1,6 +1,6 @@
-// ─── Schedule Meeting API — Creates Google Calendar event from Dashboard ─────
-// Creates a Google Calendar event with Google Meet link + attendees
-// Requires GOOGLE_CALENDAR_KEY (base64 service account with calendar write scope)
+// ─── Schedule Meeting API — Creates Google Calendar event with Meet link ─────
+// Accepts the rich payload from MeetingModal in page.jsx
+// Requires GOOGLE_CALENDAR_KEY (base64-encoded service account JSON)
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -35,102 +35,85 @@ async function getGoogleAccessToken() {
     });
     const tokenData = await tokenRes.json();
     return tokenData.access_token || null;
-  } catch (e) {
-    console.error('Google auth error:', e);
-    return null;
-  }
+  } catch (e) { console.error('Google auth error:', e); return null; }
 }
+
+const CADENCE_RRULE = {
+  Daily: 'RRULE:FREQ=DAILY',
+  Weekly: 'RRULE:FREQ=WEEKLY',
+  'Bi-weekly': 'RRULE:FREQ=WEEKLY;INTERVAL=2',
+  Monthly: 'RRULE:FREQ=MONTHLY'
+};
 
 export async function POST(req) {
   try {
-    const { title, date, startHour, duration, attendeeEmails, description, organizer } = await req.json();
+    const body = await req.json();
+    const {
+      title,
+      description,
+      start,            // ISO datetime, e.g. "2026-06-15T10:00:00"
+      duration_minutes,
+      attendees = [],   // array of emails
+      location,
+      add_fireflies,
+      recurrence        // null or "Weekly" / "Bi-weekly" etc.
+    } = body;
 
-    if (!title || !date || startHour === undefined || !attendeeEmails?.length) {
-      return Response.json({ ok: false, error: 'title, date, startHour, and attendeeEmails required' });
+    if (!title || !start) {
+      return Response.json({ ok: false, error: 'title and start required' });
     }
 
-    const token = await getGoogleAccessToken();
-    if (!token) {
-      return Response.json({ ok: false, error: 'Google Calendar not configured. Set GOOGLE_CALENDAR_KEY env var.' });
+    const startDate = new Date(start);
+    const endDate = new Date(startDate.getTime() + (duration_minutes || 30) * 60000);
+
+    // Add Fireflies bot to attendees if requested
+    const allAttendees = [...attendees];
+    if (add_fireflies && !allAttendees.includes('fred@fireflies.ai')) {
+      allAttendees.push('fred@fireflies.ai');
     }
 
-    // Build start/end times
-    const startTime = new Date(`${date}T${String(startHour).padStart(2, '0')}:00:00`);
-    const endTime = new Date(startTime.getTime() + (duration || 60) * 60 * 1000);
-
-    // Create the event
     const event = {
       summary: title,
-      description: description || `Scheduled from PMO Dashboard by ${organizer || 'PMO'}`,
-      start: {
-        dateTime: startTime.toISOString(),
-        timeZone: 'Europe/Istanbul'
-      },
-      end: {
-        dateTime: endTime.toISOString(),
-        timeZone: 'Europe/Istanbul'
-      },
-      attendees: attendeeEmails.map(email => ({ email })),
+      description: description || '',
+      location: location || '',
+      start: { dateTime: startDate.toISOString(), timeZone: 'Europe/Istanbul' },
+      end: { dateTime: endDate.toISOString(), timeZone: 'Europe/Istanbul' },
+      attendees: allAttendees.map(email => ({ email })),
       conferenceData: {
         createRequest: {
-          requestId: `pmo-${Date.now()}`,
+          requestId: 'mt-' + Date.now(),
           conferenceSolutionKey: { type: 'hangoutsMeet' }
         }
       },
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'popup', minutes: 10 },
-          { method: 'email', minutes: 30 }
-        ]
-      }
+      ...(recurrence && CADENCE_RRULE[recurrence] ? { recurrence: [CADENCE_RRULE[recurrence]] } : {})
     };
 
-    // Use the organizer's calendar (or primary)
-    const calendarId = organizer || 'primary';
-    const createRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=all`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(event)
-      }
-    );
-    const created = await createRes.json();
-
-    if (created.error) {
-      return Response.json({ ok: false, error: created.error.message, details: created.error });
+    const token = await getGoogleAccessToken();
+    if (!token) {
+      // No Google credentials — return a fallback Add-to-Calendar link
+      const fallback = `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(title)}&dates=${startDate.toISOString().replace(/[-:]/g,'').split('.')[0]}Z/${endDate.toISOString().replace(/[-:]/g,'').split('.')[0]}Z&details=${encodeURIComponent(description || '')}&add=${encodeURIComponent(allAttendees.join(','))}`;
+      return Response.json({ ok: true, htmlLink: fallback, eventId: null, fallback: true, note: 'GOOGLE_CALENDAR_KEY not set — returning Add-to-Calendar link' });
     }
 
-    const meetLink = created.hangoutLink || created.conferenceData?.entryPoints?.[0]?.uri || '';
-
-    // Also save to meetings table in Supabase
-    await supabase.from('meetings').insert({
-      name: title,
-      type: 'Ad-hoc',
-      schedule: `${date} at ${startHour}:00`,
-      duration: `${duration || 60} min`,
-      owner: organizer || 'PMO',
-      attendees: attendeeEmails.join(', '),
-      meeting_link: meetLink
+    // Use organizer's calendar (service account's primary, or domain-delegated)
+    const calRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(event)
     });
+
+    const data = await calRes.json();
+    if (!calRes.ok) {
+      console.error('Calendar create error:', data);
+      return Response.json({ ok: false, error: data.error?.message || 'Calendar create failed' });
+    }
 
     return Response.json({
       ok: true,
-      event: {
-        id: created.id,
-        title: created.summary,
-        start: created.start,
-        end: created.end,
-        meetLink,
-        htmlLink: created.htmlLink
-      },
-      message: 'Meeting created and calendar invites sent'
+      htmlLink: data.htmlLink,
+      eventId: data.id,
+      meetLink: data.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri || null
     });
-
   } catch (e) {
     return Response.json({ ok: false, error: e.message });
   }
