@@ -127,10 +127,12 @@ async function syncAsanaTaskUrls(token) {
   let updated = 0;
   for (const task of (tasks || [])) {
     try {
-      const match = task.linked_task_url.match(/\/(\d+)(?:\/|\?|$)/);
-      if (!match) continue;
+      // Asana URL = app.asana.com/0/{board}/{task} — the TASK gid is the LAST numeric segment
+      const segs = task.linked_task_url.split(/[/?#]/).filter(s => /^\d+$/.test(s));
+      const gid = segs[segs.length - 1];
+      if (!gid) continue;
       const res = await fetch(
-        `https://app.asana.com/api/1.0/tasks/${match[1]}?opt_fields=completed,due_on,start_on,name`,
+        `https://app.asana.com/api/1.0/tasks/${gid}?opt_fields=completed,due_on,start_on,name`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const data = await res.json();
