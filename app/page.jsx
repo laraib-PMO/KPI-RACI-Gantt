@@ -277,6 +277,72 @@ function AddModal({title,fields,onSave,onClose}){
   </div>;
 }
 
+// Guided Add Task — picks dept → auto-routes to Asana/Linear → pick board/project
+function SmartAddTask({onSave,onClose}){
+  const DEPT_SRC={Marketing:"asana",Design:"asana",PMO:"linear",Leadership:"linear","AI/Science":"linear",Development:"linear"};
+  const[v,setV]=useState({dept:"",priority:"Medium"});
+  const[projects,setProjects]=useState({linear:[],asana:[]});
+  const[loadingProj,setLoadingProj]=useState(true);
+  const[saving,setSaving]=useState(false);
+  const[err,setErr]=useState("");
+  useEffect(()=>{fetch('/api/list-projects').then(r=>r.json()).then(d=>{setProjects({linear:d.linear||[],asana:d.asana||[]});setLoadingProj(false)}).catch(()=>setLoadingProj(false))},[]);
+  const set=(k,val)=>setV(p=>({...p,[k]:val}));
+  const src=v.dept?DEPT_SRC[v.dept]:null;
+  const projList=src==="asana"?projects.asana:src==="linear"?projects.linear:[];
+  const submit=async()=>{
+    if(!v.name?.trim()){setErr("Task name required");return}
+    if(!v.dept){setErr("Pick a department");return}
+    if(!v.projectId){setErr("Pick a "+(src==="asana"?"board":"project"));return}
+    setErr("");setSaving(true);
+    await onSave({...v,source:src});
+    setSaving(false);
+  };
+  return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
+    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(460px,95vw)",padding:20,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>Add Task</h3><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"var(--fg2)"}}>✕</button></div>
+      {err&&<div style={{background:"#FEE2E2",color:"#DC2626",padding:"8px 12px",borderRadius:8,fontSize:11,fontWeight:600,marginBottom:12}}>{err}</div>}
+      <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Task Name *</label>
+      <input value={v.name||""} onChange={e=>set("name",e.target.value)} placeholder="e.g. Landing page hero section" style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)",marginBottom:12}}/>
+
+      <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Department *</label>
+      <select value={v.dept} onChange={e=>{set("dept",e.target.value);set("projectId","")}} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",marginBottom:8}}>
+        <option value="">Select department...</option>
+        {Object.keys(DEPT_SRC).map(d=><option key={d} value={d}>{d}</option>)}
+      </select>
+
+      {/* Source indicator */}
+      {src&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12,padding:"6px 10px",borderRadius:8,background:src==="asana"?"#F472B610":"#6366F110"}}>
+        <span style={{fontSize:10,color:"var(--fg2)"}}>This task will be created in</span>
+        <span style={{fontSize:11,fontWeight:700,color:src==="asana"?"#EC4899":"#6366F1"}}>{src==="asana"?"Asana":"Linear"}</span>
+      </div>}
+
+      {/* Project/Board picker */}
+      {src&&<>
+        <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>{src==="asana"?"Asana Board":"Linear Project"} *</label>
+        {loadingProj?<div style={{fontSize:11,color:"var(--fg2)",padding:8}}>Loading {src==="asana"?"boards":"projects"}...</div>
+        :<select value={v.projectId||""} onChange={e=>set("projectId",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",marginBottom:12}}>
+          <option value="">Select {src==="asana"?"board":"project"}...</option>
+          {projList.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>}
+      </>}
+
+      <div style={{display:"flex",gap:10,marginBottom:12}}>
+        <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Owner</label>
+          <input value={v.owner||""} onChange={e=>set("owner",e.target.value)} placeholder="Name" style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)"}}/></div>
+        <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Priority</label>
+          <select value={v.priority} onChange={e=>set("priority",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)"}}>{["Low","Medium","High"].map(p=><option key={p}>{p}</option>)}</select></div>
+      </div>
+      <div style={{display:"flex",gap:10,marginBottom:16}}>
+        <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Start</label>
+          <input type="date" value={v.start_date||""} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)"}}/></div>
+        <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Due Date</label>
+          <input type="date" value={v.end_date||""} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)"}}/></div>
+      </div>
+      <button onClick={submit} disabled={saving} className="btn-pop" style={{width:"100%",padding:10,background:saving?"var(--bg3)":"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:saving?"var(--fg2)":"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:saving?"wait":"pointer"}}>{saving?"Creating...":"Create Task"}</button>
+    </div>
+  </div>;
+}
+
 function TicketPopup({task,tasks,onClose,onUpdate,onDelete,setConfirmDlg}){
   if(!task)return null;const cl=CL[task.dept]||"#94A3B8";const rc=RC[task.risk];const pc=PC[task.priority];
   const depN=(task.deps||[]).map(id=>tasks.find(t=>t.id===id)?.name||id);
@@ -508,7 +574,7 @@ export default function Home(){
 
   const updateTask=useCallback(async(id,u)=>{if(!isEditor())return;notify("updated","tasks",u.name||u.status||JSON.stringify(u));setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));setSel(p=>p?.id===id?{...p,...u}:p);await supabase.from('tasks').update(u).eq('id',id)},[]);
   const deleteTask=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setTasks(p=>p.filter(t=>t.id!==id));await supabase.from('tasks').delete().eq('id',id)},[]);
-  const addTask=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}try{const res=await fetch('/api/create-task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",priority:v.priority||"Medium",start_date:v.start_date||today,end_date:v.end_date||today})});const r=await res.json();if(r.ok&&r.task){setTasks(p=>[...p,r.task]);showToast("Created in "+(r.source==="linear"?"Linear":"Asana"));setAddModal(null);return}if(r.ok){showToast("Created in "+(r.source||"external"));setAddModal(null);return}showToast("Sync failed, saving locally","error")}catch(e){console.error(e)}const{data}=await supabase.from('tasks').insert({name:v.name||"New Task",dept:v.dept||"PMO",owner:v.owner||"",start_date:v.start_date||today,end_date:v.end_date||today,status:"To Do",priority:v.priority||"Medium",risk:"On track",deps:[]}).select();if(data)setTasks(p=>[...p,...data]);setAddModal(null)},[]);
+  const addTask=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}try{const res=await fetch('/api/create-task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:v.name,dept:v.dept,owner:v.owner||"",priority:v.priority||"Medium",start_date:v.start_date||today,end_date:v.end_date||today,source:v.source,projectId:v.projectId})});const r=await res.json();if(r.ok&&r.task){setTasks(p=>[...p,r.task]);showToast("Created in "+(r.source==="linear"?"Linear":"Asana"));setAddModal(null);return}if(r.ok){showToast("Created in "+(r.source||"external"));setAddModal(null);return}showToast("Failed: "+(r.error||"unknown"),"error");console.error(r)}catch(e){console.error(e);showToast("Create failed","error")}},[]);
   const addRaci=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}notify("added","raci",v.task);const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteRaci=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
   const updateRaci=useCallback(async(id,u)=>{if(!isEditor())return;setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
@@ -980,12 +1046,22 @@ export default function Home(){
         {/* Upcoming Deadlines */}
         <div className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"150ms"}}>
           <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>{ I.calendar(14)} Upcoming Deadlines</div>
-          {tasks.filter(t=>t.status!=="Done"&&t.end_date).sort((a,b)=>String(a.end_date).localeCompare(String(b.end_date))).slice(0,8).map((t,i)=>{const od=isOverdue(t);return <div key={t.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,animationDelay:i*40+"ms"}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:od?"#EF4444":CL[t.dept]||"#94A3B8",flexShrink:0}}/>
-            <span style={{fontSize:11,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:od?"#EF4444":"var(--fg)"}}>{t.name}</span>
-            <span style={{fontSize:9,color:od?"#EF4444":"var(--fg2)",fontWeight:od?700:400,flexShrink:0}}>{fD(t.end_date)}</span>
-          </div>})}
-          {tasks.filter(t=>t.status!=="Done"&&t.end_date).length===0&&<div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No upcoming deadlines</div>}
+          {(()=>{const active=tasks.filter(t=>t.status!=="Done"&&t.end_date);const overdue=active.filter(t=>isOverdue(t)).sort((a,b)=>String(a.end_date).localeCompare(String(b.end_date)));const upcoming=active.filter(t=>!isOverdue(t)).sort((a,b)=>String(a.end_date).localeCompare(String(b.end_date)));
+          return <>
+            {overdue.length>0&&<div style={{fontSize:9,fontWeight:700,color:"#EF4444",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Overdue ({overdue.length})</div>}
+            {overdue.slice(0,4).map((t,i)=><div key={t.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,animationDelay:i*40+"ms"}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#EF4444",flexShrink:0}}/>
+              <span style={{fontSize:11,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#EF4444"}}>{t.name}</span>
+              <span style={{fontSize:9,color:"#EF4444",fontWeight:700,flexShrink:0}}>{fD(t.end_date)}</span>
+            </div>)}
+            {upcoming.length>0&&<div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:.5,margin:overdue.length>0?"8px 0 4px":"0 0 4px"}}>Upcoming</div>}
+            {upcoming.slice(0,6).map((t,i)=><div key={t.id} className="rh asl" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,animationDelay:i*40+"ms"}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:CL[t.dept]||"#94A3B8",flexShrink:0}}/>
+              <span style={{fontSize:11,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--fg)"}}>{t.name}</span>
+              <span style={{fontSize:9,color:"var(--fg2)",flexShrink:0}}>{fD(t.end_date)}</span>
+            </div>)}
+            {active.length===0&&<div style={{textAlign:"center",padding:20,color:"var(--fg2)",fontSize:11}}>No deadlines</div>}
+          </>})()}
         </div>
       </div>
 
@@ -1080,7 +1156,7 @@ export default function Home(){
       </div>
 
       {/* COMPANY GANTT */}
-      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)",position:"relative"}}>{(()=>{const tOff=Math.max(0,daysB(TL_START,today));const tPct=25+(tOff/TL_DAYS)*75;return tPct>25&&tPct<100?<div style={{position:"absolute",top:0,bottom:0,left:tPct+"%",width:2,background:"#EF4444",zIndex:10,pointerEvents:"none",opacity:.7}}><div style={{position:"absolute",top:-1,left:-14,background:"#EF4444",color:"#fff",fontSize:7,fontWeight:700,padding:"1px 4px",borderRadius:3,whiteSpace:"nowrap"}}>Today</div></div>:null})()}{STS.map(st=>{const items=tasks.filter(t=>t.status===st&&(personFilter==="all"||t.owner===personFilter));return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
+      {ganttMode==="company"&&<div style={{background:"var(--card)",borderRadius:10,border:"1px solid var(--border)",position:"relative"}}>{(()=>{const tOff=Math.max(0,daysB(TL_START,today));const tPct=25+(tOff/TL_DAYS)*75;return tPct>25&&tPct<100?<div style={{position:"absolute",top:8,bottom:8,left:tPct+"%",width:0,borderLeft:"1.5px dashed #EF4444",zIndex:5,pointerEvents:"none",opacity:.45}}><div style={{position:"absolute",top:-6,left:-16,background:"var(--card)",border:"1px solid #EF4444",color:"#EF4444",fontSize:7,fontWeight:700,padding:"1px 5px",borderRadius:99,whiteSpace:"nowrap"}}>Today</div></div>:null})()}{STS.map(st=>{const items=tasks.filter(t=>t.status===st&&(personFilter==="all"||t.owner===personFilter));return <div key={st} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
         <div style={{fontWeight:700,fontSize:14,marginBottom:8,display:"flex",alignItems:"center",gap:8,color:"var(--fg)"}}>▼ {st}<span style={{background:"var(--bg3)",borderRadius:99,padding:"1px 8px",fontSize:11,color:"var(--fg2)"}}>{items.length}</span></div>
         {items.map((t,idx)=>{const cl=CL[t.dept]||"#94A3B8";
           const startStr=String(t.start_date).split('T')[0];const endStr=String(t.end_date).split('T')[0];
@@ -1822,7 +1898,7 @@ export default function Home(){
 
     </div>
     <TicketPopup task={sel} tasks={tasks} onClose={()=>setSel(null)} onUpdate={updateTask} onDelete={deleteTask} setConfirmDlg={setConfirmDlg}/>
-    {addModal==="task"&&<AddModal title="Add Task" fields={[{key:"name",label:"Task Name",placeholder:"e.g. Landing page"},{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"owner",label:"Owner"},{key:"start_date",label:"Start",type:"date"},{key:"end_date",label:"End",type:"date"},{key:"priority",label:"Priority",type:"select",options:PRI_OPT}]} onSave={addTask} onClose={()=>setAddModal(null)}/>}
+    {addModal==="task"&&<SmartAddTask onSave={addTask} onClose={()=>setAddModal(null)}/>}
     {addModal==="raci"&&<AddModal title="Add RACI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"task",label:"Task"},{key:"responsible",label:"R"},{key:"accountable",label:"A"},{key:"consulted",label:"C"},{key:"informed",label:"I"},{key:"notes",label:"Notes"},{key:"is_suggestion",label:"PMO Suggestion?",type:"select",options:["false","true"]}]} onSave={addRaci} onClose={()=>setAddModal(null)}/>}
     {addModal==="risk"&&<AddModal title="Add Risk" fields={[{key:"description",label:"Risk"},{key:"impact",label:"Impact",type:"select",options:IMP_OPT},{key:"owner",label:"Owner"},{key:"mitigation",label:"Mitigation"},{key:"linked_to",label:"Linked Task (name or ID)"}]} onSave={addRisk} onClose={()=>setAddModal(null)}/>}
     {addModal==="kpi"&&<AddModal title="Add KPI" fields={[{key:"dept",label:"Department",type:"select",options:DEPT_OPT},{key:"name",label:"KPI"},{key:"target",label:"Target"},{key:"current_value",label:"Current"},{key:"flag",label:"Status",type:"select",options:["green","yellow","red"]},{key:"review_rhythm",label:"Review",type:"select",options:["Weekly","Bi-Weekly","Monthly"]}]} onSave={addKpi} onClose={()=>setAddModal(null)}/>}
