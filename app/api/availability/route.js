@@ -50,20 +50,27 @@ export async function GET() {
       const statusEmoji = p.status_emoji || '';
 
       // Determine mapped status based on:
-      // 1. Explicit status emoji (palm_tree=off, coffee=break, calendar=meeting)
+      // 1. Explicit status emoji (palm_tree=off, coffee=break)
       // 2. Status text keywords
       // 3. Actual Slack presence (active vs away)
+      // NOTE: Meeting = Working (someone in a meeting IS working)
       let mapped_status;
+      let status_detail = ''; // extra context like "In a meeting"
       if (statusEmoji === ':palm_tree:' || statusEmoji === ':desert_island:' || statusText.includes('vacation') || statusText.includes('leave') || statusText.includes('off')) {
         mapped_status = 'off';
+        status_detail = p.status_text || 'Away';
       } else if (statusEmoji === ':coffee:' || statusEmoji === ':tea:' || statusText.includes('lunch') || statusText.includes('break') || statusText.includes('brb')) {
         mapped_status = 'break';
+        status_detail = p.status_text || 'On break';
       } else if (statusEmoji === ':calendar:' || statusEmoji === ':spiral_calendar_pad:' || statusText.includes('meeting') || statusText.includes('call') || statusText.includes('huddle')) {
-        mapped_status = 'meeting';
+        mapped_status = 'working'; // Meeting IS working
+        status_detail = p.status_text || 'In a meeting';
       } else if (isActive) {
         mapped_status = 'working';
+        status_detail = p.status_text || '';
       } else {
         mapped_status = 'offline';
+        status_detail = '';
       }
 
       return {
@@ -83,6 +90,7 @@ export async function GET() {
         presence: pres.presence,
         is_online: isActive,
         mapped_status,
+        status_detail,
       };
     });
 
