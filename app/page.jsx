@@ -741,6 +741,7 @@ export default function Home(){
   },[userRoles]);
 
   // Performance auto-fetch on tab open
+  const[vitalsTab,setVitalsTab]=useState("overview");
   useEffect(()=>{if(((view==="perf")||(view==="vitals"&&vitalsTab==="people"))&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view,vitalsTab]);
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
@@ -1047,7 +1048,6 @@ export default function Home(){
   const raciByDept={};raci.forEach(r=>{if(!raciByDept[r.dept])raciByDept[r.dept]=[];raciByDept[r.dept].push(r)});
   const kpiByDept={};kpis.forEach(k=>{if(!kpiByDept[k.dept])kpiByDept[k.dept]=[];kpiByDept[k.dept].push(k)});
   const TABS=[{id:"dashboard",l:"Dashboard",icon:"⊞"},{id:"vitals",l:"Vitals",icon:"♥"},{id:"timeline",l:"Timeline",icon:"◔"},{id:"board",l:"Board",icon:"▦"},{id:"calendar",l:"Calendar",icon:"◫"},{id:"standup",l:"Daily Standup",icon:"◉"},{id:"meet",l:"Meetings",icon:"◈"},{id:"leave",l:"Leave",icon:"◇"},{id:"onboard",l:"Onboarding",icon:"◑"},{id:"hrdocs",l:"Documents",icon:"◪"}];
-  const[vitalsTab,setVitalsTab]=useState("overview");
 
   // Timeline window — auto-calculated from task dates, with sensible padding
   const tlBounds=useMemo(()=>{
