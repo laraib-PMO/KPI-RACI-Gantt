@@ -47,7 +47,7 @@ async function openLeaveModal(trigger_id, userEmail) {
           action_id: 'value',
           placeholder: { type: 'plain_text', text: 'Pick one' },
           options: (types || []).map(t => ({
-            text: { type: 'plain_text', text: `${t.emoji || ''} ${t.display_name}` },
+            text: { type: 'plain_text', text: t.display_name },
             value: t.key
           }))
         }
@@ -122,7 +122,7 @@ export async function POST(req) {
 
     // Block Efehan (excluded from leave)
     if (email.toLowerCase() === 'efehan@attimo.com') {
-      return Response.json({ response_type: 'ephemeral', text: '🚫 The CEO is excluded from leave requests.' });
+      return Response.json({ response_type: 'ephemeral', text: 'The CEO is excluded from leave requests.' });
     }
 
     // Acknowledge immediately, then open modal asynchronously
