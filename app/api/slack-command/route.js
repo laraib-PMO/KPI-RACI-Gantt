@@ -112,7 +112,7 @@ export async function POST(req) {
   const trigger_id = params.get('trigger_id');
   const userId = params.get('user_id');
 
-  if (command === '/leave') {
+  if (['/leave', '/applyleave', '/apply-leave', '/leaverequest', '/timeoff', '/holiday'].includes(command)) {
     // Look up the user's email from their Slack ID
     const lookupRes = await fetch(`https://slack.com/api/users.info?user=${userId}`, {
       headers: { 'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}` }
