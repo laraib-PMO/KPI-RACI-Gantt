@@ -2122,18 +2122,18 @@ export default function Home(){
           {/* Welcome header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8}}>
             <div>
-              <div style={{fontSize:22,fontWeight:800,color:"var(--fg)"}}>Welcome {firstName}! 👋</div>
+              <div style={{fontSize:22,fontWeight:800,color:"var(--fg)"}}>Welcome, {firstName}</div>
               <div style={{fontSize:11,color:"var(--fg2)",marginTop:2}}>Your leave hub — apply, track, plan around the team.</div>
             </div>
             {!isEfehan&&<button onClick={()=>setAddModal("leave")} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"9px 18px",borderRadius:10,fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Request Leave</button>}
           </div>
 
-          {/* Top row: On leave today + My Teams */}
+          {/* Top row: On Leave Today + My Teams */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14,marginBottom:16}}>
-            {/* On leave today */}
+            {/* On Leave Today */}
             <div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16}}>
-              <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:10}}>On leave today</div>
-              {onLeaveToday.length===0?<div style={{fontSize:11,color:"var(--fg2)",fontStyle:"italic"}}>Everyone is in today! 💪</div>
+              <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:10}}>On Leave Today</div>
+              {onLeaveToday.length===0?<div style={{fontSize:11,color:"var(--fg2)",fontStyle:"italic"}}>Everyone is in today.</div>
               :<div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {onLeaveToday.map(l=>{const cl=CL[N2D[l.person]]||"#6366F1";
                   return <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,background:"var(--bg2)"}}>
@@ -2187,7 +2187,7 @@ export default function Home(){
                     const spentMo=Number(b?.spent_this_month||0);
                     const monthAvail=t.monthly_limit!=null?Math.max(0,t.monthly_limit-spentMo):null;
                     return <tr key={t.key} style={{borderBottom:"1px solid var(--border)"}}>
-                      <td style={{padding:"8px 10px"}}><span style={{padding:"3px 10px",borderRadius:6,background:(t.color||"#6366F1")+"20",color:t.color||"#6366F1",fontWeight:600,fontSize:10}}>{t.emoji} {t.display_name}</span></td>
+                      <td style={{padding:"8px 10px"}}><span style={{padding:"3px 10px",borderRadius:6,background:(t.color||"#6366F1")+"20",color:t.color||"#6366F1",fontWeight:600,fontSize:10}}>{t.display_name}</span></td>
                       <td style={{padding:"8px 10px",fontWeight:600}}>{spent} day{spent===1?"":"s"}</td>
                       <td style={{padding:"8px 10px",color:"var(--fg2)"}}>{allow!=null?`${allow} days`:"∞"}</td>
                       <td style={{padding:"8px 10px",fontWeight:700,color:avail===0?"#EF4444":avail!=null&&avail<3?"#F59E0B":"var(--fg)"}}>{avail!=null?`${avail} day${avail===1?"":"s"}`:"∞"}</td>
@@ -2204,8 +2204,8 @@ export default function Home(){
           {/* Bottom row: My Upcoming + Public Holidays */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14,marginBottom:16}}>
             {!isEfehan&&<div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"150ms"}}>
-              <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:10}}>My upcoming leave 🧳</div>
-              {myUpcoming.length===0?<div style={{fontSize:11,color:"var(--fg2)",fontStyle:"italic"}}>Nothing booked. Take a break! 🌴</div>
+              <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:10}}>My Upcoming Leave</div>
+              {myUpcoming.length===0?<div style={{fontSize:11,color:"var(--fg2)",fontStyle:"italic"}}>No upcoming leave booked.</div>
               :<div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {myUpcoming.map(l=>{
                   const t=leaveTypes.find(x=>x.key===l.leave_type)||{};
@@ -2213,7 +2213,7 @@ export default function Home(){
                   return <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:"var(--bg2)"}}>
                     <div>
                       <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{dateLabel}</div>
-                      <div style={{fontSize:9,color:"var(--fg2)"}}>{t.emoji} {t.display_name||l.leave_type} · {l.half_day?"0.5 day":`${l.days} day${l.days>1?"s":""}`}</div>
+                      <div style={{fontSize:9,color:"var(--fg2)"}}>{t.display_name||l.leave_type} · {l.half_day?"0.5 day":`${l.days} day${l.days>1?"s":""}`}</div>
                     </div>
                     <span style={{fontSize:9,padding:"3px 8px",borderRadius:99,background:l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7",color:l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E",fontWeight:700,letterSpacing:.5}}>{l.status.toUpperCase()}</span>
                   </div>;
@@ -2246,7 +2246,7 @@ export default function Home(){
                 <div style={{width:20,height:20,borderRadius:"50%",background:CL[N2D[l.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:"#fff"}}>{l.person?.[0]}</div>
                 <span style={{fontSize:11}}>{l.person}</span>
               </div>,
-              <Bdg bg={(leaveTypes.find(t=>t.key===l.leave_type)?.color||"#6366F1")+"20"} c={leaveTypes.find(t=>t.key===l.leave_type)?.color||"#6366F1"}>{leaveTypes.find(t=>t.key===l.leave_type)?.emoji} {l.leave_type}</Bdg>,
+              <Bdg bg={(leaveTypes.find(t=>t.key===l.leave_type)?.color||"#6366F1")+"20"} c={leaveTypes.find(t=>t.key===l.leave_type)?.color||"#6366F1"}>{leaveTypes.find(t=>t.key===l.leave_type)?.display_name||l.leave_type}</Bdg>,
               <span style={{fontSize:10,color:"var(--fg)"}}>{l.start_date===l.end_date?fD(l.start_date):`${fD(l.start_date)} → ${fD(l.end_date)}`}</span>,
               <span style={{fontSize:10,color:"var(--fg2)"}}>{l.half_day?"0.5d":`${l.days}d`}</span>,
               <span style={{fontSize:9,color:"var(--fg2)",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",display:"inline-block",whiteSpace:"nowrap"}}>{l.reason||"—"}</span>,
