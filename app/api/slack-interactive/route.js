@@ -69,13 +69,13 @@ function buildCalendarUrls(leave) {
 }
 
 async function sendApprovalDecision(leave, decision, approver) {
-  const emoji = decision === 'approved' ? '✅' : '❌';
+  const _ = decision;
   const cal = decision === 'approved' ? buildCalendarUrls(leave) : null;
   const requesterId = await lookupUser(leave.email);
 
   if (requesterId) {
     const blocks = [
-      { type: 'header', text: { type: 'plain_text', text: `${emoji} Leave request has been ${decision}` } },
+      { type: 'header', text: { type: 'plain_text', text: `Leave request has been ${decision}` } },
       { type: 'section', text: { type: 'mrkdwn', text: `*${approver.name}* has ${decision} your leave request:` } },
       {
         type: 'section',
@@ -91,7 +91,7 @@ async function sendApprovalDecision(leave, decision, approver) {
     ];
     if (cal) {
       blocks.push({ type: 'divider' });
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '📅 *Add leave to your calendar:*' } });
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '*Add leave to your calendar:*' } });
       blocks.push({
         type: 'actions',
         elements: [
@@ -109,14 +109,14 @@ async function sendApprovalDecision(leave, decision, approver) {
   if (efehanId) {
     await slackAPI('chat.postMessage', {
       channel: efehanId,
-      text: `${emoji} ${leave.person}'s ${leave.leave_type} (${isoToDateLabel(leave.start_date)}) ${decision} by ${approver.name}.`
+      text: `${leave.person}'s ${leave.leave_type} (${isoToDateLabel(leave.start_date)}) ${decision} by ${approver.name}.`
     });
   }
 
   if (decision === 'approved') {
     await slackAPI('chat.postMessage', {
       channel: '#general',
-      text: `🌴 *${leave.person}* will be off ${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`
+      text: `*${leave.person}* will be off ${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`
     });
     const { data: ur } = await supabase.from('user_roles').select('allow_status_update').eq('email', leave.email).maybeSingle();
     if (ur?.allow_status_update && requesterId) {
@@ -125,7 +125,7 @@ async function sendApprovalDecision(leave, decision, approver) {
           user: requesterId,
           profile: {
             status_text: `On ${leave.leave_type}`,
-            status_emoji: ':palm_tree:',
+            status_emoji: ':no-entry:',
             status_expiration: Math.floor(new Date(leave.end_date + 'T23:59:59').getTime() / 1000)
           }
         });
@@ -164,7 +164,7 @@ async function openMyLeaveModal(trigger_id, email) {
   const past = (leaves || []).filter(l => l.end_date < today);
   const fmt = l => {
     const dur = l.half_day ? '0.5 day' : `${l.days} day${l.days > 1 ? 's' : ''}`;
-    const status = l.status === 'approved' ? '✅' : l.status === 'rejected' ? '❌' : l.status === 'pending' ? '⏳' : '🚫';
+    const status = l.status === 'approved' ? '[APPROVED]' : l.status === 'rejected' ? '[REJECTED]' : l.status === 'pending' ? '[PENDING]' : '[CANCELLED]';
     const range = l.start_date === l.end_date ? isoToDateLabel(l.start_date) : `${isoToDateLabel(l.start_date)} → ${isoToDateLabel(l.end_date)}`;
     return `${status} *${l.leave_type}* · ${range} · ${dur}`;
   };
@@ -188,7 +188,7 @@ async function openHolidaysModal(trigger_id) {
   } catch { holidays = []; }
   const today = new Date().toISOString().split('T')[0];
   const upcoming = holidays.filter(h => h.date >= today).slice(0, 20);
-  const blocks = [{ type: 'header', text: { type: 'plain_text', text: '🌍 Public Holidays' } }];
+  const blocks = [{ type: 'header', text: { type: 'plain_text', text: 'Public Holidays' } }];
   if (upcoming.length === 0) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No upcoming holidays._' } });
   else for (const h of upcoming) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${isoToDateLabel(h.date)}* · ${h.name} _(${h.country || 'TR/PK'})_` } });
   await slackAPI('views.open', {
@@ -204,11 +204,11 @@ async function openPolicyModal(trigger_id) {
       blocks: [
         { type: 'section', text: { type: 'mrkdwn', text: '*Attimo Leave Policy (2026)*' } },
         { type: 'divider' },
-        { type: 'section', text: { type: 'mrkdwn', text: '🏖️ *Annual Leave:* 14 days/year. Max 5 days per month. Half-day allowed.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '🤒 *Sick Leave:* 8 days/year. No monthly cap. Doctor note for >2 consecutive days.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '🌴 *Casual Leave:* 12 days/year. Max 1 per month. Half-day allowed.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '🏠 *Work From Home:* Flexible. Request via /leave or dashboard.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '🧘 *Personal Leave:* 5 days/year. Max 2 per month.' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '*Annual Leave:* 14 days/year. Max 5 days per month. Half-day allowed.' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '*Sick Leave:* 8 days/year. No monthly cap. Doctor note for >2 consecutive days.' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '*Casual Leave:* 12 days/year. Max 1 per month. Half-day allowed.' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '*Work From Home:* Flexible. Request via /leave or dashboard.' } },
+        { type: 'section', text: { type: 'mrkdwn', text: '*Personal Leave:* 5 days/year. Max 2 per month.' } },
         { type: 'divider' },
         { type: 'section', text: { type: 'mrkdwn', text: '*Approval:* Department manager approves. Efehan is notified for visibility.' } },
         { type: 'section', text: { type: 'mrkdwn', text: '*Submission window:* Request at least 2 working days in advance (except sick).' } }
@@ -255,7 +255,7 @@ async function handleLeaveSubmit(payload) {
   if (managerOnLeave && managerEmail !== 'efehan@attimo.com') managerEmail = 'efehan@attimo.com';
 
   const card = [
-    { type: 'header', text: { type: 'plain_text', text: '📝 New Leave Request' } },
+    { type: 'header', text: { type: 'plain_text', text: 'New Leave Request' } },
     {
       type: 'section',
       fields: [
@@ -270,8 +270,8 @@ async function handleLeaveSubmit(payload) {
   card.push({
     type: 'actions',
     elements: [
-      { type: 'button', text: { type: 'plain_text', text: '✅ Approve' }, style: 'primary', action_id: `approve_leave_${inserted.id}`, value: String(inserted.id) },
-      { type: 'button', text: { type: 'plain_text', text: '❌ Reject' }, style: 'danger', action_id: `reject_leave_${inserted.id}`, value: String(inserted.id) }
+      { type: 'button', text: { type: 'plain_text', text: 'Approve' }, style: 'primary', action_id: `approve_leave_${inserted.id}`, value: String(inserted.id) },
+      { type: 'button', text: { type: 'plain_text', text: 'Reject' }, style: 'danger', action_id: `reject_leave_${inserted.id}`, value: String(inserted.id) }
     ]
   });
 
@@ -282,12 +282,12 @@ async function handleLeaveSubmit(payload) {
     const efehanId = await lookupUser('efehan@attimo.com');
     if (efehanId) await slackAPI('chat.postMessage', {
       channel: efehanId,
-      text: `👀 FYI: *${requester.name}* requested ${typeRow?.display_name || leave_type} for ${isoToDateLabel(start_date)}${start_date !== end_date ? ` → ${isoToDateLabel(end_date)}` : ''}. Awaiting approval from manager.`
+      text: `FYI: *${requester.name}* requested ${typeRow?.display_name || leave_type} for ${isoToDateLabel(start_date)}${start_date !== end_date ? ` → ${isoToDateLabel(end_date)}` : ''}. Awaiting approval from manager.`
     });
   }
 
   await slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested leave` });
-  if (userId) await slackAPI('chat.postMessage', { channel: userId, text: '✅ Leave request submitted. Awaiting approval from your manager.' });
+  if (userId) await slackAPI('chat.postMessage', { channel: userId, text: 'Leave request submitted. Awaiting approval from your manager.' });
 
   return { response_action: 'clear' };
 }
@@ -304,7 +304,7 @@ async function handleHomeAction(payload, action) {
   switch (action.action_id) {
     case 'home_request_leave': {
       if (email.toLowerCase() === 'efehan@attimo.com') {
-        await slackAPI('chat.postMessage', { channel: userId, text: '🚫 The CEO is excluded from leave requests.' });
+        await slackAPI('chat.postMessage', { channel: userId, text: 'The CEO is excluded from leave requests.' });
         return;
       }
       const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
@@ -319,7 +319,7 @@ async function handleHomeAction(payload, action) {
           blocks: [
             { type: 'input', block_id: 'leave_type', label: { type: 'plain_text', text: 'Leave Type' },
               element: { type: 'static_select', action_id: 'value',
-                options: (types || []).map(t => ({ text: { type: 'plain_text', text: `${t.emoji || ''} ${t.display_name}` }, value: t.key })) } },
+                options: (types || []).map(t => ({ text: { type: 'plain_text', text: t.display_name }, value: t.key })) } },
             { type: 'input', block_id: 'start_date', label: { type: 'plain_text', text: 'Start date' },
               element: { type: 'datepicker', action_id: 'value', initial_date: today } },
             { type: 'input', block_id: 'end_date', label: { type: 'plain_text', text: 'End date' },
@@ -350,7 +350,7 @@ async function handleHomeAction(payload, action) {
     case 'home_bulk_request':
     case 'home_birthdays':
     case 'home_subscribe':
-      await slackAPI('chat.postMessage', { channel: userId, text: '⏳ Coming soon.' });
+      await slackAPI('chat.postMessage', { channel: userId, text: ' Coming soon.' });
       break;
   }
 }
@@ -393,7 +393,7 @@ export async function POST(req) {
       const { data: requester } = await supabase.from('user_roles').select('manager_email').eq('email', leave.email).maybeSingle();
       const allowedApprovers = [requester?.manager_email, 'efehan@attimo.com'].filter(Boolean).map(e => e.toLowerCase());
       if (!allowedApprovers.includes(approverEmail.toLowerCase())) {
-        return Response.json({ response_type: 'ephemeral', text: `❌ Only the manager or Efehan can act on this.` });
+        return Response.json({ response_type: 'ephemeral', text: 'Only the manager or Efehan can act on this.' });
       }
 
       const newStatus = decision === 'approve' ? 'approved' : 'rejected';
@@ -404,11 +404,11 @@ export async function POST(req) {
       sendApprovalDecision(leave, newStatus, { email: approverEmail, name: approverName })
         .catch(e => console.error('Approval decision err:', e));
 
-      const emoji = newStatus === 'approved' ? '✅' : '❌';
+      const _status = newStatus;
       return Response.json({
         replace_original: true,
         blocks: [
-          { type: 'header', text: { type: 'plain_text', text: `${emoji} Leave ${newStatus}` } },
+          { type: 'header', text: { type: 'plain_text', text: `Leave ${newStatus.toUpperCase()}` } },
           {
             type: 'section',
             fields: [
@@ -417,7 +417,7 @@ export async function POST(req) {
               { type: 'mrkdwn', text: `*Dates:*\n${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}` }
             ]
           },
-          { type: 'context', elements: [{ type: 'mrkdwn', text: `${emoji} *${newStatus.toUpperCase()}* by ${approverName}` }] }
+          { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *${newStatus.toUpperCase()}* by ${approverName}` }] }
         ]
       });
     }
@@ -433,7 +433,7 @@ export async function POST(req) {
       }
       return Response.json({
         replace_original: true,
-        blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `${decision === 'dismiss' ? '🚫 Dismissed' : '⚠️ Confirmed'} by *${approverName}*` } }]
+        blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `${decision === 'dismiss' ? 'Risk dismissed' : 'Risk confirmed'} by *${approverName}*` } }]
       });
     }
   }
