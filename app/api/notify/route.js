@@ -34,15 +34,15 @@ async function lookupSlackUser(email) {
   } catch { return null; }
 }
 
-const LEAVE_TYPE_EMOJI = { annual: '🏖️', sick: '🤒', personal: '🌴', casual: '🌴', wfh: '🏠', other: '📝' };
+const LEAVE_TYPE_EMOJI = { annual: '', sick: '', personal: '', casual: '', wfh: '', other: '' };
 
 function leaveRequestBlocks(leave) {
-  const emoji = LEAVE_TYPE_EMOJI[leave.leave_type] || '🌿';
+  const emoji = LEAVE_TYPE_EMOJI[leave.leave_type] || '';
   const dateRange = leave.start_date === leave.end_date
     ? leave.start_date
     : `${leave.start_date} → ${leave.end_date}`;
   return [
-    { type: 'header', text: { type: 'plain_text', text: `${emoji} New Leave Request` } },
+    { type: 'header', text: { type: 'plain_text', text: `New Leave Request` } },
     {
       type: 'section',
       fields: [
@@ -58,14 +58,14 @@ function leaveRequestBlocks(leave) {
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: '✅ Approve' },
+          text: { type: 'plain_text', text: 'Approve' },
           style: 'primary',
           action_id: `approve_leave_${leave.id}`,
           value: String(leave.id)
         },
         {
           type: 'button',
-          text: { type: 'plain_text', text: '❌ Reject' },
+          text: { type: 'plain_text', text: 'Reject' },
           style: 'danger',
           action_id: `reject_leave_${leave.id}`,
           value: String(leave.id)
@@ -102,12 +102,12 @@ export async function POST(req) {
 
     // ─── Leave decision update (admin acted in dashboard, not Slack) ────
     if (table === 'leave' && (action === 'approved' || action === 'rejected') && leave?.id) {
-      const emoji = action === 'approved' ? '✅' : '❌';
+      const _action = action;
       const dateRange = leave.start_date === leave.end_date
         ? leave.start_date
         : `${leave.start_date} → ${leave.end_date}`;
       const blocks = [
-        { type: 'header', text: { type: 'plain_text', text: `${emoji} Leave ${action}` } },
+        { type: 'header', text: { type: 'plain_text', text: `Leave ${action}` } },
         {
           type: 'section',
           fields: [
@@ -116,20 +116,20 @@ export async function POST(req) {
             { type: 'mrkdwn', text: `*Dates:*\n${dateRange}` }
           ]
         },
-        { type: 'context', elements: [{ type: 'mrkdwn', text: `${emoji} ${action.toUpperCase()} by ${user || 'admin'}` }] }
+        { type: 'context', elements: [{ type: 'mrkdwn', text: `${action.toUpperCase()} by ${user || 'admin'}` }] }
       ];
       await slackPost('#hr-module', blocks, `${leave.person}'s leave ${action}`);
       // DM the employee
       const empId = await lookupSlackUser(leave.email);
       if (empId) {
         await slackPost(empId, [
-          { type: 'section', text: { type: 'mrkdwn', text: `${emoji} Your *${leave.leave_type}* leave for ${dateRange} was *${action}* by ${user || 'admin'}.` } }
+          { type: 'section', text: { type: 'mrkdwn', text: `Your *${leave.leave_type}* leave for ${dateRange} was *${action}* by ${user || 'admin'}.` } }
         ], `Leave ${action}`);
       }
       // Announce in #general if approved
       if (action === 'approved') {
         await slackPost('#general',
-          [{ type: 'section', text: { type: 'mrkdwn', text: `🌿 *${leave.person}* will be off on ${dateRange} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).` } }],
+          [{ type: 'section', text: { type: 'mrkdwn', text: `*${leave.person}* will be off on ${dateRange} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).` } }],
           `${leave.person} off ${dateRange}`
         );
       }
@@ -138,7 +138,7 @@ export async function POST(req) {
 
     // ─── Generic edit notification (light-touch) ────────────────────────
     if (action && table) {
-      const text = `📝 *${user || 'Someone'}* ${action} ${table}${detail ? `: ${detail}` : ''}`;
+      const text = `*${user || 'Someone'}* ${action} ${table}${detail ? `: ${detail}` : ''}`;
       const webhook = process.env.SLACK_WEBHOOK_URL;
       if (webhook) {
         await fetch(webhook, {
