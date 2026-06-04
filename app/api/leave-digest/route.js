@@ -65,16 +65,16 @@ export async function GET(req) {
     .eq('start_date', tomorrow);
 
   const blocks = [];
-  blocks.push({ type: 'header', text: { type: 'plain_text', text: `🌅 Daily Leave Digest · ${dateLabel(today)}` } });
+  blocks.push({ type: 'header', text: { type: 'plain_text', text: `Daily Leave Digest · ${dateLabel(today)}` } });
 
   if ((todayLeaves || []).length === 0) {
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_Everyone is in today! 💪_' } });
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_Everyone is in today._' } });
   } else {
     blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '*On leave today:*' } });
     for (const l of todayLeaves) {
       blocks.push({
         type: 'section',
-        text: { type: 'mrkdwn', text: `🌴 *${l.person}* → ${l.leave_type}${l.half_day ? ' (half day)' : ''}${l.end_date !== today ? ` _(back ${dateLabel(new Date(new Date(l.end_date + 'T00:00:00').getTime() + 86400000).toISOString().split('T')[0])})_` : ' _(back tomorrow)_'}` }
+        text: { type: 'mrkdwn', text: `*${l.person}* → ${l.leave_type}${l.half_day ? ' (half day)' : ''}${l.end_date !== today ? ` _(back ${dateLabel(new Date(new Date(l.end_date + 'T00:00:00').getTime() + 86400000).toISOString().split('T')[0])})_` : ' _(back tomorrow)_'}` }
       });
     }
   }
