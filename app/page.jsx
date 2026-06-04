@@ -689,8 +689,8 @@ export default function Home(){
   const[leaveTypes,setLeaveTypes]=useState([]);
   useEffect(()=>{
     const yr=new Date().getFullYear();
-    supabase.from('leave_balances').select('*').eq('year',yr).then(({data})=>{if(data)setLeaveBalances(data)});
-    supabase.from('leave_types').select('*').order('sort_order').then(({data})=>{if(data)setLeaveTypes(data)});
+    supabase.from('leave_balances').select('*').eq('year',yr).then(({data,error})=>{if(error)console.warn('leave_balances:',error.message);else if(data)setLeaveBalances(data)});
+    supabase.from('leave_types').select('*').order('sort_order').then(({data,error})=>{if(error)console.warn('leave_types:',error.message);else if(data)setLeaveTypes(data)});
     // Realtime: refresh balances when leaves change
     const ch=supabase.channel('leave-balances').on('postgres_changes',{event:'*',schema:'public',table:'leave_balances'},()=>{
       supabase.from('leave_balances').select('*').eq('year',new Date().getFullYear()).then(({data})=>{if(data)setLeaveBalances(data)});
@@ -2115,7 +2115,7 @@ export default function Home(){
         const myBals=leaveBalances.filter(b=>b.email===myEmail);
         const myUpcoming=leaves.filter(l=>l.email===myEmail&&l.end_date>=today).sort((a,b)=>a.start_date.localeCompare(b.start_date));
         const onLeaveToday=leaves.filter(l=>l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
-        const upcomingHolidays=publicHolidays.filter(h=>h.date>=today).slice(0,10);
+        const upcomingHolidays=publicHolidays.filter(h=>(h.d||h.date)>=today).slice(0,10);
         const myTeam=userRoles.filter(r=>r.dept===me?.dept&&r.email!==myEmail);
 
         return <>
@@ -2228,8 +2228,8 @@ export default function Home(){
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:280,overflowY:"auto"}}>
                 {upcomingHolidays.map((h,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 8px",borderRadius:6,background:i%2===0?"var(--bg2)":"transparent",fontSize:11}}>
-                  <span style={{color:"var(--fg)",fontWeight:600}}>{fD(h.date)} <span style={{color:"var(--fg2)",fontWeight:400}}>({new Date(h.date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short"})})</span></span>
-                  <span style={{color:"var(--fg2)"}}>{h.name} <span style={{fontSize:9,padding:"1px 6px",borderRadius:4,background:h.country==="PK"?"#3B82F620":"#EC489920",color:h.country==="PK"?"#3B82F6":"#EC4899",fontWeight:700,marginLeft:4}}>{h.country}</span></span>
+                  <span style={{color:"var(--fg)",fontWeight:600}}>{fD(h.d||h.date)} <span style={{color:"var(--fg2)",fontWeight:400}}>({new Date((h.d||h.date)+"T00:00:00").toLocaleDateString("en-US",{weekday:"short"})})</span></span>
+                  <span style={{color:"var(--fg2)"}}>{h.l||h.name} <span style={{fontSize:9,padding:"1px 6px",borderRadius:4,background:(h.c||h.country)==="PK"?"#3B82F620":"#EC489920",color:(h.c||h.country)==="PK"?"#3B82F6":"#EC4899",fontWeight:700,marginLeft:4}}>{h.c||h.country}</span></span>
                 </div>)}
               </div>
             </div>
@@ -2241,7 +2241,7 @@ export default function Home(){
               <div style={{fontSize:13,fontWeight:700,color:"var(--fg)"}}>All Leave Requests</div>
               <span style={{fontSize:9,color:"var(--fg2)"}}>Approver view · {leaves.filter(l=>l.status==="pending").length} pending</span>
             </div>
-            <Tbl head={["Person","Type","Dates","Duration","Reason","Status","Approved By",""]} rows={leaves.slice().sort((a,b)=>(a.status==="pending"?-1:1)-(b.status==="pending"?-1:1)||b.start_date?.localeCompare(a.start_date||"")||0).slice(0,40).map(l=>[
+            <Tbl headers={["Person","Type","Dates","Duration","Reason","Status","Approved By",""]} rows={leaves.slice().sort((a,b)=>(a.status==="pending"?-1:1)-(b.status==="pending"?-1:1)||b.start_date?.localeCompare(a.start_date||"")||0).slice(0,40).map(l=>[
               <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <div style={{width:20,height:20,borderRadius:"50%",background:CL[N2D[l.person]]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:"#fff"}}>{l.person?.[0]}</div>
                 <span style={{fontSize:11}}>{l.person}</span>
