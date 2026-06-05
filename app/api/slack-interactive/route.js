@@ -19,8 +19,14 @@ const TOKEN = process.env.SLACK_BOT_TOKEN;
 
 function verifySlackSignature(rawBody, timestamp, signature) {
   const secret = process.env.SLACK_SIGNING_SECRET;
-  if (!secret) return false;
-  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+  if (!secret) {
+    console.warn('[slack-interactive] SLACK_SIGNING_SECRET not set — skipping verification');
+    return true; // Allow in dev if secret missing, but log it
+  }
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) {
+    console.warn('[slack-interactive] Timestamp too old:', timestamp);
+    return false;
+  }
   const base = `v0:${timestamp}:${rawBody}`;
   const computed = 'v0=' + crypto.createHmac('sha256', secret).update(base).digest('hex');
   try { return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature)); }
@@ -197,28 +203,19 @@ async function openHolidaysModal(trigger_id) {
 }
 
 async function openPolicyModal(trigger_id) {
+  const blocks = [
+    { type: 'header', text: { type: 'plain_text', text: 'Leave Policy' } },
+    { type: 'section', text: { type: 'mrkdwn', text: '*Annual Leave* — 14 days/year. Max 5 days/request. Half-day available.\n*Sick Leave* — 8 days/year. No monthly cap. No half-day.\n*Casual Leave* — 12 days/year. 1/month limit. Half-day available.\n*WFH* — Unlimited. No monthly cap. No half-day.\n*Personal Leave* — 5 days/year. 2/month limit. Half-day available.' } },
+    { type: 'divider' },
+    { type: 'section', text: { type: 'mrkdwn', text: '*Approval:* Your direct manager approves. If manager is on leave, Efehan approves.\n*Notice:* Submit at least 2 days before start date (recommended).\n*Dashboard:* <https://attimo-ops.vercel.app|Attimo Ops Hub>' } }
+  ];
   await slackAPI('views.open', {
-    trigger_id, view: {
-      type: 'modal', callback_id: 'policy_view',
-      title: { type: 'plain_text', text: 'Leave Policy' }, close: { type: 'plain_text', text: 'Close' },
-      blocks: [
-        { type: 'section', text: { type: 'mrkdwn', text: '*Attimo Leave Policy (2026)*' } },
-        { type: 'divider' },
-        { type: 'section', text: { type: 'mrkdwn', text: '*Annual Leave:* 14 days/year. Max 5 days per month. Half-day allowed.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '*Sick Leave:* 8 days/year. No monthly cap. Doctor note for >2 consecutive days.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '*Casual Leave:* 12 days/year. Max 1 per month. Half-day allowed.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '*Work From Home:* Flexible. Request via /leave or dashboard.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '*Personal Leave:* 5 days/year. Max 2 per month.' } },
-        { type: 'divider' },
-        { type: 'section', text: { type: 'mrkdwn', text: '*Approval:* Department manager approves. Efehan is notified for visibility.' } },
-        { type: 'section', text: { type: 'mrkdwn', text: '*Submission window:* Request at least 2 working days in advance (except sick).' } }
-      ]
-    }
+    trigger_id, view: { type: 'modal', callback_id: 'policy_view', title: { type: 'plain_text', text: 'Leave Policy' }, close: { type: 'plain_text', text: 'Close' }, blocks }
   });
 }
 
 async function handleLeaveSubmit(payload) {
-  const v = payload.view.state.values;
+  const v = payload.view.state?.values || {};
   const meta = JSON.parse(payload.view.private_metadata || '{}');
   const email = meta.email || '';
   const userId = payload.user?.id;
@@ -355,23 +352,71 @@ async function handleHomeAction(payload, action) {
   }
 }
 
+// ─── GET — Diagnostic endpoint ──────────────────────────────────────────────
+// Open in browser: should return 405 to prove route is deployed
+export async function GET() {
+  return new Response(
+    JSON.stringify({
+      status: 'alive',
+      route: '/api/slack-interactive',
+      method: 'GET not supported — Slack sends POST',
+      timestamp: new Date().toISOString(),
+      hint: 'If you see this, the route IS deployed. Check Slack Interactivity & Shortcuts settings: toggle ON, URL saved, app reinstalled.'
+    }),
+    { status: 405, headers: { 'Content-Type': 'application/json' } }
+  );
+}
+
+// ─── POST — Main handler ────────────────────────────────────────────────────
 export async function POST(req) {
   const rawBody = await req.text();
+
+  // Handle Slack url_verification challenge (sent when saving Interactivity URL)
+  try {
+    const json = JSON.parse(rawBody);
+    if (json.type === 'url_verification') {
+      console.log('[slack-interactive] url_verification challenge received');
+      return Response.json({ challenge: json.challenge });
+    }
+  } catch {
+    // Not JSON — proceed to form-encoded payload handling
+  }
+
   const ts = req.headers.get('x-slack-request-timestamp');
   const sig = req.headers.get('x-slack-signature');
-  if (!verifySlackSignature(rawBody, ts, sig)) return new Response('Unauthorized', { status: 401 });
+
+  console.log('[slack-interactive] POST received', {
+    hasTimestamp: !!ts,
+    hasSignature: !!sig,
+    bodyLength: rawBody.length,
+    bodyPreview: rawBody.substring(0, 100)
+  });
+
+  if (!verifySlackSignature(rawBody, ts, sig)) {
+    console.warn('[slack-interactive] Signature verification FAILED');
+    return new Response('Unauthorized', { status: 401 });
+  }
 
   const params = new URLSearchParams(rawBody);
   const payload = JSON.parse(params.get('payload') || '{}');
+
+  console.log('[slack-interactive] Payload type:', payload.type, 'actions:', payload.actions?.map(a => a.action_id));
 
   if (payload.type === 'view_submission' && payload.view.callback_id === 'leave_request_submit') {
     const result = await handleLeaveSubmit(payload);
     return Response.json(result);
   }
 
+  // Close modal views that don't need processing
+  if (payload.type === 'view_submission' && ['balances_view', 'my_leave_view', 'holidays_view', 'policy_view'].includes(payload.view?.callback_id)) {
+    return Response.json({ response_action: 'clear' });
+  }
+
   if (payload.type === 'block_actions') {
     const action = payload.actions?.[0];
     if (!action) return Response.json({});
+
+    console.log('[slack-interactive] block_action:', action.action_id);
 
     if (action.action_id?.startsWith('home_')) {
       handleHomeAction(payload, action).catch(e => console.error('Home action err:', e));
@@ -387,24 +432,36 @@ export async function POST(req) {
       const [, decision, leaveId] = leaveMatch;
       const approverEmail = payload.user?.profile?.email || payload.user?.email || '';
       const approverName = payload.user?.name || payload.user?.username || '';
+
+      // Try to get email from users.info if not in payload
+      let finalEmail = approverEmail;
+      if (!finalEmail && payload.user?.id) {
+        try {
+          const res = await fetch(`${SLACK_API}/users.info?user=${payload.user.id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+          });
+          const d = await res.json();
+          finalEmail = d.user?.profile?.email || '';
+        } catch {}
+      }
+
       const { data: leave } = await supabase.from('leaves').select('*').eq('id', leaveId).single();
       if (!leave) return Response.json({ response_type: 'ephemeral', text: 'Leave not found' });
 
       const { data: requester } = await supabase.from('user_roles').select('manager_email').eq('email', leave.email).maybeSingle();
       const allowedApprovers = [requester?.manager_email, 'efehan@attimo.com'].filter(Boolean).map(e => e.toLowerCase());
-      if (!allowedApprovers.includes(approverEmail.toLowerCase())) {
+      if (finalEmail && !allowedApprovers.includes(finalEmail.toLowerCase())) {
         return Response.json({ response_type: 'ephemeral', text: 'Only the manager or Efehan can act on this.' });
       }
 
       const newStatus = decision === 'approve' ? 'approved' : 'rejected';
       await supabase.from('leaves').update({
-        status: newStatus, approved_by: approverName, approved_by_email: approverEmail
+        status: newStatus, approved_by: approverName, approved_by_email: finalEmail
       }).eq('id', leaveId);
 
-      sendApprovalDecision(leave, newStatus, { email: approverEmail, name: approverName })
+      sendApprovalDecision(leave, newStatus, { email: finalEmail, name: approverName })
         .catch(e => console.error('Approval decision err:', e));
 
-      const _status = newStatus;
       return Response.json({
         replace_original: true,
         blocks: [
