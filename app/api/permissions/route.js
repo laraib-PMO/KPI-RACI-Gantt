@@ -112,7 +112,7 @@ export async function GET(req) {
         supabase.from('platform_tabs').select('*').eq('is_active', true).order('sort_order'),
         supabase.from('role_permissions').select('*'),
         supabase.from('user_permission_overrides').select('*'),
-        supabase.from('user_roles').select('email, name, dept, platform_role, role, employment_type').order('name')
+        supabase.from('user_roles').select('email, name, dept, platform_role, role, employment_type, avatar_url').order('name')
       ]);
 
       result.admin_data = {
