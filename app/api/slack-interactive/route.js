@@ -53,6 +53,25 @@ async function lookupUser(email) {
   } catch { return null; }
 }
 
+// Robust DM: open the IM channel first, then post to the returned channel ID.
+// Posting to a bare user ID is unreliable — this is the correct pattern.
+async function dmUser(userId, message) {
+  if (!userId) return { ok: false, error: 'no_user_id' };
+  try {
+    const open = await slackAPI('conversations.open', { users: userId });
+    if (!open.ok || !open.channel?.id) {
+      console.error('[dm] conversations.open failed:', open.error);
+      return { ok: false, error: open.error };
+    }
+    const result = await slackAPI('chat.postMessage', { channel: open.channel.id, ...message });
+    if (!result.ok) console.error('[dm] postMessage failed:', result.error);
+    return result;
+  } catch (e) {
+    console.error('[dm] error:', e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
 function isoToDateLabel(d) {
   if (!d) return '';
   const date = new Date(d + 'T00:00:00');
@@ -107,14 +126,13 @@ async function sendApprovalDecision(leave, decision, approver) {
         ]
       });
     }
-    await slackAPI('chat.postMessage', { channel: requesterId, blocks, text: `Your leave was ${decision}` });
+    await dmUser(requesterId, { blocks, text: `Your leave was ${decision}` });
   }
 
   // Efehan FYI
   const efehanId = await lookupUser('efehan@attimo.com');
   if (efehanId) {
-    await slackAPI('chat.postMessage', {
-      channel: efehanId,
+    await dmUser(efehanId, {
       text: `${leave.person}'s ${leave.leave_type} (${isoToDateLabel(leave.start_date)}) ${decision} by ${approver.name}.`
     });
   }
@@ -260,18 +278,17 @@ async function handleLeaveSubmit(payload) {
   });
 
   const managerId = await lookupUser(managerEmail);
-  if (managerId) await slackAPI('chat.postMessage', { channel: managerId, blocks: card, text: `${requester.name} requested leave` });
+  if (managerId) await dmUser(managerId, { blocks: card, text: `${requester.name} requested leave` });
 
   if (managerEmail !== 'efehan@attimo.com') {
     const efehanId = await lookupUser('efehan@attimo.com');
-    if (efehanId) await slackAPI('chat.postMessage', {
-      channel: efehanId,
+    if (efehanId) await dmUser(efehanId, {
       text: `FYI: *${requester.name}* requested ${typeRow?.display_name || leave_type} for ${isoToDateLabel(start_date)}${start_date !== end_date ? ` → ${isoToDateLabel(end_date)}` : ''}. Awaiting approval from manager.`
     });
   }
 
   await slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested leave` });
-  if (userId) await slackAPI('chat.postMessage', { channel: userId, text: 'Leave request submitted. Awaiting approval from your manager.' });
+  if (userId) await dmUser(userId, { text: 'Leave request submitted. Awaiting approval from your manager.' });
 
   return { response_action: 'clear' };
 }
@@ -288,7 +305,7 @@ async function handleHomeAction(payload, action) {
   switch (action.action_id) {
     case 'home_request_leave': {
       if (email.toLowerCase() === 'efehan@attimo.com') {
-        await slackAPI('chat.postMessage', { channel: userId, text: 'The CEO is excluded from leave requests.' });
+        await dmUser(userId, { text: 'The CEO is excluded from leave requests.' });
         return;
       }
       const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
@@ -321,20 +338,37 @@ async function handleHomeAction(payload, action) {
     case 'home_my_leave': await openMyLeaveModal(trigger_id, email); break;
     case 'home_holidays': await openHolidaysModal(trigger_id); break;
     case 'home_policy': await openPolicyModal(trigger_id); break;
-    case 'home_status_toggle': {
-      const { data: cur } = await supabase.from('user_roles').select('allow_status_update').eq('email', email).maybeSingle();
-      const newVal = !cur?.allow_status_update;
-      await supabase.from('user_roles').update({ allow_status_update: newVal }).eq('email', email);
-      await slackAPI('chat.postMessage', { channel: userId, text: `Auto-status update is now *${newVal ? 'ON' : 'OFF'}*.` });
+    case 'home_subscribe': {
+      const ics = 'attimo-ops.vercel.app/api/leave-calendar';
+      const googleAdd = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://' + ics)}`;
+      await slackAPI('views.open', {
+        trigger_id,
+        view: {
+          type: 'modal', callback_id: 'subscribe_view',
+          title: { type: 'plain_text', text: 'Subscribe to Leave' },
+          close: { type: 'plain_text', text: 'Close' },
+          blocks: [
+            { type: 'section', text: { type: 'mrkdwn', text: '*Team Leave Calendar*\nSubscribe once and every approved leave shows up automatically in your calendar.' } },
+            { type: 'divider' },
+            { type: 'section', text: { type: 'mrkdwn', text: '*Google Calendar*\nOpen Settings > Add calendar > From URL, and paste:\n`https://' + ics + '`' } },
+            { type: 'section', text: { type: 'mrkdwn', text: '*Apple / Outlook*\nAdd a subscription calendar with:\n`webcal://' + ics + '`' } },
+            { type: 'actions', elements: [
+              { type: 'button', text: { type: 'plain_text', text: 'Add to Google Calendar' }, url: googleAdd, action_id: 'sub_google' },
+              { type: 'button', text: { type: 'plain_text', text: 'Open Dashboard' }, url: 'https://attimo-ops.vercel.app', action_id: 'sub_dash' }
+            ] }
+          ]
+        }
+      });
       break;
     }
     case 'home_help':
-      await slackAPI('chat.postMessage', { channel: userId, text: '*How to use Attimo PMO Bot:*\n• Type `/leave` to request leave\n• Click *+ Request Leave* in Home tab\n• Visit https://attimo-ops.vercel.app for dashboard\n• Reach Laraib in #pmo for issues' });
+      await dmUser(userId, { text: '*How to use Attimo PMO Bot:*\n- Type `/applyleave` or click *+ Request Leave* to request leave\n- *My Balances* shows your remaining days\n- *My Leave* lists your upcoming and past leave\n- *Subscribe Calendar* adds all team leave to your calendar\n- Full dashboard: https://attimo-ops.vercel.app\n- Issues: message Laraib' });
       break;
     case 'home_bulk_request':
+      await dmUser(userId, { text: 'Bulk leave requests are coming soon. For now, submit each request via *+ Request Leave*.' });
+      break;
     case 'home_birthdays':
-    case 'home_subscribe':
-      await slackAPI('chat.postMessage', { channel: userId, text: ' Coming soon.' });
+      await dmUser(userId, { text: 'Birthdays and anniversaries are coming soon.' });
       break;
   }
 }
@@ -395,7 +429,7 @@ export async function POST(req) {
   }
 
   // Close modal views that don't need processing
-  if (payload.type === 'view_submission' && ['balances_view', 'my_leave_view', 'holidays_view', 'policy_view'].includes(payload.view?.callback_id)) {
+  if (payload.type === 'view_submission' && ['balances_view', 'my_leave_view', 'holidays_view', 'policy_view', 'subscribe_view'].includes(payload.view?.callback_id)) {
     return Response.json({ response_action: 'clear' });
   }
 
