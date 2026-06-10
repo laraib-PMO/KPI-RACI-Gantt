@@ -704,6 +704,7 @@ export default function Home(){
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);const[meetingNotes,setMeetingNotes]=useState(null);const[notesLoading,setNotesLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
+  const[effectivePerms,setEffectivePerms]=useState(null);const[platformRole,setPlatformRole]=useState(null);
 
   // Fetch Slack availability
   const fetchSlackStatus=useCallback(async()=>{
@@ -775,9 +776,15 @@ export default function Home(){
     return()=>subscription.unsubscribe();
   },[]);
   const lookupRole=async(email)=>{
-    const{data}=await supabase.from('user_roles').select('role').eq('email',email).single();
-    setRole(data?.role||null);setAuthLoading(false);
+    const{data}=await supabase.from('user_roles').select('role,platform_role').eq('email',email).single();
+    setRole(data?.role||null);setPlatformRole(data?.platform_role||null);
+    const{data:perms}=await supabase.rpc('get_effective_permissions',{p_email:email});
+    if(perms)setEffectivePerms(perms);
+    setAuthLoading(false);
   };
+  const canSeeTab=useCallback((tabKey)=>{if(!effectivePerms)return true;const p=effectivePerms.find(ep=>ep.tab_key===tabKey);return p?.can_view??false},[effectivePerms]);
+  const getTabPerm=useCallback((tabKey,field)=>{if(!effectivePerms)return role==='admin'||role==='editor';const p=effectivePerms.find(ep=>ep.tab_key===tabKey);return p?.[field]??false},[effectivePerms,role]);
+  const TAB_PERM={dashboard:'dashboard',vitals:['kpis','risks','raci','performance','open_roles'],timeline:'timeline',board:'board',calendar:'calendar',standup:'standup',meet:'meetings',leave:'leave',onboard:'onboarding',hrdocs:'hr_docs'};
   const doLogin=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
   const doLogout=async()=>{await supabase.auth.signOut();setUser(null);setRole(null)};
 
@@ -1120,13 +1127,13 @@ export default function Home(){
         <span className="sb-label" style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Attimo</span>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
-        {TABS.map(t=><div key={t.id} className={"sb-item"+(view===t.id?" active":"")} onClick={()=>setView(t.id)} data-tip={t.l}>
+        {TABS.filter(t=>{if(!effectivePerms)return true;const k=TAB_PERM[t.id];if(Array.isArray(k))return k.some(x=>canSeeTab(x));return canSeeTab(k||t.id)}).map(t=><div key={t.id} className={"sb-item"+(view===t.id?" active":"")} onClick={()=>setView(t.id)} data-tip={t.l}>
           <div className="sb-icon">{t.icon}</div>
           <span className="sb-label" style={{color:view===t.id?"#3B82F6":"var(--fg2)"}}>{t.l}</span>
         </div>)}
       </div>
       <div style={{borderTop:"1px solid var(--border)",padding:"8px 0"}}>
-        {role==='admin'&&<div className={"sb-item"+(view==="settings"?" active":"")} onClick={()=>setView("settings")}><div className="sb-icon">{I.settings(16)}</div><span className="sb-label">Settings</span></div>}
+        {canSeeTab('settings')&&<div className={"sb-item"+(view==="settings"?" active":"")} onClick={()=>setView("settings")}><div className="sb-icon">{I.settings(16)}</div><span className="sb-label">Settings</span></div>}
         <div className="sb-item" onClick={()=>{const me=userRoles.find(r=>r.email===user?.email);setHoursForm({tz:me?.timezone||"Europe/Istanbul",start:me?.work_start||"09:00",end:me?.work_end||"18:00"});setShowHoursModal(true)}}><div className="sb-icon">{I.clock(16)}</div><span className="sb-label">Working Hours</span></div>
         <div className="sb-item" onClick={()=>setDark(!dark)}><div className="sb-icon">{dark?I.sun(16):I.moon(16)}</div><span className="sb-label">{dark?"Light Mode":"Dark Mode"}</span></div>
       </div>
@@ -2395,7 +2402,7 @@ export default function Home(){
         </div>})()}
     </div>}
 
-    {view==="settings"&&role==="admin"&&<div className="af">
+    {view==="settings"&&canSeeTab('settings')&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div>
         <div style={{display:"flex",gap:8}}>
@@ -2429,14 +2436,19 @@ export default function Home(){
         <InEdit value={r.dept||""} onChange={v=>updateUserRole(r.id,{dept:v})}/>,
         <button onClick={()=>setConfirmDlg({msg:"Remove "+r.name+" from team?",fn:()=>deleteUserRole(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
-      <div style={{marginTop:20,padding:16,background:"var(--bg3)",borderRadius:10}}>
+      {platformRole==='super_admin'&&<div style={{marginTop:24,borderTop:"1px solid var(--border)",paddingTop:20}}>
+        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)",marginBottom:4}}>Dynamic Permissions Engine</div>
+        <div style={{fontSize:11,color:"var(--fg2)",marginBottom:16}}>ERP-grade role-based access control. Changes take effect immediately.</div>
+        <PermissionsMatrix supabase={supabase} session={{user}}/>
+      </div>}
+      {platformRole!=='super_admin'&&<div style={{marginTop:20,padding:16,background:"var(--bg3)",borderRadius:10}}>
         <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Role Permissions</div>
         <div style={{fontSize:11,color:"var(--fg2)",lineHeight:1.8}}>
           <b style={{color:"#3B82F6"}}>admin</b> — Full access: view, add, edit, delete, manage users<br/>
           <b style={{color:"#F59E0B"}}>editor</b> — Can view, add, and edit. Cannot delete. Edits trigger Slack notifications.<br/>
           <b style={{color:"#94A3B8"}}>viewer</b> — Read-only access. No add, edit, or delete buttons visible.
         </div>
-      </div>
+      </div>}
     </div>}
 
     </div>
