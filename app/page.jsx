@@ -704,7 +704,7 @@ export default function Home(){
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);const[meetingNotes,setMeetingNotes]=useState(null);const[notesLoading,setNotesLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
-  const[effectivePerms,setEffectivePerms]=useState(null);const[platformRole,setPlatformRole]=useState(null);
+  const[effectivePerms,setEffectivePerms]=useState(null);const[platformRole,setPlatformRole]=useState(null);const[settingsTab,setSettingsTab]=useState("team");
 
   // Fetch Slack availability
   const fetchSlackStatus=useCallback(async()=>{
@@ -2403,6 +2403,15 @@ export default function Home(){
     </div>}
 
     {view==="settings"&&canSeeTab('settings')&&<div className="af">
+      {/* Settings header + ERP-style sub-navigation */}
+      <div style={{fontSize:18,fontWeight:800,color:"var(--fg)",marginBottom:2}}>Settings</div>
+      <div style={{fontSize:11,color:"var(--fg2)",marginBottom:14}}>Workspace configuration and access control</div>
+      <div style={{display:"flex",gap:4,background:"var(--bg3)",borderRadius:10,padding:3,width:"fit-content",marginBottom:20}}>
+        <button onClick={()=>setSettingsTab("team")} style={{padding:"8px 18px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",background:settingsTab==="team"?"var(--fg)":"transparent",color:settingsTab==="team"?"var(--bg)":"var(--fg2)"}}>Team</button>
+        {platformRole==='super_admin'&&<button onClick={()=>setSettingsTab("permissions")} style={{padding:"8px 18px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",background:settingsTab==="permissions"?"var(--fg)":"transparent",color:settingsTab==="permissions"?"var(--bg)":"var(--fg2)",display:"flex",alignItems:"center",gap:6}}>{I.shield(12)} Permissions</button>}
+      </div>
+
+      {settingsTab==="team"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>User Roles</div>
         <div style={{display:"flex",gap:8}}>
@@ -2436,18 +2445,19 @@ export default function Home(){
         <InEdit value={r.dept||""} onChange={v=>updateUserRole(r.id,{dept:v})}/>,
         <button onClick={()=>setConfirmDlg({msg:"Remove "+r.name+" from team?",fn:()=>deleteUserRole(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
-      {platformRole==='super_admin'&&<div style={{marginTop:24,borderTop:"1px solid var(--border)",paddingTop:20}}>
-        <div style={{fontSize:14,fontWeight:800,color:"var(--fg)",marginBottom:4}}>Dynamic Permissions Engine</div>
-        <div style={{fontSize:11,color:"var(--fg2)",marginBottom:16}}>ERP-grade role-based access control. Changes take effect immediately.</div>
-        <PermissionsMatrix supabase={supabase} session={{user}}/>
-      </div>}
-      {platformRole!=='super_admin'&&<div style={{marginTop:20,padding:16,background:"var(--bg3)",borderRadius:10}}>
-        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Role Permissions</div>
+      <div style={{marginTop:20,padding:16,background:"var(--bg3)",borderRadius:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:8}}>Legacy Edit Roles</div>
         <div style={{fontSize:11,color:"var(--fg2)",lineHeight:1.8}}>
           <b style={{color:"#3B82F6"}}>admin</b> — Full access: view, add, edit, delete, manage users<br/>
           <b style={{color:"#F59E0B"}}>editor</b> — Can view, add, and edit. Cannot delete. Edits trigger Slack notifications.<br/>
           <b style={{color:"#94A3B8"}}>viewer</b> — Read-only access. No add, edit, or delete buttons visible.
         </div>
+        {platformRole==='super_admin'&&<div style={{fontSize:10,color:"var(--fg2)",marginTop:8,paddingTop:8,borderTop:"1px solid var(--border)"}}>Tab visibility and granular permissions are managed in the <span onClick={()=>setSettingsTab("permissions")} style={{color:"#3B82F6",fontWeight:600,cursor:"pointer"}}>Permissions</span> section.</div>}
+      </div>
+      </div>}
+
+      {settingsTab==="permissions"&&platformRole==='super_admin'&&<div className="af">
+        <PermissionsMatrix supabase={supabase} session={{user}}/>
       </div>}
     </div>}
 
