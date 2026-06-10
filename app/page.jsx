@@ -2434,13 +2434,14 @@ export default function Home(){
             </div>
           </div>)}
         </div>})()}
-      <Tbl headers={["","Email","Name","Role","Department",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
+      <Tbl headers={["","Email","Name","Access Level","Legacy","Department",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
         <div style={{display:"flex",alignItems:"center",gap:4}}>
           {r.avatar_url?<img src={r.avatar_url} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:28,height:28,borderRadius:"50%",background:CL[r.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{r.name?.[0]}</span></div>}
           <label style={{cursor:"pointer",fontSize:9,color:"#3B82F6"}}><input type="file" accept="image/*" style={{display:"none"}} onChange={e=>uploadAvatar(r.id,e.target.files?.[0])}/>edit</label>
         </div>,
         <InEdit value={r.email} onChange={v=>updateUserRole(r.id,{email:v})}/>,
         <InEdit value={r.name} onChange={v=>updateUserRole(r.id,{name:v})}/>,
+        platformRole==='super_admin'?<select value={r.platform_role||"employee"} onChange={e=>updateUserRole(r.id,{platform_role:e.target.value})} style={{padding:"5px 8px",fontSize:11,fontWeight:600,borderRadius:6,border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg)",cursor:"pointer"}}>{["super_admin","admin","manager","employee","intern"].map(p=><option key={p} value={p}>{p.replace("_"," ").replace(/\b\w/g,c=>c.toUpperCase())}</option>)}</select>:<Bdg bg={(r.platform_role==="super_admin"?"#3B82F6":r.platform_role==="admin"?"#8B5CF6":r.platform_role==="manager"?"#F59E0B":"#64748B")+"20"} c={r.platform_role==="super_admin"?"#3B82F6":r.platform_role==="admin"?"#8B5CF6":r.platform_role==="manager"?"#D97706":"#64748B"}>{(r.platform_role||"employee").replace("_"," ")}</Bdg>,
         <InEdit value={r.role} onChange={v=>updateUserRole(r.id,{role:v})} type="select" options={["admin","editor","viewer"]}/>,
         <InEdit value={r.dept||""} onChange={v=>updateUserRole(r.id,{dept:v})}/>,
         <button onClick={()=>setConfirmDlg({msg:"Remove "+r.name+" from team?",fn:()=>deleteUserRole(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
