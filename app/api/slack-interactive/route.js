@@ -124,19 +124,6 @@ async function sendApprovalDecision(leave, decision, approver) {
       channel: '#general',
       text: `*${leave.person}* will be off ${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`
     });
-    const { data: ur } = await supabase.from('user_roles').select('allow_status_update').eq('email', leave.email).maybeSingle();
-    if (ur?.allow_status_update && requesterId) {
-      try {
-        await slackAPI('users.profile.set', {
-          user: requesterId,
-          profile: {
-            status_text: `On ${leave.leave_type}`,
-            status_emoji: ':no-entry:',
-            status_expiration: Math.floor(new Date(leave.end_date + 'T23:59:59').getTime() / 1000)
-          }
-        });
-      } catch (e) { console.error('Status set failed:', e); }
-    }
   }
 }
 
@@ -419,7 +406,9 @@ export async function POST(req) {
     console.log('[slack-interactive] block_action:', action.action_id);
 
     if (action.action_id?.startsWith('home_')) {
-      handleHomeAction(payload, action).catch(e => console.error('Home action err:', e));
+      // MUST await — serverless kills the function once the response returns
+      try { await handleHomeAction(payload, action); }
+      catch (e) { console.error('[slack-interactive] Home action err:', e); }
       return Response.json({});
     }
 
@@ -459,8 +448,9 @@ export async function POST(req) {
         status: newStatus, approved_by: approverName, approved_by_email: finalEmail
       }).eq('id', leaveId);
 
-      sendApprovalDecision(leave, newStatus, { email: finalEmail, name: approverName })
-        .catch(e => console.error('Approval decision err:', e));
+      // MUST await — these DMs + #general post die if left to run after return
+      try { await sendApprovalDecision(leave, newStatus, { email: finalEmail, name: approverName }); }
+      catch (e) { console.error('[slack-interactive] Approval decision err:', e); }
 
       return Response.json({
         replace_original: true,
