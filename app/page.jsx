@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import PermissionsMatrix from './components/PermissionsMatrix';
+import KnowledgeHub from './components/KnowledgeHub';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL||'', process.env.NEXT_PUBLIC_SUPABASE_KEY||'');
 
@@ -717,7 +718,7 @@ export default function Home(){
   const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);const[meetingNotes,setMeetingNotes]=useState(null);const[notesLoading,setNotesLoading]=useState(false);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
-  const[effectivePerms,setEffectivePerms]=useState(null);const[platformRole,setPlatformRole]=useState(null);const[settingsTab,setSettingsTab]=useState("team");
+  const[effectivePerms,setEffectivePerms]=useState(null);const[platformRole,setPlatformRole]=useState(null);const[settingsTab,setSettingsTab]=useState("team");const[docsTab,setDocsTab]=useState("knowledge");
 
   // Fetch Slack availability
   const fetchSlackStatus=useCallback(async()=>{
@@ -868,9 +869,7 @@ export default function Home(){
     if(!data||!data[0]){showToast("Failed to save meeting — run SQL migration 07 if columns are missing","error");return}
     setMeetings(p=>[...p,...data]);showToast("Meeting created");
 
-    // Google Calendar prefill link — works through YOUR Google account, no service account needed.
-    // Opens Calendar pre-filled with title/time/attendees/Fireflies bot; you click Save there,
-    // Google sends the calendar invites and generates the Meet link.
+    // Build Google Calendar prefill URL (fallback if server-side calendar isn't configured)
     let calUrl="";
     try{
       const fmtCal=(d)=>{const dt=new Date(d);const p=n=>String(n).padStart(2,"0");return dt.getFullYear()+p(dt.getMonth()+1)+p(dt.getDate())+"T"+p(dt.getHours())+p(dt.getMinutes())+"00"};
@@ -885,29 +884,39 @@ export default function Home(){
           +(rec.location&&rec.location!=="Google Meet"?"&location="+encodeURIComponent(rec.location):"")
           +"&add="+encodeURIComponent(guests.join(","));
         if(v.type==="Recurring"){const fr={"Daily":"DAILY","Weekly":"WEEKLY","Bi-weekly":"WEEKLY;INTERVAL=2","Monthly":"MONTHLY"}[v.cadence];if(fr)calUrl+="&recur="+encodeURIComponent("RRULE:FREQ="+fr)}
+      }
+    }catch(e){console.error('calendar prefill',e)}
+
+    // Server-side calendar + Slack notifications — one call
+    try{
+      const res=await fetch('/api/schedule-meeting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        title:rec.name,description:rec.description,
+        start:dateTime,duration_minutes:v.duration||30,
+        attendees:v.sendDM?(v.attendees||[]):[],location:rec.location,
+        add_fireflies:!!v.fireflies,recurrence:v.type==="Recurring"?v.cadence:null,
+        channel_post:!!v.channelPost,calendar_url:calUrl
+      })});
+      const d=await res.json();
+      if(d?.hasCalendar&&d?.htmlLink){
+        // Fully in-Hub: event created, Google sends invites + Meet link automatically
+        await supabase.from('meetings').update({calendar_link:d.htmlLink,calendar_event_id:d.eventId||null,meeting_link:d.meetLink||null}).eq('id',data[0].id);
+        setMeetings(p=>p.map(m=>m.id===data[0].id?{...m,calendar_link:d.htmlLink,calendar_event_id:d.eventId,meeting_link:d.meetLink||m.meeting_link}:m));
+        showToast("Calendar event created — Google is sending invites"+(d.meetLink?" with Meet link":""));
+      }else if(calUrl){
+        // Fallback: open Google Calendar pre-filled, user clicks Save there
         await supabase.from('meetings').update({calendar_link:calUrl}).eq('id',data[0].id);
         setMeetings(p=>p.map(m=>m.id===data[0].id?{...m,calendar_link:calUrl}:m));
         window.open(calUrl,"_blank");
         showToast("Google Calendar opened — click Save there to send invites");
       }
-    }catch(e){console.error('calendar prefill',e)}
-
-    // Slack DM invitations + channel announcement with real feedback
-    if(v.sendDM||v.channelPost){
-      try{
-        const res=await fetch('/api/schedule-meeting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-          title:rec.name,description:rec.description,
-          start:dateTime,duration_minutes:v.duration||30,
-          attendees:v.sendDM?(v.attendees||[]):[],location:rec.location,
-          add_fireflies:!!v.fireflies,recurrence:v.type==="Recurring"?v.cadence:null,
-          channel_post:!!v.channelPost,calendar_url:calUrl
-        })});
-        const d=await res.json();
-        if(d?.slackInvites>0)showToast(d.slackInvites+" Slack DM invitation"+(d.slackInvites>1?"s":"")+" sent");
-        if(d?.slackFailed?.length>0)showToast("DM failed for: "+d.slackFailed.join(", "),"error");
-        if(d?.channelPosted)showToast("Announced in #pmo");
-        if(v.sendDM&&!d?.slackInvites&&!d?.slackFailed?.length)showToast("Slack invites did not send — check /api/meetings-test","error");
-      }catch(e){console.error('schedule-meeting',e);showToast("Slack notification failed — is the route deployed?","error")}
+      if(d?.slackInvites>0)showToast(d.slackInvites+" Slack DM invitation"+(d.slackInvites>1?"s":"")+" sent");
+      if(d?.slackFailed?.length>0)showToast("DM failed for: "+d.slackFailed.join(", "),"error");
+      if(d?.channelPosted)showToast("Announced in #pmo");
+      if(v.sendDM&&!d?.slackInvites&&!d?.slackFailed?.length)showToast("Slack invites did not send — check /api/meetings-test","error");
+    }catch(e){
+      console.error('schedule-meeting',e);
+      if(calUrl){window.open(calUrl,"_blank");showToast("Route unreachable — opened Google Calendar fallback","error")}
+      else showToast("Scheduling backend failed — is the route deployed?","error");
     }
     setAddModal(null);
   },[user,userRoles]);
@@ -2375,6 +2384,17 @@ export default function Home(){
 
     {/* ═══ HR DOCUMENTS ═══ */}
     {view==="hrdocs"&&<div className="af">
+      {/* Documents header + sub-navigation */}
+      <div style={{fontSize:18,fontWeight:800,color:"var(--fg)",marginBottom:2}}>Documents</div>
+      <div style={{fontSize:11,color:"var(--fg2)",marginBottom:14}}>Company knowledge, Drive structure, and HR document tracking</div>
+      <div style={{display:"flex",gap:4,background:"var(--bg3)",borderRadius:10,padding:3,width:"fit-content",marginBottom:20}}>
+        <button onClick={()=>setDocsTab("knowledge")} style={{padding:"8px 18px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",background:docsTab==="knowledge"?"var(--fg)":"transparent",color:docsTab==="knowledge"?"var(--bg)":"var(--fg2)"}}>Knowledge</button>
+        <button onClick={()=>setDocsTab("hrdocs")} style={{padding:"8px 18px",borderRadius:8,border:"none",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",background:docsTab==="hrdocs"?"var(--fg)":"transparent",color:docsTab==="hrdocs"?"var(--bg)":"var(--fg2)"}}>HR Docs</button>
+      </div>
+
+      {docsTab==="knowledge"&&<KnowledgeHub supabase={supabase} userRoles={userRoles} canEdit={canEdit}/>}
+
+      {docsTab==="hrdocs"&&<div className="af">
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Company Documents</div>
         {role==="admin"&&<button onClick={()=>setAddModal("drivefolder")} className="btn-pop" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"5px 12px",borderRadius:6,fontWeight:600,fontSize:10,cursor:"pointer"}}>+ Add Folder</button>}
@@ -2445,6 +2465,7 @@ export default function Home(){
             </tbody>
           </table>
         </div>})()}
+      </div>}
     </div>}
 
     {view==="settings"&&canSeeTab('settings')&&<div className="af">
