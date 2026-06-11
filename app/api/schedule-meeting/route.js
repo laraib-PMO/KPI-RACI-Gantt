@@ -83,6 +83,7 @@ export async function POST(req) {
     const {
       title, description, start, duration_minutes = 30,
       attendees = [], location, add_fireflies = false, recurrence = null,
+      channel_post = false, calendar_url = '',
     } = body;
 
     if (!title) {
@@ -145,7 +146,7 @@ export async function POST(req) {
     if (SLACK_TOKEN && attendees.length > 0) {
       const when = fmtWhen(start, recurrence, duration_minutes);
       const joinLine = result.meetLink ? `\nJoin: ${result.meetLink}` : (location && location !== 'In-person' ? `\nLocation: ${location}` : location === 'In-person' ? '\nLocation: In-person' : '');
-      const calLine = result.htmlLink ? `\nCalendar: ${result.htmlLink}` : '';
+      const calLine = result.htmlLink ? `\nCalendar: ${result.htmlLink}` : (calendar_url ? `\nAdd to your calendar: ${calendar_url}` : '');
       const ffLine = add_fireflies ? '\nFireflies notetaker will join this meeting.' : '';
 
       for (const email of attendees) {
@@ -164,6 +165,21 @@ export async function POST(req) {
         if (msg.ok) result.slackInvites++;
         else result.slackFailed.push(email);
       }
+    }
+
+    // ── 3. Channel announcement (#pmo) ──────────────────────────────────
+    if (SLACK_TOKEN && channel_post) {
+      const when = fmtWhen(start, recurrence, duration_minutes);
+      const ann = await slackCall('chat.postMessage', {
+        channel: '#pmo',
+        text: `New meeting scheduled: ${title}`,
+        blocks: [
+          { type: 'section', text: { type: 'mrkdwn', text: `*[MEETING SCHEDULED]*\n*${title}*\nWhen: ${when}${attendees.length ? `\nAttendees: ${attendees.length} invited` : ''}` } },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: 'Sent from Attimo Ops Hub' }] },
+        ],
+      });
+      result.channelPosted = !!ann.ok;
+      if (!ann.ok) result.channelError = ann.error;
     }
 
     return Response.json(result);
