@@ -955,6 +955,10 @@ export default function Home(){
   const deletePerf=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
 
   // Leave CRUD
+  // Leave quota management (Settings > Team > Leave Quotas)
+  const updateLeaveTypeDefault=useCallback(async(key,field,value)=>{const num=value===""?null:Number(value);setLeaveTypes(p=>p.map(t=>t.key===key?{...t,[field]:num}:t));await supabase.from('leave_types').update({[field]:num}).eq('key',key)},[]);
+  const setPersonQuota=useCallback(async(email,leave_type,value)=>{const yr=new Date().getFullYear();const num=value===""?null:Number(value);const existing=leaveBalances.find(b=>b.email===email&&b.leave_type===leave_type&&b.year===yr);if(existing){setLeaveBalances(p=>p.map(b=>b.id===existing.id?{...b,allowance_override:num}:b));await supabase.from('leave_balances').update({allowance_override:num}).eq('id',existing.id)}else{const{data}=await supabase.from('leave_balances').insert({email,leave_type,year:yr,spent:0,spent_this_month:0,allowance_override:num}).select();if(data)setLeaveBalances(p=>[...p,...data])}},[leaveBalances]);
+
   const addLeave=useCallback(async v=>{const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;if(s&&s<today){showToast("Cannot book leave starting in the past","error");return}const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data){setLeaves(p=>[...data,...p]);showToast("Leave request submitted — pending approval");
     // Send Spock-style Slack card with Approve/Reject buttons
     try{await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:v.person||user?.user_metadata?.full_name,action:"requested",table:"leave",leave:data[0]})})}catch{}
@@ -2244,7 +2248,7 @@ export default function Home(){
                   {leaveTypes.map(t=>{
                     const b=myBals.find(x=>x.leave_type===t.key);
                     const spent=Number(b?.spent||0);
-                    const allow=t.annual_allowance;
+                    const allow=b?.allowance_override!=null?Number(b.allowance_override):t.annual_allowance;
                     const avail=allow!=null?Math.max(0,allow-spent):null;
                     const spentMo=Number(b?.spent_this_month||0);
                     const monthAvail=t.monthly_limit!=null?Math.max(0,t.monthly_limit-spentMo):null;
@@ -2525,6 +2529,46 @@ export default function Home(){
         </div>
         {platformRole==='super_admin'&&<div style={{fontSize:10,color:"var(--fg2)",marginTop:8,paddingTop:8,borderTop:"1px solid var(--border)"}}>Tab visibility and granular permissions are managed in the <span onClick={()=>setSettingsTab("permissions")} style={{color:"#3B82F6",fontWeight:600,cursor:"pointer"}}>Permissions</span> section.</div>}
       </div>
+
+      {/* Leave Quotas — global defaults + per-person override */}
+      {role==="admin"&&<div style={{marginTop:20,border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
+        <div style={{padding:"12px 14px",background:"var(--bg2)",borderBottom:"1px solid var(--border)"}}>
+          <div style={{fontSize:13,fontWeight:800,color:"var(--fg)"}}>Leave Quotas</div>
+          <div style={{fontSize:10,color:"var(--fg2)",marginTop:2}}>Set the company default per leave type, then override for any individual (e.g. new hires). Blank = use default. Annual basis.</div>
+        </div>
+        {/* Global defaults row */}
+        <div style={{padding:"10px 14px",borderBottom:"2px solid var(--border)",background:"var(--bg3)"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Company Default (per year)</div>
+          <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+            {leaveTypes.map(t=><div key={t.key} style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:11,fontWeight:600,color:t.color||"var(--fg)"}}>{t.display_name}</span>
+              <input type="number" min="0" defaultValue={t.annual_allowance??""} onBlur={e=>updateLeaveTypeDefault(t.key,'annual_allowance',e.target.value)} style={{width:54,padding:"4px 6px",fontSize:11,borderRadius:6,border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg)",textAlign:"center"}}/>
+            </div>)}
+          </div>
+        </div>
+        {/* Per-person override grid */}
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
+            <thead><tr style={{background:"var(--bg2)"}}>
+              <th style={{padding:"8px 14px",textAlign:"left",fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:.5,borderBottom:"1px solid var(--border)"}}>Member</th>
+              {leaveTypes.map(t=><th key={t.key} style={{padding:"8px 10px",textAlign:"center",fontSize:9,fontWeight:700,color:t.color||"var(--fg2)",textTransform:"uppercase",letterSpacing:.5,borderBottom:"1px solid var(--border)",minWidth:70}}>{t.display_name}</th>)}
+            </tr></thead>
+            <tbody>
+              {userRoles.filter(u=>u.name!=="Efehan Maleri").sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map((u,i)=><tr key={u.id} className="rh" style={{background:i%2?"var(--bg2)":"transparent"}}>
+                <td style={{padding:"6px 14px",fontSize:11,fontWeight:600,color:"var(--fg)",borderBottom:"1px solid var(--border)"}}>{u.name}</td>
+                {leaveTypes.map(t=>{const bal=leaveBalances.find(b=>b.email===u.email&&b.leave_type===t.key&&b.year===new Date().getFullYear());const ov=bal?.allowance_override;
+                  return <td key={t.key} style={{padding:"4px 10px",textAlign:"center",borderBottom:"1px solid var(--border)"}}>
+                    <input type="number" min="0" placeholder={t.annual_allowance??"∞"} defaultValue={ov??""} key={(ov??"")+"-"+u.id+t.key} onBlur={e=>{if(String(e.target.value)!==String(ov??""))setPersonQuota(u.email,t.key,e.target.value)}} title={ov!=null?`Override: ${ov}`:`Default: ${t.annual_allowance??"unlimited"}`} style={{width:50,padding:"4px 5px",fontSize:11,borderRadius:6,border:ov!=null?"1.5px solid #F59E0B":"1px solid var(--border)",background:"var(--bg2)",color:ov!=null?"#D97706":"var(--fg2)",textAlign:"center",fontWeight:ov!=null?700:400}}/>
+                  </td>;})}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+        <div style={{padding:"8px 14px",fontSize:9,color:"var(--fg2)",display:"flex",gap:14,alignItems:"center"}}>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:11,height:11,borderRadius:4,border:"1.5px solid #F59E0B",display:"inline-block"}}/> Custom override</span>
+          <span>Grey number = company default. Type a value to override; clear it to revert.</span>
+        </div>
+      </div>}
       </div>}
 
       {settingsTab==="permissions"&&platformRole==='super_admin'&&<div className="af">
