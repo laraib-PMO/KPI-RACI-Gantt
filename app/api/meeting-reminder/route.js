@@ -1,77 +1,70 @@
-// ─── Meeting Reminder Route — DM all attendees a Slack reminder ─────────────
-// POST /api/meeting-reminder
-// Body: { meeting_id, meeting_name, when, duration, location, calendar_link, attendees_emails:[] }
+// ═══════════════════════════════════════════════════════════════════════════
+// /api/meeting-reminder — DMs every attendee of an existing meeting on Slack
+// Used by the "Remind" button in the Meetings tab.
+// ═══════════════════════════════════════════════════════════════════════════
 
-const SLACK_API = 'https://slack.com/api';
+const SLACK_TOKEN = process.env.SLACK_BOT_TOKEN;
 
-async function lookupSlackUser(email) {
-  const token = process.env.SLACK_BOT_TOKEN;
-  if (!token || !email) return null;
+async function lookupSlackId(email) {
   try {
-    const res = await fetch(`${SLACK_API}/users.lookupByEmail?email=${encodeURIComponent(email)}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const res = await fetch(`https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`, {
+      headers: { 'Authorization': `Bearer ${SLACK_TOKEN}` },
     });
-    const d = await res.json();
-    return d.user?.id || null;
+    const data = await res.json();
+    return data.ok ? data.user.id : null;
   } catch { return null; }
-}
-
-async function slackDM(userId, blocks, fallback) {
-  const token = process.env.SLACK_BOT_TOKEN;
-  if (!token || !userId) return { ok: false };
-  const res = await fetch(`${SLACK_API}/chat.postMessage`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: userId, blocks, text: fallback, unfurl_links: false })
-  });
-  return await res.json();
 }
 
 export async function POST(req) {
   try {
+    if (!SLACK_TOKEN) {
+      return Response.json({ ok: false, error: 'SLACK_BOT_TOKEN not configured' }, { status: 500 });
+    }
+
     const body = await req.json();
-    const { meeting_name, when, duration, location, calendar_link, attendees_emails } = body;
+    const { meeting_name, when, duration, location, calendar_link, attendees_emails = [] } = body;
 
-    if (!attendees_emails || attendees_emails.length === 0) {
-      return Response.json({ ok: false, error: 'No attendees' });
+    if (!meeting_name || attendees_emails.length === 0) {
+      return Response.json({ ok: false, error: 'Missing meeting_name or attendees' }, { status: 400 });
     }
 
-    const fallback = `📅 Reminder: ${meeting_name} ${when ? `(${when})` : ''}`;
-    const blocks = [
-      { type: 'header', text: { type: 'plain_text', text: `📅 ${meeting_name || 'Meeting Reminder'}` } },
-      {
-        type: 'section',
-        fields: [
-          ...(when ? [{ type: 'mrkdwn', text: `*When:*\n${when}` }] : []),
-          ...(duration ? [{ type: 'mrkdwn', text: `*Duration:*\n${duration}` }] : []),
-          ...(location ? [{ type: 'mrkdwn', text: `*Where:*\n${location}` }] : [])
-        ]
-      },
-      ...(calendar_link ? [{
-        type: 'actions',
-        elements: [{
-          type: 'button',
-          text: { type: 'plain_text', text: '📅 Open in Calendar' },
-          url: calendar_link,
-          action_id: 'open_calendar'
-        }]
-      }] : []),
-      { type: 'context', elements: [{ type: 'mrkdwn', text: `Reminder sent via Attimo PMO` }] }
-    ];
+    let sent = 0;
+    const failed = [];
 
-    const results = [];
+    const detailLines = [
+      when ? `When: ${when}` : null,
+      duration ? `Duration: ${duration}` : null,
+      location ? `Location: ${location}` : null,
+      calendar_link ? `Calendar: ${calendar_link}` : null,
+    ].filter(Boolean).join('\n');
+
     for (const email of attendees_emails) {
-      const userId = await lookupSlackUser(email);
-      if (userId) {
-        const res = await slackDM(userId, blocks, fallback);
-        results.push({ email, ok: res.ok, error: res.error });
-      } else {
-        results.push({ email, ok: false, error: 'No Slack user found' });
-      }
+      const cleanEmail = (email || '').trim();
+      if (!cleanEmail) continue;
+      const slackId = await lookupSlackId(cleanEmail);
+      if (!slackId) { failed.push(cleanEmail); continue; }
+
+      const res = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SLACK_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: slackId,
+          text: `Meeting reminder: ${meeting_name}`,
+          blocks: [
+            { type: 'section', text: { type: 'mrkdwn', text: `*[MEETING REMINDER]*\n*${meeting_name}*` } },
+            { type: 'section', text: { type: 'mrkdwn', text: detailLines || 'See the Ops Hub for details.' } },
+            { type: 'context', elements: [{ type: 'mrkdwn', text: 'Sent from Attimo Ops Hub' }] },
+          ],
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) sent++;
+      else failed.push(cleanEmail);
     }
 
-    return Response.json({ ok: true, sent: results.filter(r => r.ok).length, total: attendees_emails.length, results });
-  } catch (e) {
-    return Response.json({ ok: false, error: e.message });
+    return Response.json({ ok: true, sent, failed });
+  } catch (err) {
+    console.error('[meeting-reminder] Error:', err);
+    return Response.json({ ok: false, error: 'Internal error' }, { status: 500 });
   }
 }
