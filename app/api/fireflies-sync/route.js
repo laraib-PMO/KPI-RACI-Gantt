@@ -1,124 +1,101 @@
-// ─── Fireflies Sync API — Pulls meeting notes into dashboard ─────────────────
-// Fetches transcripts, summaries, action items from Fireflies GraphQL API
-// ENV: FIREFLIES_API_KEY (get from Fireflies → Settings → Developer API)
+// ═══════════════════════════════════════════════════════════════════════════
+// /api/fireflies-sync — Pulls recent MOMs from Fireflies
 //
-// Called by: cron job + manual "Sync" button
-// Returns: recent meeting notes with summaries and action items
+// Returns last 10 meetings: title, date, duration, AI summary, action items,
+// participants, and a direct link to the full transcript in Fireflies.
+//
+// Requires FIREFLIES_API_KEY in Vercel env vars.
+// Get it from: fireflies.ai > Settings > Developer Settings > API Key
+// ═══════════════════════════════════════════════════════════════════════════
 
-export async function GET(req) {
-  const apiKey = process.env.FIREFLIES_API_KEY;
-  if (!apiKey) {
-    return Response.json({
-      ok: false,
-      error: 'No FIREFLIES_API_KEY configured',
-      meetings: []
-    });
-  }
+const FF_API = 'https://api.fireflies.ai/graphql';
 
-  const { searchParams } = new URL(req.url);
-  const limit = parseInt(searchParams.get('limit') || '20');
-  const days = parseInt(searchParams.get('days') || '7');
-
-  const sinceDate = new Date();
-  sinceDate.setDate(sinceDate.getDate() - days);
-
+export async function GET() {
   try {
-    // Fetch recent transcripts
-    const res = await fetch('https://api.fireflies.ai/graphql', {
+    const key = process.env.FIREFLIES_API_KEY;
+    if (!key) {
+      return Response.json({
+        ok: false,
+        meetings: [],
+        error: 'FIREFLIES_API_KEY not set. Add it in Vercel env vars (fireflies.ai > Settings > Developer Settings).',
+      });
+    }
+
+    const query = `
+      query Transcripts($limit: Int) {
+        transcripts(limit: $limit) {
+          id
+          title
+          date
+          duration
+          transcript_url
+          organizer_email
+          participants
+          summary {
+            overview
+            action_items
+            shorthand_bullet
+          }
+        }
+      }
+    `;
+
+    const res = await fetch(FF_API, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        query: `{
-          transcripts(limit: ${limit}) {
-            id
-            title
-            dateString
-            duration
-            privacy
-            host_email
-            organizer_email
-            speakers {
-              id
-              name
-            }
-            sentences {
-              speaker_name
-              text
-              ai_filters {
-                task
-                question
-              }
-            }
-          }
-        }`
-      })
+      body: JSON.stringify({ query, variables: { limit: 10 } }),
     });
 
-    const data = await res.json();
-    const transcripts = data?.data?.transcripts || [];
+    const json = await res.json();
 
-    // Process each transcript into a clean meeting note
+    if (json.errors) {
+      console.error('[fireflies-sync] GraphQL errors:', JSON.stringify(json.errors));
+      return Response.json({ ok: false, meetings: [], error: json.errors[0]?.message || 'Fireflies API error' });
+    }
+
+    const transcripts = json.data?.transcripts || [];
+
     const meetings = transcripts.map(t => {
-      const sentences = t.sentences || [];
-      const speakers = t.speakers || [];
+      // Action items come back as one text block; split into lines
+      const rawActions = t.summary?.action_items || '';
+      const actionItems = rawActions
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 2)
+        .map(l => {
+          // Fireflies formats lines like "**Name** task text" or "- task text"
+          const m = l.match(/^\*\*(.+?)\*\*\s*(.*)$/);
+          if (m) return { speaker: m[1], text: m[2] || m[1] };
+          return { speaker: '', text: l.replace(/^[-*•]\s*/, '') };
+        })
+        .filter(a => a.text);
 
-      // Extract action items (sentences flagged as tasks)
-      const actionItems = sentences
-        .filter(s => s.ai_filters?.task)
-        .map(s => ({ speaker: s.speaker_name, text: s.text }));
+      let dateStr = '';
+      try {
+        dateStr = new Date(Number(t.date) || t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      } catch { dateStr = String(t.date); }
 
-      // Extract questions raised
-      const questions = sentences
-        .filter(s => s.ai_filters?.question)
-        .map(s => ({ speaker: s.speaker_name, text: s.text }));
-
-      // Speaker talk time (rough estimate by sentence count)
-      const speakerCounts = {};
-      sentences.forEach(s => {
-        speakerCounts[s.speaker_name] = (speakerCounts[s.speaker_name] || 0) + 1;
-      });
-      const totalSentences = sentences.length || 1;
-      const speakerBreakdown = Object.entries(speakerCounts).map(([name, count]) => ({
-        name,
-        sentences: count,
-        percentage: Math.round((count / totalSentences) * 100)
-      })).sort((a, b) => b.sentences - a.sentences);
-
-      // Build a brief summary from first 5 sentences
-      const summaryText = sentences.slice(0, 5).map(s => s.text).join(' ').slice(0, 300);
+      const durMin = t.duration ? Math.round(Number(t.duration)) : null;
 
       return {
         id: t.id,
-        title: t.title,
-        date: t.dateString,
-        duration: t.duration ? Math.round(t.duration / 60) + ' min' : 'Unknown',
-        host: t.host_email || t.organizer_email || 'Unknown',
-        privacy: t.privacy,
-        speakers: speakers.map(s => s.name),
-        speakerBreakdown,
+        title: t.title || 'Untitled meeting',
+        date: dateStr,
+        duration: durMin ? `${durMin} min` : '',
+        speakers: t.participants || [],
+        summary: t.summary?.overview || t.summary?.shorthand_bullet || '',
         actionItems,
-        questions,
-        summary: summaryText,
-        totalSentences: sentences.length,
-        firefliesUrl: `https://app.fireflies.ai/view/${t.id}`
+        firefliesUrl: t.transcript_url || `https://app.fireflies.ai/view/${t.id}`,
+        organizer: t.organizer_email || '',
       };
     });
 
-    return Response.json({
-      ok: true,
-      meetings,
-      count: meetings.length,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (e) {
-    return Response.json({
-      ok: false,
-      error: e.message,
-      meetings: []
-    });
+    return Response.json({ ok: true, meetings, count: meetings.length });
+  } catch (err) {
+    console.error('[fireflies-sync] Error:', err);
+    return Response.json({ ok: false, meetings: [], error: 'Failed to reach Fireflies API' }, { status: 500 });
   }
 }
