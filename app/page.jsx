@@ -487,7 +487,7 @@ function NotificationBell({leaves,risks,decisions,isApprover,onNavigate}){
 
 // Full-featured Meeting modal — one-time or recurring, multi-attendee, Fireflies bot
 function MeetingModal({userRoles,onSave,onClose}){
-  const[v,setV]=useState({type:"One-time",cadence:"Weekly",date:"",time:"10:00",duration:30,attendees:[],description:"",fireflies:true,location:"Google Meet"});
+  const[v,setV]=useState({type:"One-time",cadence:"Weekly",date:"",time:"10:00",duration:30,attendees:[],description:"",fireflies:true,location:"Google Meet",sendDM:true,channelPost:false});
   const[saving,setSaving]=useState(false);
   const[err,setErr]=useState("");
   const set=(k,val)=>setV(p=>({...p,[k]:val}));
@@ -541,7 +541,7 @@ function MeetingModal({userRoles,onSave,onClose}){
         </div>
 
         {/* Fireflies + Location */}
-        <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+        <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:8}}>
           <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"var(--fg)"}}>
             <input type="checkbox" checked={v.fireflies} onChange={e=>set("fireflies",e.target.checked)} style={{cursor:"pointer"}}/>
             <span>Add Fireflies bot for notes</span>
@@ -552,13 +552,26 @@ function MeetingModal({userRoles,onSave,onClose}){
           </select>
         </div>
 
+        {/* Slack notification options */}
+        <div style={{background:"var(--bg2)",borderRadius:8,padding:10,marginBottom:12,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:.5}}>Slack Notifications</div>
+          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"var(--fg)"}}>
+            <input type="checkbox" checked={v.sendDM} onChange={e=>set("sendDM",e.target.checked)} style={{cursor:"pointer"}}/>
+            <span>Send DM invitation to each attendee ({v.attendees.length} selected)</span>
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"var(--fg)"}}>
+            <input type="checkbox" checked={v.channelPost} onChange={e=>set("channelPost",e.target.checked)} style={{cursor:"pointer"}}/>
+            <span>Announce in #pmo channel</span>
+          </label>
+        </div>
+
         {/* Description */}
         <label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>Description / Agenda</label>
         <textarea value={v.description} onChange={e=>set("description",e.target.value)} placeholder="What's this meeting about?" rows={3} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:11,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)",resize:"vertical",fontFamily:"inherit"}}/>
       </div>
       <div style={{padding:"12px 20px",borderTop:"1px solid var(--border)",flexShrink:0}}>
         <button onClick={submit} disabled={saving} className="btn-pop" style={{width:"100%",padding:10,background:saving?"var(--bg3)":"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:saving?"var(--fg2)":"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:saving?"wait":"pointer"}}>{saving?"Creating...":"Schedule & Send Invites"}</button>
-        <div style={{fontSize:9,color:"var(--fg2)",marginTop:6,textAlign:"center"}}>Creates Google Calendar event + sends invites to all attendees{v.fireflies?" + Fireflies bot":""}</div>
+        <div style={{fontSize:9,color:"var(--fg2)",marginTop:6,textAlign:"center"}}>Opens Google Calendar pre-filled with attendees{v.fireflies?" + Fireflies bot":""} — click Save there to send calendar invites{v.sendDM?". Slack DMs go out instantly.":"."}</div>
       </div>
     </div>
   </div>;
@@ -852,18 +865,50 @@ export default function Home(){
       meeting_datetime:dateTime
     };
     const{data}=await supabase.from('meetings').insert(rec).select();
-    if(data){setMeetings(p=>[...p,...data]);showToast("Meeting created")}
-    // Fire-and-forget Google Calendar create + Slack DM invites
+    if(!data||!data[0]){showToast("Failed to save meeting — run SQL migration 07 if columns are missing","error");return}
+    setMeetings(p=>[...p,...data]);showToast("Meeting created");
+
+    // Google Calendar prefill link — works through YOUR Google account, no service account needed.
+    // Opens Calendar pre-filled with title/time/attendees/Fireflies bot; you click Save there,
+    // Google sends the calendar invites and generates the Meet link.
+    let calUrl="";
     try{
-      const res=await fetch('/api/schedule-meeting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        title:rec.name,description:rec.description,
-        start:dateTime,duration_minutes:v.duration||30,
-        attendees:v.attendees||[],location:rec.location,
-        add_fireflies:!!v.fireflies,recurrence:v.type==="Recurring"?v.cadence:null
-      })});
-      const d=await res.json();
-      if(d?.htmlLink){await supabase.from('meetings').update({calendar_link:d.htmlLink,calendar_event_id:d.eventId}).eq('id',data[0].id);showToast("Google Calendar event created")}
-    }catch(e){console.error('schedule-meeting',e)}
+      const fmtCal=(d)=>{const dt=new Date(d);const p=n=>String(n).padStart(2,"0");return dt.getFullYear()+p(dt.getMonth()+1)+p(dt.getDate())+"T"+p(dt.getHours())+p(dt.getMinutes())+"00"};
+      const guests=[...(v.attendees||[])];
+      if(v.fireflies)guests.push("fred@fireflies.ai");
+      if(dateTime){
+        const endDt=new Date(new Date(dateTime).getTime()+(v.duration||30)*60000);
+        calUrl="https://calendar.google.com/calendar/render?action=TEMPLATE"
+          +"&text="+encodeURIComponent(rec.name)
+          +"&dates="+fmtCal(dateTime)+"/"+fmtCal(endDt)
+          +"&details="+encodeURIComponent(rec.description||"Scheduled via Attimo Ops Hub")
+          +(rec.location&&rec.location!=="Google Meet"?"&location="+encodeURIComponent(rec.location):"")
+          +"&add="+encodeURIComponent(guests.join(","));
+        if(v.type==="Recurring"){const fr={"Daily":"DAILY","Weekly":"WEEKLY","Bi-weekly":"WEEKLY;INTERVAL=2","Monthly":"MONTHLY"}[v.cadence];if(fr)calUrl+="&recur="+encodeURIComponent("RRULE:FREQ="+fr)}
+        await supabase.from('meetings').update({calendar_link:calUrl}).eq('id',data[0].id);
+        setMeetings(p=>p.map(m=>m.id===data[0].id?{...m,calendar_link:calUrl}:m));
+        window.open(calUrl,"_blank");
+        showToast("Google Calendar opened — click Save there to send invites");
+      }
+    }catch(e){console.error('calendar prefill',e)}
+
+    // Slack DM invitations + channel announcement with real feedback
+    if(v.sendDM||v.channelPost){
+      try{
+        const res=await fetch('/api/schedule-meeting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          title:rec.name,description:rec.description,
+          start:dateTime,duration_minutes:v.duration||30,
+          attendees:v.sendDM?(v.attendees||[]):[],location:rec.location,
+          add_fireflies:!!v.fireflies,recurrence:v.type==="Recurring"?v.cadence:null,
+          channel_post:!!v.channelPost,calendar_url:calUrl
+        })});
+        const d=await res.json();
+        if(d?.slackInvites>0)showToast(d.slackInvites+" Slack DM invitation"+(d.slackInvites>1?"s":"")+" sent");
+        if(d?.slackFailed?.length>0)showToast("DM failed for: "+d.slackFailed.join(", "),"error");
+        if(d?.channelPosted)showToast("Announced in #pmo");
+        if(v.sendDM&&!d?.slackInvites&&!d?.slackFailed?.length)showToast("Slack invites did not send — check /api/meetings-test","error");
+      }catch(e){console.error('schedule-meeting',e);showToast("Slack notification failed — is the route deployed?","error")}
+    }
     setAddModal(null);
   },[user,userRoles]);
 
