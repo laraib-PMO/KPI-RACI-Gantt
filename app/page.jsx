@@ -195,7 +195,7 @@ function LeaveRequestModal({user,onSave,onClose,isAdmin,leaves,userRoles,holiday
   const[step,setStep]=useState(initialType?2:1);const[vals,setVals]=useState({duration:"full",leave_type:initialType||"",person:user?.user_metadata?.full_name||""});const[err,setErr]=useState("");
   const set=(k,v)=>setVals(p=>({...p,[k]:v}));
   const empTypes=[{id:"annual",l:"Annual",sub:"14/yr"},{id:"sick",l:"Sick",sub:"8/yr"},{id:"casual",l:"Casual",sub:"1/mo"}];
-  const adminExtra=[{id:"wfh",l:"WFH",sub:""},{id:"other",l:"Other",sub:""}];
+  const adminExtra=[{id:"other",l:"Other",sub:""}];
   const halfDayTypes=[{id:"annual",l:"Annual",sub:"14/yr"},{id:"casual",l:"Casual",sub:"1/mo"}];
   const getTypes=()=>{
     if(vals.duration==="half")return halfDayTypes;
@@ -205,7 +205,7 @@ function LeaveRequestModal({user,onSave,onClose,isAdmin,leaves,userRoles,holiday
   const validate1=()=>{if(!vals.leave_type){setErr("Select a leave type");return false}setErr("");return true};
   // Check overlap + holidays
   const getOverlap=()=>{if(!vals.start_date)return{overlap:[],hols:[]};const me=userRoles?.find(r=>r.name===vals.person);const myDept=me?.dept||"";const s=vals.start_date;const e=vals.duration==="half"?s:(vals.end_date||s);const overlap=(leaves||[]).filter(l=>l.status==="approved"&&l.person!==vals.person&&l.start_date<=e&&l.end_date>=s).map(l=>{const ur=userRoles?.find(r=>r.name===l.person);return{name:l.person,dept:ur?.dept||"",sameDept:ur?.dept===myDept}}).filter(o=>o.sameDept);const hols=(holidays||[]).filter(h=>h.d>=s&&h.d<=e);return{overlap,hols}};
-  const validate2=()=>{if(!vals.person?.trim()){setErr("Name is required");return false}if(!vals.start_date){setErr("Select a date");return false}if(vals.duration==="full"&&!vals.end_date){setErr("Select end date");return false}if(vals.duration==="full"&&vals.end_date<vals.start_date){setErr("End date must be after start date");return false}setErr("");return true};
+  const validate2=()=>{const todayStr=new Date().toISOString().split('T')[0];if(!vals.person?.trim()){setErr("Name is required");return false}if(!vals.start_date){setErr("Select a date");return false}if(vals.start_date<todayStr){setErr("Cannot book leave starting in the past");return false}if(vals.duration==="full"&&!vals.end_date){setErr("Select end date");return false}if(vals.duration==="full"&&vals.end_date<vals.start_date){setErr("End date must be after start date");return false}setErr("");return true};
   return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
     <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(440px,95vw)",padding:20,boxShadow:"0 25px 60px rgba(0,0,0,.3)",border:"1px solid var(--border)"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><h3 style={{margin:0,fontSize:16,fontWeight:800,color:"var(--fg)"}}>Request Leave</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--fg2)"}}>{I.x(16)}</button></div>
@@ -235,9 +235,9 @@ function LeaveRequestModal({user,onSave,onClose,isAdmin,leaves,userRoles,holiday
         <input value={vals.person} onChange={e=>set("person",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",marginBottom:12,boxSizing:"border-box"}}/>
         <div style={{display:"flex",gap:12,marginBottom:12}}>
           <div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>{vals.duration==="half"?"Date":"From"} <span style={{color:"#EF4444"}}>*</span></label>
-            <input type="date" value={vals.start_date||""} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",boxSizing:"border-box"}}/></div>
+            <input type="date" min={new Date().toISOString().split('T')[0]} value={vals.start_date||""} onChange={e=>set("start_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",boxSizing:"border-box"}}/></div>
           {vals.duration==="full"&&<div style={{flex:1}}><label style={{fontSize:11,fontWeight:600,color:"var(--fg2)",display:"block",marginBottom:4}}>To <span style={{color:"#EF4444"}}>*</span></label>
-            <input type="date" value={vals.end_date||""} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",boxSizing:"border-box"}}/></div>}
+            <input type="date" min={vals.start_date||new Date().toISOString().split('T')[0]} value={vals.end_date||""} onChange={e=>set("end_date",e.target.value)} style={{width:"100%",padding:8,border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--bg2)",color:"var(--fg)",boxSizing:"border-box"}}/></div>}
         </div>
         <div style={{background:"var(--bg2)",borderRadius:8,padding:10,marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:vals.leave_type==="annual"?"#3B82F6":vals.leave_type==="sick"?"#EF4444":"#F59E0B"}}/>
@@ -955,7 +955,7 @@ export default function Home(){
   const deletePerf=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setPerf(p=>p.filter(r=>r.id!==id));await supabase.from('performance').delete().eq('id',id)},[]);
 
   // Leave CRUD
-  const addLeave=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data){setLeaves(p=>[...data,...p]);showToast("Leave request submitted — pending approval");
+  const addLeave=useCallback(async v=>{const me=userRoles.find(r=>r.email===user?.email);if(me?.name==="Efehan Maleri"){showToast("CEO is excluded from leave requests","error");return}const s=v.start_date;const e=v.end_date||v.start_date;if(s&&s<today){showToast("Cannot book leave starting in the past","error");return}const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const{data}=await supabase.from('leaves').insert({person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'}).select();if(data){setLeaves(p=>[...data,...p]);showToast("Leave request submitted — pending approval");
     // Send Spock-style Slack card with Approve/Reject buttons
     try{await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:v.person||user?.user_metadata?.full_name,action:"requested",table:"leave",leave:data[0]})})}catch{}
   }setAddModal(null)},[user,userRoles]);
@@ -2275,7 +2275,7 @@ export default function Home(){
                   return <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:"var(--bg2)"}}>
                     <div>
                       <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{dateLabel}</div>
-                      <div style={{fontSize:9,color:"var(--fg2)"}}>{t.display_name||l.leave_type} · {l.half_day?"0.5 day":`${l.days} day${l.days>1?"s":""}`}</div>
+                      <div style={{fontSize:9,color:"var(--fg2)"}}>{t.display_name||l.leave_type} · {l.half_day?"0.5 day":`${l.days} day${l.days>1?"s":""}`}{(l.status==="approved"||l.status==="rejected")&&l.approved_by?` · ${l.status==="approved"?"approved":"rejected"} by ${l.approved_by.split(" ")[0]}`:""}</div>
                     </div>
                     <span style={{fontSize:9,padding:"3px 8px",borderRadius:99,background:l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7",color:l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E",fontWeight:700,letterSpacing:.5}}>{l.status.toUpperCase()}</span>
                   </div>;
