@@ -147,19 +147,23 @@ async function sendApprovalDecision(leave, decision, approver) {
 
 async function openBalancesModal(trigger_id, email) {
   const year = new Date().getFullYear();
-  const { data: bals } = await supabase.from('leave_balances').select('*').eq('email', email).eq('year', year);
+  const { data: bals } = await supabase.from('leave_balances').select('*').ilike('email', email).eq('year', year);
   const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
   const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `*Your leave balances for ${year}*` } }, { type: 'divider' }];
   for (const t of (types || [])) {
-    const b = (bals || []).find(x => x.leave_type === t.key) || { spent: 0, allowance: t.annual_allowance, spent_this_month: 0, monthly_limit: t.monthly_limit };
-    const available = b.allowance != null ? Math.max(0, b.allowance - (b.spent || 0)) : null;
-    const monthAvail = b.monthly_limit != null ? Math.max(0, b.monthly_limit - (b.spent_this_month || 0)) : null;
+    const b = (bals || []).find(x => x.leave_type === t.key) || {};
+    const allowance = b.allowance_override != null ? Number(b.allowance_override) : t.annual_allowance;
+    const spent = Number(b.spent || 0);
+    const available = allowance != null ? Math.max(0, allowance - spent) : null;
+    const monthlyLimit = t.monthly_limit;
+    const spentMonth = Number(b.spent_this_month || 0);
+    const monthAvail = monthlyLimit != null ? Math.max(0, monthlyLimit - spentMonth) : null;
     blocks.push({
       type: 'section',
       text: { type: 'mrkdwn',
         text: `${t.emoji || ''} *${t.display_name}*\n` +
-              `Spent: *${b.spent || 0}* · Allowance: *${b.allowance ?? '∞'}* · Available: *${available ?? '∞'}*\n` +
-              (b.monthly_limit != null ? `_This month:_ ${b.spent_this_month || 0}/${b.monthly_limit} used · ${monthAvail} available` : '_No monthly cap_')
+              `Spent: *${spent}* · Allowance: *${allowance ?? '∞'}* · Available: *${available ?? '∞'}*\n` +
+              (monthlyLimit != null ? `_This month:_ ${spentMonth}/${monthlyLimit} used · ${monthAvail} available` : '_No monthly cap_')
       }
     });
   }
@@ -170,7 +174,7 @@ async function openBalancesModal(trigger_id, email) {
 
 async function openMyLeaveModal(trigger_id, email) {
   const today = new Date().toISOString().split('T')[0];
-  const { data: leaves } = await supabase.from('leaves').select('*').eq('email', email).order('start_date', { ascending: false }).limit(15);
+  const { data: leaves } = await supabase.from('leaves').select('*').ilike('email', email).order('start_date', { ascending: false }).limit(15);
   const upcoming = (leaves || []).filter(l => l.end_date >= today);
   const past = (leaves || []).filter(l => l.end_date < today);
   const fmt = l => {
@@ -222,7 +226,7 @@ async function openPolicyModal(trigger_id) {
 async function handleLeaveSubmit(payload) {
   const v = payload.view.state?.values || {};
   const meta = JSON.parse(payload.view.private_metadata || '{}');
-  const email = meta.email || '';
+  const email = (meta.email || '').toLowerCase();
   const userId = payload.user?.id;
   const leave_type = v.leave_type?.value?.selected_option?.value;
   const start_date = v.start_date?.value?.selected_date;
@@ -232,15 +236,18 @@ async function handleLeaveSubmit(payload) {
 
   if (!leave_type || !start_date || !end_date) return { response_action: 'errors', errors: { start_date: 'All fields required' } };
   if (end_date < start_date) return { response_action: 'errors', errors: { end_date: 'End must be on/after start' } };
+  const todayIso = new Date().toISOString().split('T')[0];
+  if (start_date < todayIso) return { response_action: 'errors', errors: { start_date: 'Cannot book leave starting in the past' } };
 
   const { data: typeRow } = await supabase.from('leave_types').select('*').eq('key', leave_type).maybeSingle();
-  if (half_day && !typeRow?.allows_half_day) return { response_action: 'errors', errors: { half_day: 'Half day not allowed for this type' } };
+  const halfAllowed = typeRow?.allows_half_day ?? ['annual', 'casual'].includes(leave_type);
+  if (half_day && !halfAllowed) return { response_action: 'errors', errors: { half_day: 'Half day not allowed for this type' } };
 
   const d1 = new Date(start_date + 'T00:00:00');
   const d2 = new Date(end_date + 'T00:00:00');
   const days = half_day ? 0.5 : Math.max(1, Math.round((d2 - d1) / 86400000) + 1);
 
-  const { data: requester } = await supabase.from('user_roles').select('*').eq('email', email).maybeSingle();
+  const { data: requester } = await supabase.from('user_roles').select('*').ilike('email', email).maybeSingle();
   if (!requester) return { response_action: 'errors', errors: { leave_type: 'Account not in roster — contact Laraib' } };
 
   const { data: inserted } = await supabase.from('leaves').insert({
@@ -277,18 +284,24 @@ async function handleLeaveSubmit(payload) {
     ]
   });
 
-  const managerId = await lookupUser(managerEmail);
-  if (managerId) await dmUser(managerId, { blocks: card, text: `${requester.name} requested leave` });
-
+  // Fire all notifications in parallel — sequential awaits blew Slack's 3s
+  // view_submission budget and caused "We had some trouble connecting".
+  const notifyTasks = [];
+  notifyTasks.push((async () => {
+    const managerId = await lookupUser(managerEmail);
+    if (managerId) await dmUser(managerId, { blocks: card, text: `${requester.name} requested leave` });
+  })());
   if (managerEmail !== 'efehan@attimo.com') {
-    const efehanId = await lookupUser('efehan@attimo.com');
-    if (efehanId) await dmUser(efehanId, {
-      text: `FYI: *${requester.name}* requested ${typeRow?.display_name || leave_type} for ${isoToDateLabel(start_date)}${start_date !== end_date ? ` → ${isoToDateLabel(end_date)}` : ''}. Awaiting approval from manager.`
-    });
+    notifyTasks.push((async () => {
+      const efehanId = await lookupUser('efehan@attimo.com');
+      if (efehanId) await dmUser(efehanId, {
+        text: `FYI: *${requester.name}* requested ${typeRow?.display_name || leave_type} for ${isoToDateLabel(start_date)}${start_date !== end_date ? ` → ${isoToDateLabel(end_date)}` : ''}. Awaiting approval from manager.`
+      });
+    })());
   }
-
-  await slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested leave` });
-  if (userId) await dmUser(userId, { text: 'Leave request submitted. Awaiting approval from your manager.' });
+  notifyTasks.push(slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested leave` }));
+  if (userId) notifyTasks.push(dmUser(userId, { text: 'Leave request submitted. Awaiting approval from your manager.' }));
+  await Promise.all(notifyTasks);
 
   return { response_action: 'clear' };
 }
@@ -299,7 +312,7 @@ async function handleHomeAction(payload, action) {
   let email = '';
   try {
     const lookup = await fetch(`${SLACK_API}/users.info?user=${userId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    email = (await lookup.json()).user?.profile?.email || '';
+    email = ((await lookup.json()).user?.profile?.email || '').toLowerCase();
   } catch {}
 
   switch (action.action_id) {
@@ -471,7 +484,7 @@ export async function POST(req) {
       const { data: leave } = await supabase.from('leaves').select('*').eq('id', leaveId).single();
       if (!leave) return Response.json({ response_type: 'ephemeral', text: 'Leave not found' });
 
-      const { data: requester } = await supabase.from('user_roles').select('manager_email').eq('email', leave.email).maybeSingle();
+      const { data: requester } = await supabase.from('user_roles').select('manager_email').ilike('email', leave.email).maybeSingle();
       const allowedApprovers = [requester?.manager_email, 'efehan@attimo.com'].filter(Boolean).map(e => e.toLowerCase());
       if (finalEmail && !allowedApprovers.includes(finalEmail.toLowerCase())) {
         return Response.json({ response_type: 'ephemeral', text: 'Only the manager or Efehan can act on this.' });
