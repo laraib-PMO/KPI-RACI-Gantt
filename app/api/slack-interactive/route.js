@@ -233,18 +233,22 @@ async function handleLeaveSubmit(payload) {
   const end_date = v.end_date?.value?.selected_date;
   const half_day = !!(v.half_day?.value?.selected_options?.length);
   const reason = v.reason?.value?.value || '';
+  // A half day is always a single day — the end date is meaningless for it.
+  const effEnd = half_day ? start_date : end_date;
 
-  if (!leave_type || !start_date || !end_date) return { response_action: 'errors', errors: { start_date: 'All fields required' } };
-  if (end_date < start_date) return { response_action: 'errors', errors: { end_date: 'End must be on/after start' } };
+  if (!leave_type || !start_date || (!half_day && !end_date)) return { response_action: 'errors', errors: { start_date: 'All fields required' } };
+  if (!half_day && end_date < start_date) return { response_action: 'errors', errors: { end_date: 'End must be on/after start' } };
   const todayIso = new Date().toISOString().split('T')[0];
   if (start_date < todayIso) return { response_action: 'errors', errors: { start_date: 'Cannot book leave starting in the past' } };
 
   const { data: typeRow } = await supabase.from('leave_types').select('*').eq('key', leave_type).maybeSingle();
-  const halfAllowed = typeRow?.allows_half_day ?? ['annual', 'casual'].includes(leave_type);
+  // Policy: half day is allowed ONLY for Annual and Casual. Enforced in code,
+  // not from the DB column (which can be misconfigured per-type).
+  const halfAllowed = ['annual', 'casual'].includes(leave_type);
   if (half_day && !halfAllowed) return { response_action: 'errors', errors: { half_day: 'Half day not allowed for this type' } };
 
   const d1 = new Date(start_date + 'T00:00:00');
-  const d2 = new Date(end_date + 'T00:00:00');
+  const d2 = new Date(effEnd + 'T00:00:00');
   const days = half_day ? 0.5 : Math.max(1, Math.round((d2 - d1) / 86400000) + 1);
 
   const { data: requester } = await supabase.from('user_roles').select('*').ilike('email', email).maybeSingle();
@@ -252,7 +256,7 @@ async function handleLeaveSubmit(payload) {
 
   const { data: inserted } = await supabase.from('leaves').insert({
     person: requester.name, email, leave_type, half_day,
-    start_date, end_date: half_day ? start_date : end_date, days, reason, status: 'pending'
+    start_date, end_date: effEnd, days, reason, status: 'pending'
   }).select().single();
   if (!inserted) return { response_action: 'errors', errors: { leave_type: 'Save failed' } };
 
@@ -270,7 +274,7 @@ async function handleLeaveSubmit(payload) {
       fields: [
         { type: 'mrkdwn', text: `*Requester:*\n${requester.name}` },
         { type: 'mrkdwn', text: `*Type:*\n${typeRow?.emoji || ''} ${typeRow?.display_name || leave_type}` },
-        { type: 'mrkdwn', text: `*Dates:*\n${isoToDateLabel(start_date)}${start_date !== end_date ? ` → ${isoToDateLabel(end_date)}` : ''}` },
+        { type: 'mrkdwn', text: `*Dates:*\n${isoToDateLabel(start_date)}${start_date !== effEnd ? ` → ${isoToDateLabel(effEnd)}` : ''}${half_day ? ' (half day)' : ''}` },
         { type: 'mrkdwn', text: `*Duration:*\n${half_day ? '0.5 day' : `${days} day${days > 1 ? 's' : ''}`}` }
       ]
     }
