@@ -65,6 +65,7 @@ async function runBirthdays() {
     .eq('birthday', md);
 
   const wished = [];
+  const errors = [];
   for (const p of people || []) {
     const slackId = await lookupSlackUser(p.email);
     const who = slackId ? `<@${slackId}>` : `*${p.name}*`;
@@ -74,14 +75,19 @@ async function runBirthdays() {
       { type: 'divider' },
       { type: 'context', elements: [ { type: 'mrkdwn', text: `🎁  With love, from the whole Attimo team` } ] }
     ];
-    await slackPost(BIRTHDAY_CHANNEL, blocks, `🎉 Happy Birthday ${p.name}!`);
-    wished.push(p.name);
+    const res = await slackPost(BIRTHDAY_CHANNEL, blocks, `🎉 Happy Birthday ${p.name}!`);
+    if (res && res.ok) wished.push(p.name);
+    else errors.push({ name: p.name, error: (res && res.error) || 'unknown' });
   }
 
-  // Record the run last, so a posting failure doesn't silently mark the day done.
-  await supabase.from('config').upsert({ key: 'last_birthday_run', value: full }, { onConflict: 'key' });
+  // If there were birthday people but NONE posted, don't mark the day done —
+  // surface the error so a retry works after the cause is fixed.
+  if ((people?.length || 0) > 0 && wished.length === 0) {
+    return { ok: false, date: full, matched: people.length, posted: 0, errors };
+  }
 
-  return { ok: true, date: full, birthdays: wished.length, names: wished };
+  await supabase.from('config').upsert({ key: 'last_birthday_run', value: full }, { onConflict: 'key' });
+  return { ok: true, date: full, matched: people?.length || 0, posted: wished.length, names: wished, errors };
 }
 
 export async function GET() {
