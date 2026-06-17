@@ -443,13 +443,21 @@ function OnboardModal({initialMode,userRoles,onboarding,onboardCommon,onboardDep
 }
 
 // Notification bell — pending leaves + active risks + decisions
-function NotificationBell({leaves,risks,decisions,isApprover,onNavigate}){
+function NotificationBell({leaves,risks,decisions,userRoles,isApprover,userEmail,onNavigate}){
   const[open,setOpen]=useState(false);
-  const pendingLeaves=isApprover?leaves.filter(l=>l.status==="pending"):[];
-  const activeRisks=risks.filter(r=>r.status==="ACTIVE"&&(r.impact==="HIGH"||r.impact==="CRITICAL"));
-  const openDecisions=decisions.filter(d=>d.status==="open"&&(d.priority==="high"||d.priority==="critical"));
-  const total=pendingLeaves.length+activeRisks.length+openDecisions.length;
-
+  const[readIds,setReadIds]=useState([]);
+  const storeKey='attimo_notif_read_'+(userEmail||'x');
+  useEffect(()=>{try{const r=JSON.parse(localStorage.getItem(storeKey)||'[]');if(Array.isArray(r))setReadIds(r)}catch{}},[storeKey]);
+  const markRead=ids=>setReadIds(prev=>{const next=Array.from(new Set([...prev,...ids]));try{localStorage.setItem(storeKey,JSON.stringify(next))}catch{}return next});
+  const todayMD=today.slice(5,7)+'-'+today.slice(8,10);
+  const items=[];
+  if(isApprover)leaves.filter(l=>l.status==="pending").forEach(l=>items.push({id:"leave-"+l.id,tab:"leave",hdr:"Pending Leave Approval",color:"#F59E0B",title:l.person,sub:`${l.leave_type} · ${l.start_date}${l.start_date!==l.end_date?` → ${l.end_date}`:""} · ${l.half_day?"0.5":l.days}d`}));
+  risks.filter(r=>r.status==="ACTIVE"&&(r.impact==="HIGH"||r.impact==="CRITICAL")).slice(0,8).forEach(r=>items.push({id:"risk-"+r.id,tab:"vitals",hdr:"High Risk",color:"#EF4444",title:r.description,sub:`${r.impact} · Owner: ${r.owner||"unassigned"}`}));
+  decisions.filter(d=>d.status==="open"&&(d.priority==="high"||d.priority==="critical")).slice(0,8).forEach(d=>items.push({id:"decision-"+d.id,tab:"dashboard",hdr:"Open Decision",color:"#3B82F6",title:d.title,sub:`${d.priority} · ${d.owner||"unassigned"}`}));
+  (userRoles||[]).filter(u=>u.birthday===todayMD).forEach(u=>items.push({id:"bday-"+u.id+"-"+todayMD,tab:"dashboard",hdr:"Birthday Today",color:"#EC4899",title:u.name,sub:"Wish them a happy birthday"}));
+  const unread=items.filter(i=>!readIds.includes(i.id));
+  const total=unread.length;
+  const openItem=i=>{markRead([i.id]);onNavigate(i.tab);setOpen(false)};
   return <div style={{position:"relative"}}>
     <button onClick={()=>setOpen(!open)} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"#94A3B8",position:"relative",display:"flex",alignItems:"center"}}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
@@ -458,29 +466,20 @@ function NotificationBell({leaves,risks,decisions,isApprover,onNavigate}){
     {open&&<>
       <div style={{position:"fixed",inset:0,zIndex:9998}} onClick={()=>setOpen(false)}/>
       <div className="asc" style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,minWidth:320,maxWidth:380,maxHeight:480,overflow:"auto",boxShadow:"0 12px 40px rgba(0,0,0,.3)",zIndex:9999}}>
-        <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",fontSize:12,fontWeight:700,color:"var(--fg)"}}>Notifications {total>0&&`(${total})`}</div>
-        {total===0&&<div style={{padding:20,fontSize:11,color:"var(--fg2)",textAlign:"center"}}>All clear — no pending items.</div>}
-        {pendingLeaves.length>0&&<div>
-          <div style={{padding:"8px 14px",fontSize:9,fontWeight:700,color:"#F59E0B",textTransform:"uppercase",letterSpacing:.5,background:"#FEF3C720"}}>Pending Leave Approvals ({pendingLeaves.length})</div>
-          {pendingLeaves.map(l=><div key={l.id} onClick={()=>{onNavigate("leave");setOpen(false)}} className="rh" style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",cursor:"pointer"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{l.person}</div>
-            <div style={{fontSize:9,color:"var(--fg2)"}}>{l.leave_type} · {l.start_date}{l.start_date!==l.end_date?` → ${l.end_date}`:""} · {l.half_day?"0.5":l.days}d</div>
-          </div>)}
-        </div>}
-        {activeRisks.length>0&&<div>
-          <div style={{padding:"8px 14px",fontSize:9,fontWeight:700,color:"#EF4444",textTransform:"uppercase",letterSpacing:.5,background:"#FEE2E220"}}>High Risks ({activeRisks.length})</div>
-          {activeRisks.slice(0,5).map(r=><div key={r.id} onClick={()=>{onNavigate("vitals");setOpen(false)}} className="rh" style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",cursor:"pointer"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{r.description}</div>
-            <div style={{fontSize:9,color:"var(--fg2)"}}>{r.impact} · Owner: {r.owner||"unassigned"}</div>
-          </div>)}
-        </div>}
-        {openDecisions.length>0&&<div>
-          <div style={{padding:"8px 14px",fontSize:9,fontWeight:700,color:"#3B82F6",textTransform:"uppercase",letterSpacing:.5,background:"#DBEAFE40"}}>Open Decisions ({openDecisions.length})</div>
-          {openDecisions.slice(0,5).map(d=><div key={d.id} onClick={()=>{onNavigate("dashboard");setOpen(false)}} className="rh" style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",cursor:"pointer"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{d.title}</div>
-            <div style={{fontSize:9,color:"var(--fg2)"}}>{d.priority} · {d.owner||"unassigned"}</div>
-          </div>)}
-        </div>}
+        <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <span style={{fontSize:12,fontWeight:700,color:"var(--fg)"}}>Notifications {total>0&&`(${total})`}</span>
+          {unread.length>0&&<span onClick={()=>markRead(items.map(i=>i.id))} className="rh" style={{fontSize:9,fontWeight:600,color:"#3B82F6",cursor:"pointer",padding:"2px 6px",borderRadius:4}}>Mark all read</span>}
+        </div>
+        {items.length===0&&<div style={{padding:20,fontSize:11,color:"var(--fg2)",textAlign:"center"}}>All clear — no pending items.</div>}
+        {items.length>0&&total===0&&<div style={{padding:20,fontSize:11,color:"var(--fg2)",textAlign:"center"}}>All caught up — nothing unread.</div>}
+        {items.map(i=>{const isRead=readIds.includes(i.id);return <div key={i.id} onClick={()=>openItem(i)} className="rh" style={{padding:"8px 14px",borderBottom:"1px solid var(--border)",cursor:"pointer",opacity:isRead?.5:1,display:"flex",gap:8,alignItems:"flex-start"}}>
+          <span style={{width:6,height:6,borderRadius:99,background:isRead?"transparent":i.color,marginTop:5,flexShrink:0}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:8,fontWeight:700,color:i.color,textTransform:"uppercase",letterSpacing:.4}}>{i.hdr}</div>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.title}</div>
+            <div style={{fontSize:9,color:"var(--fg2)"}}>{i.sub}</div>
+          </div>
+        </div>})}
       </div>
     </>}
   </div>;
@@ -773,6 +772,7 @@ export default function Home(){
   useEffect(()=>{if(((view==="perf")||(view==="vitals"&&vitalsTab==="people"))&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view,vitalsTab]);
   useEffect(()=>{try{const v=localStorage.getItem('attimo_view');const ok=["dashboard","vitals","timeline","board","calendar","standup","meet","leave","onboard","hrdocs","settings"];if(v&&ok.includes(v))setView(v)}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem('attimo_view',view)}catch{}},[view]);
+  useEffect(()=>{fetch('/api/birthdays',{method:'POST'}).catch(()=>{})},[]);
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
   const roleRef=useRef(null);roleRef.current=role;
@@ -1223,7 +1223,7 @@ export default function Home(){
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
-        <NotificationBell leaves={leaves} risks={risks} decisions={decisions} isApprover={['nil@attimo.com','laraib@attimo.com','efehan@attimo.com'].includes((user?.email||'').toLowerCase())} onNavigate={setView}/>
+        <NotificationBell leaves={leaves} risks={risks} decisions={decisions} userRoles={userRoles} isApprover={['nil@attimo.com','laraib@attimo.com','efehan@attimo.com'].includes((user?.email||'').toLowerCase())} userEmail={user?.email} onNavigate={setView}/>
         <label style={{cursor:"pointer",position:"relative"}}>
           <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;const me=userRoles.find(r=>r.email===user?.email);if(me)uploadAvatar(me.id,f);else showToast("Your email not in user roles yet","error")}}/>
           {(()=>{const me=userRoles.find(r=>r.email===user?.email);return me?.avatar_url?<img src={me.avatar_url} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.2)"}}/>:<span style={{width:26,height:26,borderRadius:"50%",background:"#3B82F6",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#fff",border:"2px solid rgba(255,255,255,.2)"}}>{user?.user_metadata?.full_name?.[0]||user?.email?.[0]||"?"}</span>})()}
@@ -1437,6 +1437,9 @@ export default function Home(){
 
       {/* Upcoming meetings */}
       {(()=>{const nextMeet=meetings.filter(m=>m.schedule).slice(0,2);return nextMeet.length>0?<div className="asl" style={{background:"rgba(6,182,212,.06)",border:"1px solid rgba(6,182,212,.2)",borderRadius:10,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}><span style={{color:"#06B6D4"}}>{I.clock(16)}</span><div style={{fontSize:11,color:"var(--fg)"}}><span style={{fontWeight:700}}>Next meetings:</span>{" "}{nextMeet.map((m,i)=><span key={m.id}>{i>0?" · ":""}<span style={{fontWeight:600}}>{m.name}</span><span style={{color:"var(--fg2)",fontSize:9}}> {m.schedule}{m.meeting_link?" ":"" }</span>{m.meeting_link&&<a href={m.meeting_link} target="_blank" rel="noopener" style={{fontSize:9,color:"#06B6D4",textDecoration:"none"}}>Join</a>}</span>)}</div></div>:null})()}
+
+      {/* Upcoming birthdays (next 30 days) */}
+      {(()=>{const y=+today.slice(0,4);const t=new Date(y,+today.slice(5,7)-1,+today.slice(8,10));const bdays=(userRoles||[]).filter(u=>u.birthday&&/^[0-1][0-9]-[0-3][0-9]$/.test(u.birthday)).map(u=>{const mm=+u.birthday.slice(0,2)-1,dd=+u.birthday.slice(3,5);let d=new Date(y,mm,dd);if(d<t)d=new Date(y+1,mm,dd);return{name:u.name,key:u.id,days:Math.round((d-t)/86400000)}}).filter(b=>b.days<=30).sort((a,b)=>a.days-b.days);return bdays.length>0?<div className="asl" style={{background:"rgba(236,72,153,.06)",border:"1px solid rgba(236,72,153,.2)",borderRadius:10,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}><span style={{color:"#EC4899"}}>{I.calendar(16)}</span><div style={{fontSize:11,color:"var(--fg)"}}><span style={{fontWeight:700}}>Birthdays:</span>{" "}{bdays.slice(0,6).map((b,i)=><span key={b.key}>{i>0?" · ":""}<span style={{fontWeight:600,color:b.days===0?"#EC4899":"var(--fg)"}}>{b.name?.split(" ")[0]}</span><span style={{color:"var(--fg2)",fontSize:9}}> {b.days===0?"today":b.days===1?"tomorrow":"in "+b.days+"d"}</span></span>)}</div></div>:null})()}
 
       {/* Hero Metrics Row */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:20}}>
