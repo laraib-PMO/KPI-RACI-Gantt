@@ -485,6 +485,59 @@ function NotificationBell({leaves,risks,decisions,userRoles,isApprover,userEmail
   </div>;
 }
 
+function VitalsIntel({raci,risks,kpis,roles,leaves,userRoles}){
+  const GROUP=new Set(['team','leadership','dept heads','devs','dev team','component owners','qa tester','-','']);
+  const splitNames=s=>(s||'').split(/[,/]/).map(x=>x.trim()).filter(x=>x&&!GROUP.has(x.toLowerCase()));
+  const loadA={},loadR={};
+  (raci||[]).forEach(r=>{splitNames(r.accountable).forEach(n=>loadA[n]=(loadA[n]||0)+1);splitNames(r.responsible).forEach(n=>loadR[n]=(loadR[n]||0)+1)});
+  const people=Array.from(new Set([...Object.keys(loadA),...Object.keys(loadR)])).map(n=>({name:n,a:loadA[n]||0,r:loadR[n]||0,total:(loadA[n]||0)+(loadR[n]||0)})).sort((x,y)=>y.total-x.total).slice(0,8);
+  const maxT=Math.max(1,...people.map(p=>p.total));
+  const onLeave=(leaves||[]).filter(l=>l.status==='approved'&&l.end_date>=today);
+  const leaveByFirst={};onLeave.forEach(l=>{leaveByFirst[(l.person||'').split(' ')[0].toLowerCase()]=l});
+  const gaps=[];(raci||[]).forEach(r=>splitNames(r.accountable).forEach(n=>{const fn=n.split(' ')[0].toLowerCase();if(leaveByFirst[fn])gaps.push({who:n.split(' ')[0],task:r.task,until:leaveByFirst[fn].end_date})}));
+  const activeRisks=(risks||[]).filter(r=>r.status==='ACTIVE');
+  const crit=activeRisks.filter(r=>r.impact==='CRITICAL').length;
+  const high=activeRisks.filter(r=>r.impact==='HIGH').length;
+  const aging=activeRisks.filter(r=>{const c=r.created_date||r.created_at;return c&&Math.floor((Date.now()-new Date(c).getTime())/86400000)>14}).length;
+  const red=(kpis||[]).filter(k=>k.flag==='red').length;
+  const yellow=(kpis||[]).filter(k=>k.flag==='yellow').length;
+  const openRoles=(roles||[]).filter(r=>r.status&&r.status!=='Filled'&&r.status!=='Not opened');
+  const multiA=(raci||[]).filter(r=>splitNames(r.accountable).length>1).length;
+  const noA=(raci||[]).filter(r=>!r.accountable||r.accountable==='-').length;
+  const Tile=({label,value,sub,color})=><div style={{flex:"1 1 130px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"12px 14px"}}>
+    <div style={{fontSize:9,fontWeight:700,color:"var(--fg2)",textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+    <div style={{fontSize:26,fontWeight:800,color:color,lineHeight:1.1,marginTop:4}}>{value}</div>
+    <div style={{fontSize:9,color:"var(--fg2)",marginTop:2}}>{sub}</div>
+  </div>;
+  return <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:4}}>
+    <div style={{fontSize:11,color:"var(--fg2)",fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Intelligence</div>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+      <Tile label="Active Risks" value={activeRisks.length} sub={`${crit} critical · ${high} high${aging?` · ${aging} aging`:''}`} color={crit>0?"#EF4444":high>0?"#F59E0B":"#10B981"}/>
+      <Tile label="KPI Health" value={red+yellow===0?"OK":`${red+yellow}`} sub={`${red} red · ${yellow} yellow`} color={red>0?"#EF4444":yellow>0?"#F59E0B":"#10B981"}/>
+      <Tile label="Open Hiring" value={openRoles.length} sub={openRoles.slice(0,2).map(r=>r.title).join(", ")||"none open"} color={openRoles.length>0?"#3B82F6":"#94A3B8"}/>
+      <Tile label="Coverage Gaps" value={gaps.length} sub={gaps.length?"owner on leave":"all owners present"} color={gaps.length>0?"#EF4444":"#10B981"}/>
+      <Tile label="RACI Conflicts" value={multiA+noA} sub={`${multiA} double-A · ${noA} no-A`} color={(multiA+noA)>0?"#F59E0B":"#10B981"}/>
+    </div>
+    {gaps.length>0&&<div style={{background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.25)",borderRadius:12,padding:14}}>
+      <div style={{fontSize:11,fontWeight:700,color:"#EF4444",marginBottom:8}}>Coverage gaps — accountable owner on leave</div>
+      {Array.from(new Set(gaps.map(g=>g.who))).map(who=>{const list=gaps.filter(g=>g.who===who);return <div key={who} style={{fontSize:10,color:"var(--fg)",marginBottom:4}}><b>{who}</b> off until {list[0].until} — uncovered: <span style={{color:"var(--fg2)"}}>{list.slice(0,5).map(g=>g.task).join("; ")}{list.length>5?` +${list.length-5} more`:""}</span></div>})}
+    </div>}
+    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:14}}>
+      <div style={{fontSize:12,fontWeight:700,color:"var(--fg)",marginBottom:10}}>Accountability Load — who owns the most</div>
+      {people.length===0&&<div style={{fontSize:11,color:"var(--fg2)"}}>No RACI data yet.</div>}
+      {people.map(p=><div key={p.name} style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
+        <div style={{width:70,fontSize:11,fontWeight:600,color:"var(--fg)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+        <div style={{flex:1,height:14,background:"var(--bg3)",borderRadius:7,overflow:"hidden",display:"flex"}}>
+          <div title={p.a+" accountable"} style={{width:(p.a/maxT*100)+"%",background:"#8B5CF6"}}/>
+          <div title={p.r+" responsible"} style={{width:(p.r/maxT*100)+"%",background:"#3B82F6"}}/>
+        </div>
+        <div style={{width:78,fontSize:9,color:"var(--fg2)",textAlign:"right"}}>{p.a} A · {p.r} R</div>
+      </div>)}
+      {people.length>0&&<div style={{display:"flex",gap:12,marginTop:8,fontSize:9,color:"var(--fg2)"}}><span><span style={{display:"inline-block",width:8,height:8,background:"#8B5CF6",borderRadius:2,marginRight:4}}/>Accountable</span><span><span style={{display:"inline-block",width:8,height:8,background:"#3B82F6",borderRadius:2,marginRight:4}}/>Responsible</span></div>}
+    </div>
+  </div>;
+}
+
 // Full-featured Meeting modal — one-time or recurring, multi-attendee, Fireflies bot
 function MeetingModal({userRoles,onSave,onClose}){
   const[v,setV]=useState({type:"One-time",cadence:"Weekly",date:"",time:"10:00",duration:30,attendees:[],description:"",fireflies:true,location:"Google Meet",sendDM:true,channelPost:false});
@@ -1855,6 +1908,7 @@ export default function Home(){
 
     {/* VITALS · OVERVIEW — company acceleration + dept health summary */}
     {view==="vitals"&&vitalsTab==="overview"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
+      <VitalsIntel raci={raci} risks={risks} kpis={kpis} roles={roles} leaves={leaves} userRoles={userRoles}/>
       {/* Big company acceleration */}
       {(()=>{const depts=metricsData?Object.values(metricsData):[];const totalCurrent=depts.reduce((s,d)=>s+(d.tasks_current||0),0);const totalPrior=depts.reduce((s,d)=>s+(d.tasks_prior||0),0);const accel=totalPrior===0?(totalCurrent>0?100:0):Math.round(((totalCurrent-totalPrior)/totalPrior)*100);const c=accel>5?"#10B981":accel<-5?"#EF4444":"#94A3B8";const arrow=accel>5?"↗":accel<-5?"↘":"→";
         return <div style={{background:"linear-gradient(135deg,var(--card),var(--bg2))",border:"1px solid var(--border)",borderRadius:14,padding:24}}>
@@ -1875,7 +1929,7 @@ export default function Home(){
           {Object.entries(metricsData).sort((a,b)=>(b[1].acceleration_pct||0)-(a[1].acceleration_pct||0)).map(([dept,d])=>{
             const accel=d.acceleration_pct||0;const c=accel>5?"#10B981":accel<-5?"#EF4444":"#94A3B8";const arrow=accel>5?"↗":accel<-5?"↘":"→";const cl=CL[dept]||"#6366F1";
             const deptRisks=risks.filter(r=>r.status==="ACTIVE"&&r.description?.toLowerCase().includes(dept.toLowerCase()));
-            const accountable=raci.find(r=>r.dept===dept&&r.a)?.a||"—";
+            const accountable=raci.find(r=>r.dept===dept&&r.accountable)?.accountable||"—";
             return <div key={dept} onClick={()=>{setVitalsTab("departments")}} className="ch asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderLeft:"3px solid "+cl,borderRadius:12,padding:14,cursor:"pointer"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                 <div style={{fontSize:13,fontWeight:700,color:"var(--fg)"}}>{dept}</div>
