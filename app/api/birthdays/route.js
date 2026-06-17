@@ -69,9 +69,12 @@ async function runBirthdays() {
     const slackId = await lookupSlackUser(p.email);
     const who = slackId ? `<@${slackId}>` : `*${p.name}*`;
     const blocks = [
-      { type: 'section', text: { type: 'mrkdwn', text: `Happy Birthday, ${who}! Wishing you a wonderful day — thank you for everything you bring to the team.` } }
+      { type: 'header', text: { type: 'plain_text', text: `🎉  Happy Birthday, ${p.name}!  🎂`, emoji: true } },
+      { type: 'section', text: { type: 'mrkdwn', text: `Wishing you an amazing day, ${who}! 🥳\n\nThank you for everything you bring to *Attimo* — here's to a fantastic year ahead full of wins. 🎈` } },
+      { type: 'divider' },
+      { type: 'context', elements: [ { type: 'mrkdwn', text: `🎁  With love, from the whole Attimo team` } ] }
     ];
-    await slackPost(BIRTHDAY_CHANNEL, blocks, `Happy Birthday ${p.name}`);
+    await slackPost(BIRTHDAY_CHANNEL, blocks, `🎉 Happy Birthday ${p.name}!`);
     wished.push(p.name);
   }
 
