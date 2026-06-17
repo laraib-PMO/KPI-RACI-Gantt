@@ -2509,7 +2509,7 @@ export default function Home(){
             </div>
           </div>)}
         </div>})()}
-      <Tbl headers={["","Email","Name","Access Level","Manager","Legacy","Department",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
+      <Tbl headers={["","Email","Name","Access Level","Manager","Legacy","Department","Birthday",""]} ids={userRoles.map(r=>r.id)} onReorder={(a,b)=>reorder('user_roles',userRoles,setUserRoles,a,b)} rows={userRoles.map(r=>[
         <div style={{display:"flex",alignItems:"center",gap:4}}>
           {r.avatar_url?<img src={r.avatar_url} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:28,height:28,borderRadius:"50%",background:CL[r.dept]||"#6366F1",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:10,fontWeight:700}}>{r.name?.[0]}</span></div>}
           <label style={{cursor:"pointer",fontSize:9,color:"#3B82F6"}}><input type="file" accept="image/*" style={{display:"none"}} onChange={e=>uploadAvatar(r.id,e.target.files?.[0])}/>edit</label>
@@ -2523,6 +2523,7 @@ export default function Home(){
         </select>,
         <InEdit value={r.role} onChange={v=>updateUserRole(r.id,{role:v})} type="select" options={["admin","editor","viewer"]}/>,
         <InEdit value={r.dept||""} onChange={v=>updateUserRole(r.id,{dept:v})}/>,
+        <input type="date" value={r.birthday?("2000-"+r.birthday):""} onChange={e=>{const v=e.target.value;updateUserRole(r.id,{birthday:v?v.slice(5):null})}} title="Only month and day are used — year is ignored" style={{padding:"4px 6px",fontSize:10,borderRadius:6,border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg)",cursor:"pointer",width:128}}/>,
         <button onClick={()=>setConfirmDlg({msg:"Remove "+r.name+" from team?",fn:()=>deleteUserRole(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
       ])}/>
       <div style={{marginTop:20,padding:16,background:"var(--bg3)",borderRadius:10}}>
