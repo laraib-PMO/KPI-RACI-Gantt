@@ -727,6 +727,113 @@ function Tbl({headers,rows,ids,onReorder}){const[dI,setDI]=useState(null);const[
     {row.map((cell,ci)=><td key={ci} style={{padding:"8px",color:"var(--fg)"}}>{cell}</td>)}</tr>)}</tbody></table></div>}
 function DeptHdr({dept}){return <div className="af" style={{background:(CL[dept]||"#94A3B8")+"15",color:CL[dept],padding:"8px 12px",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,borderLeft:"4px solid "+(CL[dept]||"#94A3B8")}}>{dept}</div>}
 
+// ─── RACI grid: flexible Excel-style matrix (drag-drop rows + columns, add/remove, resize) ───
+function rgId(p){return (p||"x")+Math.random().toString(36).slice(2,8)}
+function gridToRaci(grid){
+  if(!grid||!Array.isArray(grid.columns)||!Array.isArray(grid.rows))return [];
+  const byRole=r=>grid.columns.find(c=>c.role===r);
+  const g=byRole("group"),R=byRole("R"),A=byRole("A"),C=byRole("C"),Inf=byRole("I");
+  const op=grid.columns.find(c=>!c.role&&c.id!=="notes")||grid.columns.find(c=>!c.role)||grid.columns[0];
+  const nt=grid.columns.find(c=>c.id==="notes");
+  const get=(row,col)=>col?((row.cells&&row.cells[col.id])||""):"";
+  return grid.rows.map((row,ix)=>({id:row.id||ix,dept:get(row,g),task:get(row,op),responsible:get(row,R),accountable:get(row,A),consulted:get(row,C),informed:get(row,Inf),notes:get(row,nt)}));
+}
+function gridToCsv(grid){
+  if(!grid||!grid.columns)return "";
+  const esc=v=>{v=(v==null?"":String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const head=grid.columns.map(c=>esc(c.name)).join(",");
+  const body=grid.rows.map(r=>grid.columns.map(c=>esc((r.cells&&r.cells[c.id])||"")).join(",")).join("\n");
+  return head+"\n"+body;
+}
+function RGCell({value,onCommit,canEdit,list,role}){
+  const[v,setV]=useState(value);const[f,setF]=useState(false);
+  useEffect(()=>{if(!f)setV(value)},[value,f]);
+  const tint=role==="A"?"#6366F1":role==="R"?"#10B981":null;
+  if(!canEdit)return <div style={{padding:"7px 9px",fontSize:12,color:tint&&value?tint:"var(--fg)",fontWeight:tint&&value?700:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{value||"—"}</div>;
+  return <input value={v} list={list}
+    onFocus={()=>setF(true)}
+    onChange={e=>setV(e.target.value)}
+    onBlur={()=>{setF(false);if(v!==value)onCommit(v)}}
+    onKeyDown={e=>{if(e.key==="Enter"){e.currentTarget.blur()}else if(e.key==="Escape"){setV(value);e.currentTarget.blur()}}}
+    style={{width:"100%",boxSizing:"border-box",border:"none",outline:"none",background:f?"var(--bg2)":"transparent",padding:"7px 9px",fontSize:12,color:tint&&v?tint:"var(--fg)",fontWeight:tint&&v?700:400,borderRadius:4}}/>;
+}
+function RaciGrid({grid,onSave,canEdit,canDelete,team}){
+  const[dragRow,setDragRow]=useState(null);const[overRow,setOverRow]=useState(null);
+  const[dragCol,setDragCol]=useState(null);const[overCol,setOverCol]=useState(null);
+  const[renaming,setRenaming]=useState(null);const[w,setW]=useState({});
+  if(!grid)return <div style={{padding:30,textAlign:"center",color:"var(--fg2)",fontSize:12,border:"1px dashed var(--border)",borderRadius:10}}>Matrix not found. Run <b>raci_grid_setup.sql</b> in Supabase, then refresh.</div>;
+  const cols=grid.columns||[];const rows=grid.rows||[];
+  const colW=c=>(w[c.id]!=null?w[c.id]:(c.w||140));
+  const commit=ng=>onSave&&onSave(ng);
+  const setCell=(rid,cid,val)=>commit({...grid,rows:rows.map(r=>r.id===rid?{...r,cells:{...r.cells,[cid]:val}}:r)});
+  const addRow=(afterIdx)=>{const last=rows[rows.length-1];const cells={};cols.forEach(c=>cells[c.id]=(c.role==="group"&&last)?((last.cells&&last.cells[c.id])||""):"");const nr={id:rgId("r"),cells};const nrows=[...rows];nrows.splice(afterIdx==null?rows.length:afterIdx+1,0,nr);commit({...grid,rows:nrows})};
+  const delRow=rid=>commit({...grid,rows:rows.filter(r=>r.id!==rid)});
+  const moveRow=(from,to)=>{if(from===to)return;const nrows=[...rows];const[m]=nrows.splice(from,1);nrows.splice(to,0,m);commit({...grid,rows:nrows})};
+  const addCol=()=>commit({...grid,columns:[...cols,{id:rgId("c"),name:"New Column",w:150}]});
+  const delCol=cid=>commit({...grid,columns:cols.filter(c=>c.id!==cid)});
+  const renameCol=(cid,name)=>commit({...grid,columns:cols.map(c=>c.id===cid?{...c,name}:c)});
+  const moveCol=(from,to)=>{if(from===to)return;const ncols=[...cols];const[m]=ncols.splice(from,1);ncols.splice(to,0,m);commit({...grid,columns:ncols})};
+  const setColW=(cid,width)=>commit({...grid,columns:cols.map(c=>c.id===cid?{...c,w:Math.max(60,Math.round(width))}:c)});
+  const startResize=(e,c)=>{e.preventDefault();e.stopPropagation();const sx=e.clientX,sw=colW(c);
+    const mv=ev=>setW(p=>({...p,[c.id]:Math.max(60,sw+(ev.clientX-sx))}));
+    const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);setW(p=>{const fw=p[c.id];if(fw!=null)setColW(c.id,fw);const np={...p};delete np[c.id];return np})};
+    document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up)};
+  const NAMES=Array.from(new Set([...((team||[]).map(u=>u.name).filter(Boolean)),"Leadership","Team","Advisors","Dept heads","-"]));
+  const gcol=cols.find(c=>c.role==="group");let prevG=null;
+  return <div>
+    <div style={{overflowX:"auto",border:"1px solid var(--border)",borderRadius:10,background:"var(--card)"}}>
+      <datalist id="raci-names">{NAMES.map(n=><option key={n} value={n}/>)}</datalist>
+      <table style={{borderCollapse:"separate",borderSpacing:0,minWidth:"100%",fontSize:12}}>
+        <thead><tr>
+          {canEdit&&<th style={{width:30,position:"sticky",left:0,background:"var(--bg3)",zIndex:3,borderBottom:"1px solid var(--border)"}}></th>}
+          {cols.map((c,ci)=><th key={c.id} draggable={canEdit&&renaming!==c.id}
+            onDragStart={()=>{if(canEdit)setDragCol(ci)}}
+            onDragOver={e=>{if(dragCol==null)return;e.preventDefault();setOverCol(ci)}}
+            onDrop={e=>{if(dragCol==null)return;e.preventDefault();moveCol(dragCol,ci);setDragCol(null);setOverCol(null)}}
+            onDragEnd={()=>{setDragCol(null);setOverCol(null)}}
+            style={{position:"relative",width:colW(c),minWidth:colW(c),maxWidth:colW(c),background:overCol===ci?"rgba(99,102,241,.15)":"var(--bg3)",padding:0,textAlign:"left",borderBottom:"1px solid var(--border)",cursor:canEdit?"grab":"default",userSelect:"none"}}>
+            <div style={{display:"flex",alignItems:"center",gap:4,padding:"9px"}}>
+              {c.role&&<span style={{fontSize:8,fontWeight:800,color:"#6366F1",background:"#6366F115",padding:"1px 4px",borderRadius:3}}>{c.role==="group"?"GRP":c.role}</span>}
+              {renaming===c.id
+                ?<input autoFocus defaultValue={c.name} onBlur={e=>{renameCol(c.id,e.target.value||c.name);setRenaming(null)}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();if(e.key==="Escape")setRenaming(null)}} style={{width:"100%",border:"1px solid #3B82F6",borderRadius:4,fontSize:11,fontWeight:700,padding:"2px 4px",background:"var(--bg2)",color:"var(--fg)"}}/>
+                :<span onDoubleClick={()=>canEdit&&setRenaming(c.id)} title={canEdit?"Double-click to rename · drag to reorder":""} style={{fontWeight:700,fontSize:11,color:"var(--fg2)",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</span>}
+              {canDelete&&cols.length>1&&<span onClick={()=>delCol(c.id)} title="Delete column" style={{cursor:"pointer",color:"#DC2626",opacity:.55,fontSize:12,fontWeight:700}}>✕</span>}
+            </div>
+            {canEdit&&<span onMouseDown={e=>startResize(e,c)} style={{position:"absolute",top:0,right:0,width:8,height:"100%",cursor:"col-resize"}}/>}
+          </th>)}
+          {canEdit&&<th style={{width:42,background:"var(--bg3)",borderBottom:"1px solid var(--border)",padding:0}}><button onClick={addCol} title="Add column" style={{width:"100%",minHeight:38,border:"none",background:"transparent",color:"#3B82F6",fontSize:18,fontWeight:700,cursor:"pointer"}}>+</button></th>}
+        </tr></thead>
+        <tbody>
+          {rows.map((r,ri)=>{
+            const gval=gcol?((r.cells&&r.cells[gcol.id])||""):"";const showG=gcol&&gval!==prevG;prevG=gval;
+            const sep=showG?<tr key={r.id+"-g"}><td colSpan={cols.length+(canEdit?2:0)} style={{background:(CL[gval]||"#6366F1")+"14",color:CL[gval]||"#6366F1",fontWeight:800,fontSize:11,padding:"6px 12px",borderTop:"1px solid var(--border)",letterSpacing:.4}}>{gval||"—"}</td></tr>:null;
+            const tr=<tr key={r.id}
+              onDragOver={e=>{if(dragRow==null)return;e.preventDefault();setOverRow(ri)}}
+              onDrop={e=>{if(dragRow==null)return;e.preventDefault();moveRow(dragRow,ri);setDragRow(null);setOverRow(null)}}
+              style={{background:overRow===ri?"rgba(59,130,246,.10)":"transparent"}}>
+              {canEdit&&<td draggable onDragStart={()=>setDragRow(ri)} onDragEnd={()=>{setDragRow(null);setOverRow(null)}} title="Drag to reorder row" style={{position:"sticky",left:0,background:"var(--card)",zIndex:2,textAlign:"center",color:"var(--fg2)",cursor:"grab",userSelect:"none",fontSize:13,borderBottom:"1px solid var(--border)"}}>⠿</td>}
+              {cols.map(c=><td key={c.id} style={{borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",padding:0,width:colW(c),maxWidth:colW(c)}}>
+                <RGCell value={(r.cells&&r.cells[c.id])||""} onCommit={v=>setCell(r.id,c.id,v)} canEdit={canEdit} list={(c.role&&c.role!=="group")?"raci-names":undefined} role={c.role}/>
+              </td>)}
+              {canEdit&&<td style={{borderBottom:"1px solid var(--border)",textAlign:"center",whiteSpace:"nowrap"}}>
+                <span onClick={()=>addRow(ri)} title="Insert row below" style={{cursor:"pointer",color:"#3B82F6",fontSize:13,fontWeight:700,padding:"0 4px"}}>+</span>
+                {canDelete&&<span onClick={()=>delRow(r.id)} title="Delete row" style={{cursor:"pointer",color:"#DC2626",opacity:.6,fontSize:12,padding:"0 4px"}}>✕</span>}
+              </td>}
+            </tr>;
+            return [sep,tr];
+          })}
+        </tbody>
+      </table>
+    </div>
+    {canEdit&&<div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+      <button onClick={()=>addRow(null)} className="btn-pop" style={{padding:"7px 14px",border:"1px dashed var(--border)",background:"var(--bg2)",color:"var(--fg)",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Add row</button>
+      <button onClick={addCol} className="btn-pop" style={{padding:"7px 14px",border:"1px dashed var(--border)",background:"var(--bg2)",color:"var(--fg)",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Add column</button>
+      <div style={{flex:1}}/>
+      <div style={{fontSize:10,color:"var(--fg2)",alignSelf:"center"}}>Click a cell to edit · drag ⠿ to move a row · drag a header to move a column · drag a column edge to resize · double-click a header to rename</div>
+    </div>}
+  </div>;
+}
+
 export default function Home(){
   const[tasks,setTasks]=useState([]);const[raci,setRaci]=useState([]);const[risks,setRisks]=useState([]);const[kpis,setKpis]=useState([]);const[meetings,setMeetings]=useState([]);const[roles,setRoles]=useState([]);const[standups,setStandups]=useState([]);const[perf,setPerf]=useState([]);const[leaves,setLeaves]=useState([]);const[decisions,setDecisions]=useState([]);const[onboarding,setOnboarding]=useState([]);const[hrDocs,setHrDocs]=useState([]);
   // Public holidays — fetched from Google Calendar API, hardcoded fallback
@@ -822,6 +929,14 @@ export default function Home(){
 
   // Performance auto-fetch on tab open
   const[vitalsTab,setVitalsTab]=useState("overview");
+  const[raciGrid,setRaciGrid]=useState(null);
+  // Load the flexible RACI grid + live updates; derive the legacy `raci` shape for analytics
+  useEffect(()=>{let alive=true;
+    supabase.from('raci_grid').select('data').eq('id',1).maybeSingle().then(({data,error})=>{if(alive&&!error&&data&&data.data)setRaciGrid(data.data)}).catch(()=>{});
+    const ch=supabase.channel('rt_racigrid').on('postgres_changes',{event:'*',schema:'public',table:'raci_grid'},()=>{supabase.from('raci_grid').select('data').eq('id',1).maybeSingle().then(({data,error})=>{if(!error&&data&&data.data)setRaciGrid(data.data)})}).subscribe();
+    return()=>{alive=false;supabase.removeChannel(ch)};
+  },[]);
+  useEffect(()=>{if(raciGrid)setRaci(gridToRaci(raciGrid))},[raciGrid]);
   useEffect(()=>{if(((view==="perf")||(view==="vitals"&&vitalsTab==="people"))&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view,vitalsTab]);
   useEffect(()=>{try{const v=localStorage.getItem('attimo_view');const ok=["dashboard","vitals","timeline","board","calendar","standup","meet","leave","onboard","hrdocs","settings"];if(v&&ok.includes(v))setView(v)}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem('attimo_view',view)}catch{}},[view]);
@@ -895,6 +1010,7 @@ export default function Home(){
   const addRaci=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}notify("added","raci",v.task);const{data}=await supabase.from('raci').insert({dept:v.dept||"PMO",task:v.task||"",responsible:v.responsible||"",accountable:v.accountable||"",consulted:v.consulted||"",informed:v.informed||"",notes:v.notes||"",is_suggestion:v.is_suggestion==="true"}).select();if(data)setRaci(p=>[...p,...data]);setAddModal(null)},[]);
   const deleteRaci=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setRaci(p=>p.filter(r=>r.id!==id));await supabase.from('raci').delete().eq('id',id)},[]);
   const updateRaci=useCallback(async(id,u)=>{if(!isEditor())return;setRaci(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('raci').update(u).eq('id',id)},[]);
+  const saveGrid=useCallback(async ng=>{if(!isEditor()){showToast("View-only access","error");return}setRaciGrid(ng);const{error}=await supabase.from('raci_grid').upsert({id:1,data:ng,updated_at:new Date().toISOString()});if(error){showToast("Save failed — check RACI grid table","error");console.error("raci_grid save",error)}},[]);
   const addRisk=useCallback(async v=>{if(!isEditor()){showToast("View-only access","error");return}notify("added","risks",v.description);const ni="R"+(risks.length+1).toString().padStart(2,"0");const{data}=await supabase.from('risks').insert({id:v.id||ni,description:v.description||"",impact:v.impact||"HIGH",status:"ACTIVE",owner:v.owner||"",mitigation:v.mitigation||"",linked_to:v.linked_to||""}).select();if(data)setRisks(p=>[...p,...data]);setAddModal(null)},[risks]);
   const updateRisk=useCallback(async(id,u)=>{if(!isEditor())return;setRisks(p=>p.map(r=>r.id===id?{...r,...u}:r));await supabase.from('risks').update(u).eq('id',id)},[]);
   const deleteRisk=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setRisks(p=>p.filter(r=>r.id!==id));await supabase.from('risks').delete().eq('id',id)},[]);
@@ -1960,31 +2076,23 @@ export default function Home(){
       })()}
     </div>}
 
-    {view==="vitals"&&vitalsTab==="accountability"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"flex",justifyContent:"space-between"}}><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><button onClick={()=>setAddModal("raci")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add</button></div>
-      <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)"}}><b>R</b>=Responsible <b>A</b>=Accountable <b>C</b>=Consulted <b>I</b>=Informed <span style={{color:"#3B82F6"}}>[Suggest]</span>=PMO suggestion</div>
-      {/* RACI Conflict Detection */}
-      {(()=>{const noR=raci.filter(r=>!r.responsible);const noA=raci.filter(r=>!r.accountable);const both=raci.filter(r=>!r.responsible&&!r.accountable);
-        return (noR.length>0||noA.length>0)?<div className="af" style={{background:"#FEF3C720",border:"1px solid #FDE68A50",borderRadius:10,padding:12}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:4,display:"flex",alignItems:"center",gap:6}}>{I.alert(12)} {both.length+noR.length+noA.length-both.length} RACI conflicts</div>
-          {both.length>0&&<div style={{fontSize:10,color:"#DC2626",marginBottom:2}}>No R or A: {both.slice(0,4).map(r=>r.task).join(", ")}{both.length>4?" +more":""}</div>}
-          {noR.filter(r=>r.accountable).length>0&&<div style={{fontSize:10,color:"#D97706",marginBottom:2}}>Missing R: {noR.filter(r=>r.accountable).slice(0,4).map(r=>r.task).join(", ")}</div>}
-          {noA.filter(r=>r.responsible).length>0&&<div style={{fontSize:10,color:"#D97706"}}>Missing A: {noA.filter(r=>r.responsible).slice(0,4).map(r=>r.task).join(", ")}</div>}
+    {view==="vitals"&&vitalsTab==="accountability"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:8}}>
+        <div><div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>RACI Matrix</div><div style={{fontSize:11,color:"var(--fg2)"}}>Spreadsheet-style — click any cell to edit, drag to reorder rows and columns, add or remove freely</div></div>
+        <button onClick={()=>{if(!raciGrid){showToast("Nothing to export yet","error");return}const blob=new Blob([gridToCsv(raciGrid)],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="attimo-raci-"+new Date().toISOString().slice(0,10)+".csv";a.click();URL.revokeObjectURL(a.href)}} className="btn-pop" style={{padding:"7px 14px",border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--fg)",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer"}}>Export CSV</button>
+      </div>
+      <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)"}}><b>R</b>=does the work · <b>A</b>=owns the outcome and signs off (one per row) · <b>C</b>=two-way input · <b>I</b>=kept informed</div>
+      {/* RACI conflict detection — one Accountable per row is the rule */}
+      {(()=>{const GRP=new Set(['team','leadership','dept heads','devs','dev team','component owners','qa tester','advisors','-','']);
+        const names=s=>(s||'').split(/[,/]/).map(x=>x.trim()).filter(x=>x&&!GRP.has(x.toLowerCase()));
+        const noA=raci.filter(r=>!r.accountable||r.accountable==='-');const multiA=raci.filter(r=>names(r.accountable).length>1);const noR=raci.filter(r=>r.accountable&&(!r.responsible||r.responsible==='-'));
+        return (noA.length||multiA.length||noR.length)?<div className="af" style={{background:"#FEF3C720",border:"1px solid #FDE68A50",borderRadius:10,padding:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:4,display:"flex",alignItems:"center",gap:6}}>{I.alert(12)} {noA.length+multiA.length+noR.length} RACI conflicts</div>
+          {multiA.length>0&&<div style={{fontSize:10,color:"#DC2626",marginBottom:2}}>More than one Accountable: {multiA.slice(0,4).map(r=>r.task).join(", ")}{multiA.length>4?" +more":""}</div>}
+          {noA.length>0&&<div style={{fontSize:10,color:"#D97706",marginBottom:2}}>No Accountable: {noA.slice(0,4).map(r=>r.task).join(", ")}{noA.length>4?" +more":""}</div>}
+          {noR.length>0&&<div style={{fontSize:10,color:"#D97706"}}>Missing Responsible: {noR.slice(0,4).map(r=>r.task).join(", ")}{noR.length>4?" +more":""}</div>}
         </div>:null})()}
-      {Object.keys(raciByDept).length===0&&<div className="af" style={{textAlign:"center",padding:40,background:"var(--card)",borderRadius:12,border:"1px dashed var(--border)"}}>
-        <div style={{color:"var(--fg2)",marginBottom:4}}>{I.list(24)}</div>
-        <div style={{fontSize:13,fontWeight:600,color:"var(--fg)",marginBottom:4}}>No RACI entries yet</div>
-        <div style={{fontSize:11,color:"var(--fg2)"}}>Click "+ Add" to define responsibilities for each department.</div>
-      </div>}
-      {Object.entries(raciByDept).map(([dept,rows],di)=><div key={dept} className="asl" style={{animationDelay:di*80+"ms"}}><DeptHdr dept={dept}/><Tbl headers={["Task","R","A","C","I","Notes",""]} rows={rows.map(r=>[
-        <InEdit value={r.task} onChange={v=>updateRaci(r.id,{task:v})}/>,
-        <InEdit value={r.responsible} onChange={v=>updateRaci(r.id,{responsible:v})}/>,
-        <InEdit value={r.accountable} onChange={v=>updateRaci(r.id,{accountable:v})}/>,
-        <InEdit value={r.consulted} onChange={v=>updateRaci(r.id,{consulted:v})}/>,
-        <InEdit value={r.informed} onChange={v=>updateRaci(r.id,{informed:v})}/>,
-        <InEdit value={r.notes} onChange={v=>updateRaci(r.id,{notes:v})}/>,
-        <button onClick={()=>setConfirmDlg({msg:"Delete this RACI entry?",fn:()=>deleteRaci(r.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer"}}>✕</button>
-      ])}/></div>)}
+      <RaciGrid grid={raciGrid} onSave={saveGrid} canEdit={isEditor()} canDelete={isAdmin()} team={userRoles}/>
     </div>}
 
     {/* ═══ KPIs ═══ */}
