@@ -1,6 +1,8 @@
 // ─── Slack Notify Route — Block Kit messages with Approve/Reject buttons ─────
-// Posts proper Slack cards (not text strings) when leave/changes happen
-// For leave: posts to #hr-module with Approve/Reject buttons + DMs all approvers
+// Posts proper Slack cards (not text strings) when leave/changes happen.
+// For leave: posts to #hr-module with Approve/Reject buttons + DMs all approvers.
+// Short leave (leave_type === 'short') is formatted distinctly: single date + a
+// time window in hours, never days.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -34,10 +36,37 @@ async function lookupSlackUser(email) {
   } catch { return null; }
 }
 
-const LEAVE_TYPE_EMOJI = { annual: '', sick: '', personal: '', casual: '', wfh: '', other: '' };
+// Short-leave helpers
+const isShort = (l) => l && l.leave_type === 'short';
+const shortWindow = (l) => `${l.start_time || '?'}–${l.end_time || '?'}${l.hours ? ` (${l.hours}h)` : ''}`;
 
 function leaveRequestBlocks(leave) {
-  const emoji = LEAVE_TYPE_EMOJI[leave.leave_type] || '';
+  // ── Short leave: hours-based, single date ──
+  if (isShort(leave)) {
+    return [
+      { type: 'header', text: { type: 'plain_text', text: 'New Short Leave Request' } },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Requester:*\n${leave.person}` },
+          { type: 'mrkdwn', text: `*Type:*\nShort Leave (hours)` },
+          { type: 'mrkdwn', text: `*Date:*\n${leave.start_date}` },
+          { type: 'mrkdwn', text: `*Time:*\n${shortWindow(leave)}` }
+        ]
+      },
+      ...(leave.reason ? [{ type: 'section', text: { type: 'mrkdwn', text: `*Reason:*\n${leave.reason}` } }] : []),
+      {
+        type: 'actions',
+        elements: [
+          { type: 'button', text: { type: 'plain_text', text: 'Approve' }, style: 'primary', action_id: `approve_leave_${leave.id}`, value: String(leave.id) },
+          { type: 'button', text: { type: 'plain_text', text: 'Reject' }, style: 'danger', action_id: `reject_leave_${leave.id}`, value: String(leave.id) }
+        ]
+      },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `Approvers: Nil, Laraib, Efehan · Only one needs to act · Counted in hours, not days` }] }
+    ];
+  }
+
+  // ── Standard day-based leave ──
   const dateRange = leave.start_date === leave.end_date
     ? leave.start_date
     : `${leave.start_date} → ${leave.end_date}`;
@@ -56,20 +85,8 @@ function leaveRequestBlocks(leave) {
     {
       type: 'actions',
       elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Approve' },
-          style: 'primary',
-          action_id: `approve_leave_${leave.id}`,
-          value: String(leave.id)
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Reject' },
-          style: 'danger',
-          action_id: `reject_leave_${leave.id}`,
-          value: String(leave.id)
-        }
+        { type: 'button', text: { type: 'plain_text', text: 'Approve' }, style: 'primary', action_id: `approve_leave_${leave.id}`, value: String(leave.id) },
+        { type: 'button', text: { type: 'plain_text', text: 'Reject' }, style: 'danger', action_id: `reject_leave_${leave.id}`, value: String(leave.id) }
       ]
     },
     { type: 'context', elements: [{ type: 'mrkdwn', text: `Approvers: Nil, Laraib, Efehan · Only one needs to act` }] }
@@ -81,14 +98,14 @@ export async function POST(req) {
     const body = await req.json();
     const { user, action, table, detail, leave } = body;
 
-    // ─── Leave request — Spock-style approval card ─────────────────────
+    // ─── Leave request — approval card ─────────────────────────────────
     if (table === 'leave' && action === 'requested' && leave?.id) {
-      // Post to #hr-module with buttons
       const blocks = leaveRequestBlocks(leave);
-      const fallback = `${leave.person} requested ${leave.leave_type} leave for ${leave.start_date}`;
+      const fallback = isShort(leave)
+        ? `${leave.person} requested short leave on ${leave.start_date} (${shortWindow(leave)})`
+        : `${leave.person} requested ${leave.leave_type} leave for ${leave.start_date}`;
       await slackPost('#hr-module', blocks, fallback);
 
-      // DM each approver as well
       const { data: approvers } = await supabase
         .from('approvers')
         .select('approver_email')
@@ -100,38 +117,42 @@ export async function POST(req) {
       return Response.json({ ok: true, posted: 'leave_request' });
     }
 
-    // ─── Leave decision update (admin acted in dashboard, not Slack) ────
+    // ─── Leave decision update (admin acted in dashboard or Slack) ─────
     if (table === 'leave' && (action === 'approved' || action === 'rejected') && leave?.id) {
-      const _action = action;
-      const dateRange = leave.start_date === leave.end_date
-        ? leave.start_date
-        : `${leave.start_date} → ${leave.end_date}`;
+      const short = isShort(leave);
+      const dateRange = short
+        ? `${leave.start_date} · ${shortWindow(leave)}`
+        : (leave.start_date === leave.end_date ? leave.start_date : `${leave.start_date} → ${leave.end_date}`);
+      const typeLabel = short ? 'Short Leave' : leave.leave_type;
       const blocks = [
         { type: 'header', text: { type: 'plain_text', text: `Leave ${action}` } },
         {
           type: 'section',
           fields: [
             { type: 'mrkdwn', text: `*Requester:*\n${leave.person}` },
-            { type: 'mrkdwn', text: `*Type:*\n${leave.leave_type}` },
-            { type: 'mrkdwn', text: `*Dates:*\n${dateRange}` }
+            { type: 'mrkdwn', text: `*Type:*\n${typeLabel}` },
+            { type: 'mrkdwn', text: short ? `*When:*\n${dateRange}` : `*Dates:*\n${dateRange}` }
           ]
         },
         { type: 'context', elements: [{ type: 'mrkdwn', text: `${action.toUpperCase()} by ${user || 'admin'}` }] }
       ];
       await slackPost('#hr-module', blocks, `${leave.person}'s leave ${action}`);
+
       // DM the employee
       const empId = await lookupSlackUser(leave.email);
       if (empId) {
-        await slackPost(empId, [
-          { type: 'section', text: { type: 'mrkdwn', text: `Your *${leave.leave_type}* leave for ${dateRange} was *${action}* by ${user || 'admin'}.` } }
-        ], `Leave ${action}`);
+        const msg = short
+          ? `Your *Short Leave* on ${leave.start_date} (${shortWindow(leave)}) was *${action}* by ${user || 'admin'}.`
+          : `Your *${leave.leave_type}* leave for ${dateRange} was *${action}* by ${user || 'admin'}.`;
+        await slackPost(empId, [{ type: 'section', text: { type: 'mrkdwn', text: msg } }], `Leave ${action}`);
       }
+
       // Announce in #general if approved
       if (action === 'approved') {
-        await slackPost('#general',
-          [{ type: 'section', text: { type: 'mrkdwn', text: `*${leave.person}* will be off on ${dateRange} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).` } }],
-          `${leave.person} off ${dateRange}`
-        );
+        const ann = short
+          ? `*${leave.person}* will be on short leave on ${leave.start_date}, ${shortWindow(leave)}.`
+          : `*${leave.person}* will be off on ${dateRange} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`;
+        await slackPost('#general', [{ type: 'section', text: { type: 'mrkdwn', text: ann } }], `${leave.person} ${dateRange}`);
       }
       return Response.json({ ok: true, posted: 'leave_decision' });
     }
