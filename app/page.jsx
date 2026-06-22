@@ -795,7 +795,7 @@ function RaciGrid({grid,onSave,canEdit,canDelete,team}){
   const colW=c=>(w[c.id]!=null?w[c.id]:(c.w||140));
   const commit=ng=>onSave&&onSave(ng);
   const setCell=(rid,cid,val)=>commit({...grid,rows:rows.map(r=>r.id===rid?{...r,cells:{...r.cells,[cid]:val}}:r)});
-  const addRow=(afterIdx)=>{const last=rows[rows.length-1];const cells={};cols.forEach(c=>cells[c.id]=(c.role==="group"&&last)?((last.cells&&last.cells[c.id])||""):"");const nr={id:rgId("r"),cells};const nrows=[...rows];nrows.splice(afterIdx==null?rows.length:afterIdx+1,0,nr);commit({...grid,rows:nrows})};
+  const addRow=(afterIdx)=>{const base=afterIdx==null?rows[rows.length-1]:rows[afterIdx];const cells={};cols.forEach(c=>cells[c.id]=(c.role==="group"&&base)?((base.cells&&base.cells[c.id])||""):"");const nr={id:rgId("r"),cells};const nrows=[...rows];nrows.splice(afterIdx==null?rows.length:afterIdx+1,0,nr);commit({...grid,rows:nrows})};
   const delRow=rid=>commit({...grid,rows:rows.filter(r=>r.id!==rid)});
   const moveRow=(from,to)=>{if(from===to)return;const nrows=[...rows];const[m]=nrows.splice(from,1);nrows.splice(to,0,m);commit({...grid,rows:nrows})};
   const addCol=()=>commit({...grid,columns:[...cols,{id:rgId("c"),name:"New Column",w:150}]});
