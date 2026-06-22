@@ -80,9 +80,22 @@ function isoToDateLabel(d) {
   return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()}`;
 }
 
+const isShort = (l) => l && l.leave_type === 'short';
+const shortWindow = (l) => `${l.start_time || '?'}–${l.end_time || '?'}${l.hours ? ` (${l.hours}h)` : ''}`;
+
 function buildCalendarUrls(leave) {
-  const title = encodeURIComponent(`${leave.leave_type} — ${leave.person}`);
+  const title = encodeURIComponent(`${isShort(leave) ? 'Short Leave' : leave.leave_type} — ${leave.person}`);
   const desc = encodeURIComponent(`Leave: ${leave.leave_type}${leave.half_day ? ' (half day)' : ''}${leave.reason ? '\nReason: ' + leave.reason : ''}\nApproved via Attimo PMO Bot`);
+  if (isShort(leave) && leave.start_time && leave.end_time) {
+    const dt = leave.start_date.replace(/-/g, '');
+    const st = leave.start_time.replace(':', '') + '00';
+    const et = leave.end_time.replace(':', '') + '00';
+    return {
+      google: `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dt}T${st}/${dt}T${et}&details=${desc}`,
+      outlook: `https://outlook.live.com/calendar/0/deeplink/compose?subject=${title}&body=${desc}&startdt=${leave.start_date}T${leave.start_time}:00&enddt=${leave.start_date}T${leave.end_time}:00`,
+      office365: `https://outlook.office.com/calendar/0/deeplink/compose?subject=${title}&body=${desc}&startdt=${leave.start_date}T${leave.start_time}:00&enddt=${leave.start_date}T${leave.end_time}:00`
+    };
+  }
   const sd = leave.start_date.replace(/-/g, '');
   const endD = new Date(leave.end_date + 'T00:00:00');
   endD.setDate(endD.getDate() + 1);
@@ -95,20 +108,26 @@ function buildCalendarUrls(leave) {
 
 async function sendApprovalDecision(leave, decision, approver) {
   const _ = decision;
+  const short = isShort(leave);
+  const typeStr = short ? 'Short Leave' : leave.leave_type;
+  const whenStr = short
+    ? `${isoToDateLabel(leave.start_date)} · ${shortWindow(leave)}`
+    : `${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}`;
+  const durStr = short ? `${leave.hours || ''}h` : (leave.half_day ? '0.5 day' : `${leave.days} day${leave.days > 1 ? 's' : ''}`);
   const cal = decision === 'approved' ? buildCalendarUrls(leave) : null;
   const requesterId = await lookupUser(leave.email);
 
   if (requesterId) {
     const blocks = [
       { type: 'header', text: { type: 'plain_text', text: `Leave request has been ${decision}` } },
-      { type: 'section', text: { type: 'mrkdwn', text: `*${approver.name}* has ${decision} your leave request:` } },
+      { type: 'section', text: { type: 'mrkdwn', text: `*${approver.name}* has ${decision} your ${short ? 'short leave' : 'leave'} request:` } },
       {
         type: 'section',
         fields: [
           { type: 'mrkdwn', text: `*Who:*\n${leave.person}` },
-          { type: 'mrkdwn', text: `*Leave type:*\n${leave.leave_type}` },
-          { type: 'mrkdwn', text: `*When:*\n${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}` },
-          { type: 'mrkdwn', text: `*Duration:*\n${leave.half_day ? '0.5 day' : `${leave.days} day${leave.days > 1 ? 's' : ''}`}` },
+          { type: 'mrkdwn', text: `*Leave type:*\n${typeStr}` },
+          { type: 'mrkdwn', text: `*When:*\n${whenStr}` },
+          { type: 'mrkdwn', text: `*Duration:*\n${durStr}` },
           { type: 'mrkdwn', text: `*Status:*\n${decision === 'approved' ? 'Approved' : 'Rejected'}` },
           { type: 'mrkdwn', text: `*${decision === 'approved' ? 'Approved' : 'Rejected'} by:*\n${approver.name}` }
         ]
@@ -129,22 +148,22 @@ async function sendApprovalDecision(leave, decision, approver) {
     await dmUser(requesterId, { blocks, text: `Your leave was ${decision}` });
   }
 
-  // Efehan FYI
   const efehanId = await lookupUser('efehan@attimo.com');
   if (efehanId) {
     await dmUser(efehanId, {
-      text: `${leave.person}'s ${leave.leave_type} (${isoToDateLabel(leave.start_date)}) ${decision} by ${approver.name}.`
+      text: `${leave.person}'s ${typeStr} (${whenStr}) ${decision} by ${approver.name}.`
     });
   }
 
   if (decision === 'approved') {
     await slackAPI('chat.postMessage', {
       channel: '#general',
-      text: `*${leave.person}* will be off ${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`
+      text: short
+        ? `*${leave.person}* will be on short leave ${whenStr}.`
+        : `*${leave.person}* will be off ${whenStr} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`
     });
   }
 }
-
 async function openBalancesModal(trigger_id, email) {
   const year = new Date().getFullYear();
   const { data: bals } = await supabase.from('leave_balances').select('*').ilike('email', email).eq('year', year);
@@ -310,6 +329,81 @@ async function handleLeaveSubmit(payload) {
   return { response_action: 'clear' };
 }
 
+async function handleShortLeaveSubmit(payload) {
+  const v = payload.view.state?.values || {};
+  const meta = JSON.parse(payload.view.private_metadata || '{}');
+  const email = (meta.email || '').toLowerCase();
+  const userId = payload.user?.id;
+  const date = v.sl_date?.value?.selected_date;
+  const start_time = v.sl_start?.value?.selected_time;
+  const end_time = v.sl_end?.value?.selected_time;
+  const reason = v.sl_reason?.value?.value || '';
+
+  if (!date || !start_time || !end_time) return { response_action: 'errors', errors: { sl_date: 'Date and both times are required' } };
+  if (end_time <= start_time) return { response_action: 'errors', errors: { sl_end: 'End time must be after start time' } };
+  const todayIso = new Date().toISOString().split('T')[0];
+  if (date < todayIso) return { response_action: 'errors', errors: { sl_date: 'Cannot book short leave in the past' } };
+
+  const [sh, sm] = start_time.split(':').map(Number);
+  const [eh, em] = end_time.split(':').map(Number);
+  const hours = Math.round((((eh * 60 + em) - (sh * 60 + sm)) / 60) * 10) / 10;
+
+  const { data: requester } = await supabase.from('user_roles').select('*').ilike('email', email).maybeSingle();
+  if (!requester) return { response_action: 'errors', errors: { sl_date: 'Account not in roster — contact Laraib' } };
+
+  const { data: inserted } = await supabase.from('leaves').insert({
+    person: requester.name, email, leave_type: 'short', half_day: false,
+    start_date: date, end_date: date, days: 0,
+    start_time, end_time, hours, reason, status: 'pending'
+  }).select().single();
+  if (!inserted) return { response_action: 'errors', errors: { sl_date: 'Save failed' } };
+
+  let managerEmail = requester.manager_email || 'efehan@attimo.com';
+  const today = new Date().toISOString().split('T')[0];
+  const { data: managerOnLeave } = await supabase.from('leaves')
+    .select('id').eq('email', managerEmail).eq('status', 'approved')
+    .lte('start_date', today).gte('end_date', today).maybeSingle();
+  if (managerOnLeave && managerEmail !== 'efehan@attimo.com') managerEmail = 'efehan@attimo.com';
+
+  const card = [
+    { type: 'header', text: { type: 'plain_text', text: 'New Short Leave Request' } },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Requester:*\n${requester.name}` },
+        { type: 'mrkdwn', text: `*Type:*\nShort Leave (hours)` },
+        { type: 'mrkdwn', text: `*Date:*\n${isoToDateLabel(date)}` },
+        { type: 'mrkdwn', text: `*Time:*\n${start_time}–${end_time} (${hours}h)` }
+      ]
+    }
+  ];
+  if (reason) card.push({ type: 'section', text: { type: 'mrkdwn', text: `*Reason:* ${reason}` } });
+  card.push({
+    type: 'actions',
+    elements: [
+      { type: 'button', text: { type: 'plain_text', text: 'Approve' }, style: 'primary', action_id: `approve_leave_${inserted.id}`, value: String(inserted.id) },
+      { type: 'button', text: { type: 'plain_text', text: 'Reject' }, style: 'danger', action_id: `reject_leave_${inserted.id}`, value: String(inserted.id) }
+    ]
+  });
+
+  const notifyTasks = [];
+  notifyTasks.push((async () => {
+    const managerId = await lookupUser(managerEmail);
+    if (managerId) await dmUser(managerId, { blocks: card, text: `${requester.name} requested short leave` });
+  })());
+  if (managerEmail !== 'efehan@attimo.com') {
+    notifyTasks.push((async () => {
+      const efehanId = await lookupUser('efehan@attimo.com');
+      if (efehanId) await dmUser(efehanId, { text: `FYI: *${requester.name}* requested short leave on ${isoToDateLabel(date)} (${start_time}–${end_time}, ${hours}h). Awaiting approval.` });
+    })());
+  }
+  notifyTasks.push(slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested short leave` }));
+  if (userId) notifyTasks.push(dmUser(userId, { text: 'Short leave request submitted. Awaiting approval from your manager.' }));
+  await Promise.all(notifyTasks);
+
+  return { response_action: 'clear' };
+}
+
 async function handleHomeAction(payload, action) {
   const userId = payload.user?.id;
   const trigger_id = payload.trigger_id;
@@ -337,7 +431,7 @@ async function handleHomeAction(payload, action) {
           blocks: [
             { type: 'input', block_id: 'leave_type', label: { type: 'plain_text', text: 'Leave Type' },
               element: { type: 'static_select', action_id: 'value',
-                options: (types || []).map(t => ({ text: { type: 'plain_text', text: t.display_name }, value: t.key })) } },
+                options: (types || []).filter(t => t.key !== 'short').map(t => ({ text: { type: 'plain_text', text: t.display_name }, value: t.key })) } },
             { type: 'input', block_id: 'start_date', label: { type: 'plain_text', text: 'Start date' },
               element: { type: 'datepicker', action_id: 'value', initial_date: today } },
             { type: 'input', block_id: 'end_date', label: { type: 'plain_text', text: 'End date' },
@@ -445,6 +539,11 @@ export async function POST(req) {
     return Response.json(result);
   }
 
+  if (payload.type === 'view_submission' && payload.view.callback_id === 'short_leave_submit') {
+    const result = await handleShortLeaveSubmit(payload);
+    return Response.json(result);
+  }
+
   // Close modal views that don't need processing
   if (payload.type === 'view_submission' && ['balances_view', 'my_leave_view', 'holidays_view', 'policy_view', 'subscribe_view'].includes(payload.view?.callback_id)) {
     return Response.json({ response_action: 'clear' });
@@ -512,7 +611,7 @@ export async function POST(req) {
             fields: [
               { type: 'mrkdwn', text: `*Requester:*\n${leave.person}` },
               { type: 'mrkdwn', text: `*Type:*\n${leave.leave_type}` },
-              { type: 'mrkdwn', text: `*Dates:*\n${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}` }
+              { type: 'mrkdwn', text: `*${isShort(leave) ? 'When' : 'Dates'}:*\n${isShort(leave) ? `${isoToDateLabel(leave.start_date)} · ${shortWindow(leave)}` : `${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}`}` }
             ]
           },
           { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *${newStatus.toUpperCase()}* by ${approverName}` }] }
