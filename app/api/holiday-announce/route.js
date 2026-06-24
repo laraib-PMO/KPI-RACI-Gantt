@@ -1,9 +1,9 @@
-// ─── Holiday Announcer — posts a day-before heads-up to #general ──────────────
-// Reads the SAME public-holiday feed the dashboard uses (/api/holidays, which
-// pulls from the Google Calendar API), finds any holiday happening TOMORROW,
-// and names the teammates in that country who will be off (TR = Istanbul tz,
-// PK = Karachi tz). Once-per-day guard via the `config` table, same as the
-// birthday bot. GET (cron) and POST (in-app) both work.
+// ─── Holiday Approver — requests approval before any holiday is announced ─────
+// Reads the public-holiday feed (/api/holidays) + manual corrections, finds any
+// holiday happening TOMORROW, and DMs the approvers (Efehan + Laraib) an
+// Approve/Reject request. Nothing is posted to #general until it's approved
+// (the approval + announcement happen in /api/slack-interactive). De-duped per
+// (date, country) via the holiday_requests table. GET (cron) and POST both work.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -26,6 +26,27 @@ async function slackPost(channel, blocks, fallbackText) {
     body: JSON.stringify({ channel, blocks, text: fallbackText, unfurl_links: false })
   });
   return await res.json();
+}
+
+const HOL_APPROVER_EMAILS = ['efehan@attimo.com', 'laraib@attimo.com'];
+
+async function slackAPI(method, body) {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return { ok: false, error: 'No SLACK_BOT_TOKEN' };
+  const res = await fetch(`${SLACK_API}/${method}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return res.json();
+}
+async function lookupByEmail(email) {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return null;
+  try { const r = await fetch(`${SLACK_API}/users.lookupByEmail?email=${encodeURIComponent(email)}`, { headers: { 'Authorization': `Bearer ${token}` } }); const d = await r.json(); return d.ok ? d.user.id : null; } catch { return null; }
+}
+async function dmUser(email, blocks, text) {
+  const id = await lookupByEmail(email);
+  if (!id) return { ok: false, error: 'no_user:' + email };
+  const o = await slackAPI('conversations.open', { users: id });
+  if (!o.ok || !o.channel?.id) return { ok: false, error: o.error };
+  return slackAPI('chat.postMessage', { channel: o.channel.id, blocks, text, unfurl_links: false });
 }
 
 // Date in the company's home timezone, offset by N days (1 = tomorrow).
@@ -52,12 +73,6 @@ function baseUrl(req) {
 
 async function run(req) {
   const tom = istanbulYMD(1);
-
-  // Once-per-target-day guard
-  const { data: cfg } = await supabase.from('config').select('value').eq('key', 'last_holiday_announce');
-  if (cfg?.[0]?.value === tom.full) {
-    return { ok: true, skipped: 'already_announced', date: tom.full };
-  }
 
   // Confirmed / corrected dates. Moon-sighted holidays (Ashura, Eid, etc.) are
   // often wrong in Google's calendar; a manual entry here OVERRIDES the feed for
@@ -99,36 +114,38 @@ async function run(req) {
     return { ok: true, date: tom.full, matched: 0, note: 'no_holiday_tomorrow' };
   }
 
-  const { data: people } = await supabase.from('user_roles').select('name,email,timezone');
-
-  const posted = [];
+  const requested = [];
+  const skipped = [];
   const errors = [];
   for (const h of tomorrowHolidays) {
-    // A holiday can cover more than one country (e.g. Eid "PK,TR") — name everyone affected.
-    const countries = (h.c || h.country || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
-    const tzs = countries.map(c => TZ_BY_COUNTRY[c]).filter(Boolean);
-    const label = countries.map(c => COUNTRY_LABEL[c] || c).join(' & ') || 'Public';
+    const country = (h.c || h.country || '').toUpperCase();
     const name = h.l || h.name || 'Public Holiday';
-    const affected = (people || []).filter(p => tzs.includes(p.timezone)).map(p => p.name).filter(Boolean);
-    const whoLine = affected.length
-      ? `\n\nOff for the day: ${affected.join(', ')}. Please plan around their availability.`
-      : `\n\nTeammates in ${label} will be off.`;
-    const blocks = [
-      { type: 'header', text: { type: 'plain_text', text: 'Public Holiday — Tomorrow' } },
-      { type: 'section', text: { type: 'mrkdwn', text: `Tomorrow (${tom.label}) is *${name}* — a public holiday in ${label}.${whoLine}` } }
+    // Already asked/decided for this date+country? Don't ask again.
+    const { data: existing } = await supabase.from('holiday_requests').select('id,status').eq('hol_date', tom.full).eq('country', country).maybeSingle();
+    if (existing) { skipped.push({ name, country, status: existing.status }); continue; }
+
+    const { data: row, error: insErr } = await supabase.from('holiday_requests').insert({ hol_date: tom.full, country, name, status: 'pending' }).select().single();
+    if (insErr || !row) { errors.push({ name, error: insErr?.message || 'insert_failed' }); continue; }
+
+    const label = country.split(',').map(c => COUNTRY_LABEL[c.trim()] || c.trim()).join(' & ') || 'Public';
+    const card = [
+      { type: 'header', text: { type: 'plain_text', text: 'Public Holiday — Approval Needed' } },
+      { type: 'section', text: { type: 'mrkdwn', text: `Tomorrow (${tom.label}) is *${name}* — a public holiday in ${label}.\n\nApprove to announce it in #general and mark the team off. Reject to skip it.` } },
+      { type: 'actions', elements: [
+        { type: 'button', text: { type: 'plain_text', text: 'Approve' }, style: 'primary', action_id: `holiday_approve_${row.id}`, value: String(row.id) },
+        { type: 'button', text: { type: 'plain_text', text: 'Reject' }, style: 'danger', action_id: `holiday_reject_${row.id}`, value: String(row.id) }
+      ] }
     ];
-    const res = await slackPost(CHANNEL, blocks, `Public holiday tomorrow: ${name} (${label})`);
-    if (res && res.ok) posted.push(name);
-    else errors.push({ name, error: (res && res.error) || 'unknown' });
+    const refs = [];
+    for (const email of HOL_APPROVER_EMAILS) {
+      const r = await dmUser(email, card, `Approval needed: ${name} (${label}) tomorrow`);
+      if (r?.ok && r.channel && r.ts) refs.push({ channel: r.channel, ts: r.ts });
+    }
+    if (refs.length) await supabase.from('holiday_requests').update({ msgs: refs }).eq('id', row.id);
+    requested.push({ name, country });
   }
 
-  // If there were holidays but nothing posted, don't mark done — allow a retry.
-  if (tomorrowHolidays.length > 0 && posted.length === 0) {
-    return { ok: false, date: tom.full, matched: tomorrowHolidays.length, posted: 0, errors };
-  }
-
-  await supabase.from('config').upsert({ key: 'last_holiday_announce', value: tom.full }, { onConflict: 'key' });
-  return { ok: true, date: tom.full, matched: tomorrowHolidays.length, posted: posted.length, names: posted, errors };
+  return { ok: true, date: tom.full, requested: requested.length, requestedItems: requested, skipped, errors };
 }
 
 export async function GET(req) {
