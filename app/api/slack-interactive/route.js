@@ -268,9 +268,10 @@ async function handleLeaveSubmit(payload) {
   const halfAllowed = ['annual', 'casual'].includes(leave_type);
   if (half_day && !halfAllowed) return { response_action: 'errors', errors: { half_day: 'Half day not allowed for this type' } };
 
-  const d1 = new Date(start_date + 'T00:00:00');
-  const d2 = new Date(effEnd + 'T00:00:00');
-  const days = half_day ? 0.5 : Math.max(1, Math.round((d2 - d1) / 86400000) + 1);
+  let workDays = 0;
+  { const a = new Date(start_date + 'T12:00:00'); const b = new Date(effEnd + 'T12:00:00');
+    for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) { const w = d.getDay(); if (w !== 0 && w !== 6) workDays++; } }
+  const days = half_day ? 0.5 : Math.max(1, workDays);
 
   const { data: requester } = await supabase.from('user_roles').select('*').ilike('email', email).maybeSingle();
   if (!requester) return { response_action: 'errors', errors: { leave_type: 'Account not in roster — contact Laraib' } };
