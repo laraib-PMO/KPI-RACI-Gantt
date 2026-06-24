@@ -52,6 +52,8 @@ const ANCH=MILESTONES;
 const pD=s=>{if(!s)return new Date();const str=String(s).split('T')[0];const[y,m,d]=str.split('-').map(Number);return new Date(y,m-1,d)};
 const fD=s=>{try{return pD(s).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}catch{return String(s)}};
 const daysB=(a,b)=>{const da=pD(a),db=pD(b);return Math.round((db-da)/864e5)};
+// Count working days from a to b inclusive, excluding Saturdays and Sundays
+const workingDays=(s,e)=>{const a=new Date(String(s)+'T12:00:00'),b=new Date(String(e)+'T12:00:00');let c=0;for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1)){const w=d.getDay();if(w!==0&&w!==6)c++}return c};
 // Short leave helpers (hours-based, single day)
 const isShort=l=>!!l&&l.leave_type==='short';
 const hrsBetween=(a,b)=>{if(!a||!b)return 0;const[ah,am]=a.split(':').map(Number);const[bh,bm]=b.split(':').map(Number);return Math.max(0,Math.round((((bh*60+bm)-(ah*60+am))/60)*10)/10)};
@@ -1169,7 +1171,7 @@ export default function Home(){
     const isShortReq=v.duration==="short"||v.leave_type==="short";
     let payload,detail;
     if(isShortReq){const hours=hrsBetween(v.start_time,v.end_time);payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:'short',half_day:false,start_date:s,end_date:s,days:0,start_time:v.start_time||null,end_time:v.end_time||null,hours,reason:v.reason||'',status:'pending'};detail=`Short leave on ${fD(s)} · ${v.start_time}–${v.end_time} (${hours}h) is pending approval. Nil, Laraib, or Efehan will review it.`}
-    else{const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,daysB(s,e)+1):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const dl=s===e?fD(s):`${fD(s)} → ${fD(e)}`;payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'};detail=`${hd?"Half day":`${d} day${d===1?"":"s"}`} of ${dbType} leave (${dl}) is pending approval. Nil, Laraib, or Efehan will review it.`}
+    else{const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,workingDays(s,e)):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const dl=s===e?fD(s):`${fD(s)} → ${fD(e)}`;payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'};detail=`${hd?"Half day":`${d} working day${d===1?"":"s"}`} of ${dbType} leave (${dl}) is pending approval. Nil, Laraib, or Efehan will review it.`}
     const{data,error}=await supabase.from('leaves').insert(payload).select();
     if(error){showToast("Submit failed — "+(error.message||"try again"),"error");console.error("addLeave",error);return}
     if(data){setLeaves(p=>[...data,...p]);setResultModal({kind:"submitted",detail});
