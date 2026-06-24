@@ -80,6 +80,12 @@ function isoToDateLabel(d) {
   return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()}`;
 }
 
+// Map IANA timezone -> holiday-list country code (matches the dashboard)
+const tzToCountry = tz => tz === 'Europe/Istanbul' ? 'TR' : tz === 'Asia/Karachi' ? 'PK' : tz === 'Europe/London' ? 'UK' : null;
+// UK bank holidays 2026 (gov.uk). The /api/holidays feed only covers TR + PK,
+// so UK is supplied here for the leave-day exclusion.
+const UK_HOLIDAYS_2026 = ['2026-01-01','2026-04-03','2026-04-06','2026-05-04','2026-05-25','2026-08-31','2026-12-25','2026-12-28'];
+
 const isShort = (l) => l && l.leave_type === 'short';
 const shortWindow = (l) => `${l.start_time || '?'}–${l.end_time || '?'}${l.hours ? ` (${l.hours}h)` : ''}`;
 
@@ -268,13 +274,28 @@ async function handleLeaveSubmit(payload) {
   const halfAllowed = ['annual', 'casual'].includes(leave_type);
   if (half_day && !halfAllowed) return { response_action: 'errors', errors: { half_day: 'Half day not allowed for this type' } };
 
-  let workDays = 0;
-  { const a = new Date(start_date + 'T12:00:00'); const b = new Date(effEnd + 'T12:00:00');
-    for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) { const w = d.getDay(); if (w !== 0 && w !== 6) workDays++; } }
-  const days = half_day ? 0.5 : Math.max(1, workDays);
-
   const { data: requester } = await supabase.from('user_roles').select('*').ilike('email', email).maybeSingle();
   if (!requester) return { response_action: 'errors', errors: { leave_type: 'Account not in roster — contact Laraib' } };
+
+  // Build this person's public-holiday set so leave doesn't consume days they're already off for
+  const cc = tzToCountry(requester.timezone);
+  let holSet = new Set();
+  if (cc && !half_day) {
+    let feed = [];
+    try { const r = await fetch('https://attimo-ops.vercel.app/api/holidays'); const fd = await r.json(); feed = fd.holidays || []; } catch {}
+    const all = [...feed.map(h => ({ d: h.d || h.date, c: (h.c || h.country || '').toUpperCase() })), ...UK_HOLIDAYS_2026.map(d => ({ d, c: 'UK' }))];
+    holSet = new Set(all.filter(h => h.c.split(',').map(x => x.trim()).includes(cc)).map(h => h.d));
+  }
+
+  let workDays = 0;
+  { const a = new Date(start_date + 'T12:00:00'); const b = new Date(effEnd + 'T12:00:00');
+    for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+      const w = d.getDay(); if (w === 0 || w === 6) continue;
+      const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (holSet.has(iso)) continue;
+      workDays++;
+    } }
+  const days = half_day ? 0.5 : Math.max(1, workDays);
 
   const { data: inserted } = await supabase.from('leaves').insert({
     person: requester.name, email, leave_type, half_day,
