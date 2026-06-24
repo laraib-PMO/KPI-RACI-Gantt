@@ -814,7 +814,7 @@ function RaciGrid({grid,onSave,canEdit,canDelete,team}){
       <datalist id="raci-names">{NAMES.map(n=><option key={n} value={n}/>)}</datalist>
       <table style={{borderCollapse:"separate",borderSpacing:0,minWidth:"100%",fontSize:12}}>
         <thead><tr>
-          {canEdit&&<th style={{width:30,position:"sticky",left:0,background:"var(--bg3)",zIndex:3,borderBottom:"1px solid var(--border)"}}></th>}
+          <th style={{width:40,position:"sticky",left:0,background:"var(--bg3)",zIndex:3,borderBottom:"1px solid var(--border)",fontSize:10,fontWeight:700,color:"var(--fg2)",textAlign:"center"}}>#</th>
           {cols.map((c,ci)=><th key={c.id} draggable={canEdit&&renaming!==c.id}
             onDragStart={()=>{if(canEdit)setDragCol(ci)}}
             onDragOver={e=>{if(dragCol==null)return;e.preventDefault();setOverCol(ci)}}
@@ -835,12 +835,12 @@ function RaciGrid({grid,onSave,canEdit,canDelete,team}){
         <tbody>
           {rows.map((r,ri)=>{
             const gval=gcol?((r.cells&&r.cells[gcol.id])||""):"";const showG=gcol&&gval!==prevG;prevG=gval;
-            const sep=showG?<tr key={r.id+"-g"}><td colSpan={cols.length+(canEdit?2:0)} style={{background:(CL[gval]||"#6366F1")+"14",color:CL[gval]||"#6366F1",fontWeight:800,fontSize:11,padding:"6px 12px",borderTop:"1px solid var(--border)",letterSpacing:.4}}>{gval||"—"}</td></tr>:null;
+            const sep=showG?<tr key={r.id+"-g"}><td colSpan={1+cols.length+(canEdit?1:0)} style={{background:(CL[gval]||"#6366F1")+"14",color:CL[gval]||"#6366F1",fontWeight:800,fontSize:11,padding:"6px 12px",borderTop:"1px solid var(--border)",letterSpacing:.4}}>{gval||"—"}</td></tr>:null;
             const tr=<tr key={r.id}
               onDragOver={e=>{if(dragRow==null)return;e.preventDefault();setOverRow(ri)}}
               onDrop={e=>{if(dragRow==null)return;e.preventDefault();moveRow(dragRow,ri);setDragRow(null);setOverRow(null)}}
               style={{background:overRow===ri?"rgba(59,130,246,.10)":"transparent"}}>
-              {canEdit&&<td draggable onDragStart={()=>setDragRow(ri)} onDragEnd={()=>{setDragRow(null);setOverRow(null)}} title="Drag to reorder row" style={{position:"sticky",left:0,background:"var(--card)",zIndex:2,textAlign:"center",color:"var(--fg2)",cursor:"grab",userSelect:"none",fontSize:13,borderBottom:"1px solid var(--border)"}}>⠿</td>}
+              <td draggable={canEdit} onDragStart={()=>canEdit&&setDragRow(ri)} onDragEnd={()=>{setDragRow(null);setOverRow(null)}} title={canEdit?"Drag to reorder row":""} style={{position:"sticky",left:0,background:"var(--card)",zIndex:2,textAlign:"center",color:"var(--fg2)",cursor:canEdit?"grab":"default",userSelect:"none",fontSize:11,borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)"}}>{ri+1}</td>
               {cols.map(c=><td key={c.id} style={{borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",padding:0,width:colW(c),maxWidth:colW(c)}}>
                 <RGCell value={(r.cells&&r.cells[c.id])||""} onCommit={v=>setCell(r.id,c.id,v)} canEdit={canEdit} list={(c.role&&c.role!=="group")?"raci-names":undefined} role={c.role}/>
               </td>)}
@@ -969,7 +969,7 @@ export default function Home(){
   useEffect(()=>{if(((view==="perf")||(view==="vitals"&&vitalsTab==="people"))&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view,vitalsTab]);
   useEffect(()=>{try{const v=localStorage.getItem('attimo_view');const ok=["dashboard","vitals","timeline","board","calendar","standup","meet","leave","onboard","hrdocs","settings"];if(v&&ok.includes(v))setView(v)}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem('attimo_view',view)}catch{}},[view]);
-  useEffect(()=>{fetch('/api/birthdays',{method:'POST'}).catch(()=>{})},[]);
+  useEffect(()=>{fetch('/api/birthdays',{method:'POST'}).catch(()=>{});fetch('/api/holiday-announce',{method:'POST'}).catch(()=>{})},[]);
   const canEdit=role==='admin'||role==='editor';
   const canDelete=role==='admin';
   const roleRef=useRef(null);roleRef.current=role;
