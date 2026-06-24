@@ -59,17 +59,25 @@ async function run(req) {
     return { ok: true, skipped: 'already_announced', date: tom.full };
   }
 
+  // Confirmed / corrected dates. Moon-sighted holidays (Ashura, Eid, etc.) are
+  // often wrong in Google's calendar; a manual entry here OVERRIDES the feed for
+  // that exact date. Add confirmed dates as your moon-sighting committee announces.
+  const MANUAL = [
+    { d: "2026-06-25", l: "9 Muharram", c: "PK" },
+    { d: "2026-06-26", l: "Ashura (10 Muharram)", c: "PK" },
+  ];
+
   // Reuse the existing holidays feed (Google Calendar API + fallback)
   let holidays = [];
   try {
     const res = await fetch(`${baseUrl(req)}/api/holidays`);
     const d = await res.json();
     holidays = d.holidays || [];
-  } catch (e) {
-    return { ok: false, error: 'holidays_fetch_failed: ' + e.message };
-  }
+  } catch (e) { holidays = []; }
 
-  const tomorrowHolidays = holidays.filter(h => (h.d || h.date) === tom.full);
+  const manualTomorrow = MANUAL.filter(m => m.d === tom.full);
+  const feedTomorrow = holidays.filter(h => (h.d || h.date) === tom.full);
+  const tomorrowHolidays = manualTomorrow.length ? manualTomorrow : feedTomorrow;
   if (tomorrowHolidays.length === 0) {
     return { ok: true, date: tom.full, matched: 0, note: 'no_holiday_tomorrow' };
   }
