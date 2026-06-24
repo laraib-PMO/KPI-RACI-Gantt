@@ -54,6 +54,10 @@ const fD=s=>{try{return pD(s).toLocaleDateString("en-GB",{day:"numeric",month:"s
 const daysB=(a,b)=>{const da=pD(a),db=pD(b);return Math.round((db-da)/864e5)};
 // Count working days from a to b inclusive, excluding Saturdays and Sundays
 const workingDays=(s,e)=>{const a=new Date(String(s)+'T12:00:00'),b=new Date(String(e)+'T12:00:00');let c=0;for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1)){const w=d.getDay();if(w!==0&&w!==6)c++}return c};
+// Map IANA timezone -> holiday-list country code
+const tzToCountry=tz=>tz==='Europe/Istanbul'?'TR':tz==='Asia/Karachi'?'PK':tz==='Europe/London'?'UK':null;
+// Working days excluding Sat/Sun AND any date present in the holiday Set (YYYY-MM-DD strings)
+const countLeaveDays=(s,e,hol)=>{const a=new Date(String(s)+'T12:00:00'),b=new Date(String(e)+'T12:00:00');let c=0;for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1)){const w=d.getDay();if(w===0||w===6)continue;const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;if(hol&&hol.has(iso))continue;c++}return c};
 // Short leave helpers (hours-based, single day)
 const isShort=l=>!!l&&l.leave_type==='short';
 const hrsBetween=(a,b)=>{if(!a||!b)return 0;const[ah,am]=a.split(':').map(Number);const[bh,bm]=b.split(':').map(Number);return Math.max(0,Math.round((((bh*60+bm)-(ah*60+am))/60)*10)/10)};
@@ -1171,12 +1175,12 @@ export default function Home(){
     const isShortReq=v.duration==="short"||v.leave_type==="short";
     let payload,detail;
     if(isShortReq){const hours=hrsBetween(v.start_time,v.end_time);payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:'short',half_day:false,start_date:s,end_date:s,days:0,start_time:v.start_time||null,end_time:v.end_time||null,hours,reason:v.reason||'',status:'pending'};detail=`Short leave on ${fD(s)} · ${v.start_time}–${v.end_time} (${hours}h) is pending approval. Nil, Laraib, or Efehan will review it.`}
-    else{const hd=v.half_day==="Yes";const d=hd?0.5:(s&&e?Math.max(1,workingDays(s,e)):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const dl=s===e?fD(s):`${fD(s)} → ${fD(e)}`;payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'};detail=`${hd?"Half day":`${d} working day${d===1?"":"s"}`} of ${dbType} leave (${dl}) is pending approval. Nil, Laraib, or Efehan will review it.`}
+    else{const hd=v.half_day==="Yes";const cc=tzToCountry(me?.timezone);const holSet=new Set((publicHolidays||[]).filter(h=>{const codes=(h.c||h.country||'').toUpperCase().split(',').map(x=>x.trim());return cc&&codes.includes(cc)}).map(h=>h.d||h.date));const d=hd?0.5:(s&&e?Math.max(1,countLeaveDays(s,e,holSet)):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const dl=s===e?fD(s):`${fD(s)} → ${fD(e)}`;payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'};detail=`${hd?"Half day":`${d} working day${d===1?"":"s"}`} of ${dbType} leave (${dl}) is pending approval. Nil, Laraib, or Efehan will review it.`}
     const{data,error}=await supabase.from('leaves').insert(payload).select();
     if(error){showToast("Submit failed — "+(error.message||"try again"),"error");console.error("addLeave",error);return}
     if(data){setLeaves(p=>[...data,...p]);setResultModal({kind:"submitted",detail});
     try{await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:v.person||user?.user_metadata?.full_name,action:"requested",table:"leave",leave:data[0]})})}catch{}
-  }setAddModal(null);setLeavePreFill(null)},[user,userRoles]);
+  }setAddModal(null);setLeavePreFill(null)},[user,userRoles,publicHolidays]);
 
   // Decisions CRUD
   const addDecision=useCallback(async v=>{if(!isEditor())return;const{data}=await supabase.from('decisions').insert({title:v.title||'',owner:v.owner||'',priority:v.priority||'medium',due_date:v.due_date||null,context:v.context||'',dept:v.dept||'Team',status:'open'}).select();if(data)setDecisions(p=>[...data,...p]);showToast("Decision added");setAddModal(null)},[]);
