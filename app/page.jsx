@@ -875,7 +875,7 @@ export default function Home(){
     {d:"2026-05-19",l:"Commemoration of Atatürk / Youth Day",c:"TR"},
     {d:"2026-05-26",l:"Hajj Day",c:"PK"},
     {d:"2026-05-27",l:"Eid-ul-Adha Day 1",c:"PK,TR"},{d:"2026-05-28",l:"Eid-ul-Adha Day 2",c:"PK,TR"},{d:"2026-05-29",l:"Eid-ul-Adha Day 3",c:"PK"},{d:"2026-05-30",l:"Kurban Bayramı Day 4",c:"TR"},
-    {d:"2026-06-24",l:"9 Muharram",c:"PK"},{d:"2026-06-25",l:"Ashura",c:"PK"},
+    {d:"2026-06-25",l:"9 Muharram",c:"PK"},{d:"2026-06-26",l:"Ashura",c:"PK"},
     {d:"2026-07-15",l:"Democracy & National Unity Day",c:"TR"},
     {d:"2026-08-14",l:"Independence Day",c:"PK"},
     {d:"2026-08-25",l:"Eid Milad-un-Nabi",c:"PK,TR"},
