@@ -156,6 +156,22 @@ export async function POST(req) {
           : `*${leave.person}* will be off on ${dateRange} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`;
         await slackPost('#general', [{ type: 'section', text: { type: 'mrkdwn', text: ann } }], `${leave.person} ${dateRange}`);
       }
+
+      // Blank the Approve/Reject buttons on the original request copies (manager DM + #hr-module)
+      const msgs = Array.isArray(leave.approver_msgs) ? leave.approver_msgs : [];
+      if (msgs.length) {
+        const updBlocks = [
+          { type: 'header', text: { type: 'plain_text', text: `Leave ${action.toUpperCase()}` } },
+          { type: 'section', fields: [
+            { type: 'mrkdwn', text: `*Requester:*\n${leave.person}` },
+            { type: 'mrkdwn', text: `*Type:*\n${typeLabel}` },
+            { type: 'mrkdwn', text: short ? `*When:*\n${dateRange}` : `*Dates:*\n${dateRange}` }
+          ]},
+          { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *${action.toUpperCase()}* by ${user || 'admin'}` }] }
+        ];
+        const token = process.env.SLACK_BOT_TOKEN;
+        if (token) await Promise.all(msgs.map(m => fetch(`${SLACK_API}/chat.update`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: m.channel, ts: m.ts, blocks: updBlocks, text: `Leave ${action} for ${leave.person}` }) }).catch(() => {})));
+      }
       return Response.json({ ok: true, posted: 'leave_decision' });
     }
 
