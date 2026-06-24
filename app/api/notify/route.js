@@ -147,8 +147,10 @@ export async function POST(req) {
         await slackPost(empId, [{ type: 'section', text: { type: 'mrkdwn', text: msg } }], `Leave ${action}`);
       }
 
-      // Announce in #general if approved
-      if (action === 'approved') {
+      // Announce in #general if approved AND the leave has not already passed
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+      const refDate = short ? leave.start_date : leave.end_date;
+      if (action === 'approved' && refDate && refDate >= todayStr) {
         const ann = short
           ? `*${leave.person}* will be on short leave on ${leave.start_date}, ${shortWindow(leave)}.`
           : `*${leave.person}* will be off on ${dateRange} (${leave.leave_type}${leave.half_day ? ', half day' : ''}).`;
