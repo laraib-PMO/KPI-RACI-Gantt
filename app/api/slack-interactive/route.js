@@ -247,6 +247,27 @@ async function handleRejectReason(payload) {
   const updated = { ...leave, reject_reason: reason };
   try { await sendApprovalDecision(updated, 'rejected', { email: approverEmail, name: approverName }); } catch (e) { console.error('[reject] decision err', e); }
   try { await clearApproverButtons(updated, 'rejected', approverName); } catch (e) { console.error('[reject] clear err', e); }
+  // Always blank the buttons on the exact message that was clicked (works even
+  // without stored approver_msgs / for older leaves) via Slack's response_url.
+  if (meta.responseUrl) {
+    try {
+      await fetch(meta.responseUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          replace_original: true,
+          blocks: [
+            { type: 'header', text: { type: 'plain_text', text: 'Leave REJECTED' } },
+            { type: 'section', fields: [
+              { type: 'mrkdwn', text: `*Requester:*\n${leave.person}` },
+              { type: 'mrkdwn', text: `*Type:*\n${leave.leave_type}` }
+            ] },
+            ...(reason ? [{ type: 'section', text: { type: 'mrkdwn', text: `*Reason:*\n${reason}` } }] : []),
+            { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *REJECTED* by ${approverName}` }] }
+          ]
+        })
+      });
+    } catch (e) { console.error('[reject] response_url err', e); }
+  }
   return { response_action: 'clear' };
 }
 
@@ -711,7 +732,7 @@ export async function POST(req) {
           view: {
             type: 'modal',
             callback_id: 'reject_reason_submit',
-            private_metadata: JSON.stringify({ leaveId, approverName, approverEmail: finalEmail }),
+            private_metadata: JSON.stringify({ leaveId, approverName, approverEmail: finalEmail, responseUrl: payload.response_url }),
             title: { type: 'plain_text', text: 'Reject Leave' },
             submit: { type: 'plain_text', text: 'Reject' },
             close: { type: 'plain_text', text: 'Cancel' },
@@ -736,6 +757,27 @@ export async function POST(req) {
       // Blank the buttons on every copy of the request (this DM, other approvers' DMs, #hr-module)
       try { await clearApproverButtons(leave, 'approved', approverName); }
       catch (e) { console.error('[slack-interactive] clear buttons err:', e); }
+
+      // Force-clear the clicked message via response_url too (robust to slow responses / missing stored IDs)
+      if (payload.response_url) {
+        try {
+          await fetch(payload.response_url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              replace_original: true,
+              blocks: [
+                { type: 'header', text: { type: 'plain_text', text: 'Leave APPROVED' } },
+                { type: 'section', fields: [
+                  { type: 'mrkdwn', text: `*Requester:*\n${leave.person}` },
+                  { type: 'mrkdwn', text: `*Type:*\n${leave.leave_type}` },
+                  { type: 'mrkdwn', text: `*${isShort(leave) ? 'When' : 'Dates'}:*\n${isShort(leave) ? `${isoToDateLabel(leave.start_date)} · ${shortWindow(leave)}` : `${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}`}` }
+                ] },
+                { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *APPROVED* by ${approverName}` }] }
+              ]
+            })
+          });
+        } catch (e) { console.error('[approve] response_url err', e); }
+      }
 
       return Response.json({
         replace_original: true,
@@ -781,6 +823,21 @@ export async function POST(req) {
         try { await announceHoliday(hr); } catch (e) { console.error('[holiday] announce err', e); }
       }
       try { await clearHolidayButtons(hr, newStatus, approverName); } catch (e) { console.error('[holiday] clear err', e); }
+      if (payload.response_url) {
+        try {
+          await fetch(payload.response_url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              replace_original: true,
+              blocks: [
+                { type: 'header', text: { type: 'plain_text', text: `Holiday ${newStatus.toUpperCase()}` } },
+                { type: 'section', text: { type: 'mrkdwn', text: `*${hr.name}* (${hr.country}) on ${isoToDateLabel(hr.hol_date)}` } },
+                { type: 'context', elements: [{ type: 'mrkdwn', text: `${newStatus === 'approved' ? 'Approved — announced in #general' : 'Rejected — not announced'} by ${approverName}` }] }
+              ]
+            })
+          });
+        } catch (e) { console.error('[holiday] response_url err', e); }
+      }
       return Response.json({
         replace_original: true,
         blocks: [
