@@ -883,6 +883,7 @@ export default function Home(){
     {d:"2026-10-29",l:"Republic Day",c:"TR"},
     {d:"2026-11-09",l:"Iqbal Day",c:"PK"},
     {d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
+    {d:"2026-01-01",l:"New Year's Day",c:"UK"},{d:"2026-04-03",l:"Good Friday",c:"UK"},{d:"2026-04-06",l:"Easter Monday",c:"UK"},{d:"2026-05-04",l:"Early May Bank Holiday",c:"UK"},{d:"2026-05-25",l:"Spring Bank Holiday",c:"UK"},{d:"2026-08-31",l:"Summer Bank Holiday",c:"UK"},{d:"2026-12-25",l:"Christmas Day",c:"UK"},{d:"2026-12-28",l:"Boxing Day (substitute)",c:"UK"},
   ];
   const[publicHolidays,setPublicHolidays]=useState(HOLIDAYS_FALLBACK);const[holidaySource,setHolidaySource]=useState("fallback");
   const[config,setConfig]=useState({cash_on_hand:0,monthly_burn:0,currency:"USD",launch_date:"2026-06-10",pitch_day:"2026-07-01"});
@@ -2509,7 +2510,7 @@ export default function Home(){
               <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:280,overflowY:"auto"}}>
                 {upcomingHolidays.map((h,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 8px",borderRadius:6,background:i%2===0?"var(--bg2)":"transparent",fontSize:11}}>
                   <span style={{color:"var(--fg)",fontWeight:600}}>{fD(h.d||h.date)} <span style={{color:"var(--fg2)",fontWeight:400}}>({new Date((h.d||h.date)+"T00:00:00").toLocaleDateString("en-US",{weekday:"short"})})</span></span>
-                  <span style={{color:"var(--fg2)"}}>{h.l||h.name} <span style={{fontSize:9,padding:"1px 6px",borderRadius:4,background:(h.c||h.country)==="PK"?"#3B82F620":"#EC489920",color:(h.c||h.country)==="PK"?"#3B82F6":"#EC4899",fontWeight:700,marginLeft:4}}>{h.c||h.country}</span></span>
+                  <span style={{color:"var(--fg2)"}}>{h.l||h.name} <span style={{fontSize:9,padding:"1px 6px",borderRadius:4,background:(h.c||h.country)==="PK"?"#3B82F620":(h.c||h.country)==="UK"?"#10B98120":"#EC489920",color:(h.c||h.country)==="PK"?"#3B82F6":(h.c||h.country)==="UK"?"#10B981":"#EC4899",fontWeight:700,marginLeft:4}}>{h.c||h.country}</span></span>
                 </div>)}
               </div>
             </div>
