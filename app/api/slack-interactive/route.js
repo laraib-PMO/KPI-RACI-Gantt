@@ -139,6 +139,9 @@ async function sendApprovalDecision(leave, decision, approver) {
         ]
       }
     ];
+    if (decision === 'rejected' && leave.reject_reason) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Reason for rejection:*\n${leave.reject_reason}` } });
+    }
     if (cal) {
       blocks.push({ type: 'divider' });
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '*Add leave to your calendar:*' } });
@@ -172,6 +175,81 @@ async function sendApprovalDecision(leave, decision, approver) {
     });
   }
 }
+
+// Replace the original request message(s) (manager DM + #hr-module) so the
+// Approve/Reject buttons disappear once a decision is made anywhere.
+async function clearApproverButtons(leave, decision, approverName) {
+  const msgs = Array.isArray(leave?.approver_msgs) ? leave.approver_msgs : [];
+  if (!msgs.length) return;
+  const short = isShort(leave);
+  const blocks = [
+    { type: 'header', text: { type: 'plain_text', text: `Leave ${String(decision).toUpperCase()}` } },
+    { type: 'section', fields: [
+      { type: 'mrkdwn', text: `*Requester:*\n${leave.person}` },
+      { type: 'mrkdwn', text: `*Type:*\n${leave.leave_type}` },
+      { type: 'mrkdwn', text: `*${short ? 'When' : 'Dates'}:*\n${short ? `${isoToDateLabel(leave.start_date)} · ${shortWindow(leave)}` : `${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}`}` }
+    ]},
+    { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *${String(decision).toUpperCase()}*${approverName ? ` by ${approverName}` : ''}` }] }
+  ];
+  await Promise.all(msgs.map(m =>
+    slackAPI('chat.update', { channel: m.channel, ts: m.ts, blocks, text: `Leave ${decision} for ${leave.person}` }).catch(() => {})
+  ));
+}
+
+// ─── Holiday approval helpers ────────────────────────────────────────────────
+const HOL_TZ = { TR: 'Europe/Istanbul', PK: 'Asia/Karachi', UK: 'Europe/London', GB: 'Europe/London' };
+const HOL_LBL = { TR: 'Turkey', PK: 'Pakistan', UK: 'United Kingdom', GB: 'United Kingdom' };
+
+// Post the public-holiday announcement to #general once approved (names the team off)
+async function announceHoliday(hr) {
+  const countries = String(hr.country || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+  const tzs = countries.map(c => HOL_TZ[c]).filter(Boolean);
+  const label = countries.map(c => HOL_LBL[c] || c).join(' & ') || 'Public';
+  const { data: people } = await supabase.from('user_roles').select('name,timezone');
+  const names = (people || []).filter(p => tzs.includes(p.timezone)).map(p => p.name).filter(Boolean);
+  const who = names.length
+    ? `\n\nOff for the day: ${names.join(', ')}. Please plan around their availability.`
+    : `\n\nTeammates in ${label} will be off.`;
+  await slackAPI('chat.postMessage', {
+    channel: '#general',
+    text: `Public holiday: ${hr.name} (${label})`,
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: 'Public Holiday' } },
+      { type: 'section', text: { type: 'mrkdwn', text: `*${hr.name}* — a public holiday in ${label} on ${isoToDateLabel(hr.hol_date)}.${who}` } }
+    ]
+  });
+}
+
+// Blank the Approve/Reject buttons on the holiday-approval message(s)
+async function clearHolidayButtons(hr, decision, approverName) {
+  const msgs = Array.isArray(hr.msgs) ? hr.msgs : [];
+  if (!msgs.length) return;
+  const blocks = [
+    { type: 'header', text: { type: 'plain_text', text: `Holiday ${String(decision).toUpperCase()}` } },
+    { type: 'section', text: { type: 'mrkdwn', text: `*${hr.name}* (${hr.country}) on ${isoToDateLabel(hr.hol_date)}` } },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: `${decision === 'approved' ? 'Approved — announced in #general' : 'Rejected — not announced'}${approverName ? ` by ${approverName}` : ''}` }] }
+  ];
+  await Promise.all(msgs.map(m =>
+    slackAPI('chat.update', { channel: m.channel, ts: m.ts, blocks, text: `Holiday ${decision}` }).catch(() => {})
+  ));
+}
+
+// Modal submit: reject a leave WITH a reason, notify the requester, clear buttons
+async function handleRejectReason(payload) {
+  const meta = JSON.parse(payload.view.private_metadata || '{}');
+  const leaveId = meta.leaveId;
+  const approverName = meta.approverName || payload.user?.name || payload.user?.username || '';
+  const approverEmail = meta.approverEmail || '';
+  const reason = payload.view.state?.values?.rr?.value?.value || '';
+  const { data: leave } = await supabase.from('leaves').select('*').eq('id', leaveId).single();
+  if (!leave) return { response_action: 'clear' };
+  await supabase.from('leaves').update({ status: 'rejected', reject_reason: reason, approved_by: approverName, approved_by_email: approverEmail }).eq('id', leaveId);
+  const updated = { ...leave, reject_reason: reason };
+  try { await sendApprovalDecision(updated, 'rejected', { email: approverEmail, name: approverName }); } catch (e) { console.error('[reject] decision err', e); }
+  try { await clearApproverButtons(updated, 'rejected', approverName); } catch (e) { console.error('[reject] clear err', e); }
+  return { response_action: 'clear' };
+}
+
 async function openBalancesModal(trigger_id, email) {
   const year = new Date().getFullYear();
   const { data: bals } = await supabase.from('leave_balances').select('*').ilike('email', email).eq('year', year);
@@ -333,10 +411,11 @@ async function handleLeaveSubmit(payload) {
 
   // Fire all notifications in parallel — sequential awaits blew Slack's 3s
   // view_submission budget and caused "We had some trouble connecting".
+  const refs = [];
   const notifyTasks = [];
   notifyTasks.push((async () => {
     const managerId = await lookupUser(managerEmail);
-    if (managerId) await dmUser(managerId, { blocks: card, text: `${requester.name} requested leave` });
+    if (managerId) { const r = await dmUser(managerId, { blocks: card, text: `${requester.name} requested leave` }); if (r?.ok && r.channel && r.ts) refs.push({ channel: r.channel, ts: r.ts }); }
   })());
   if (managerEmail !== 'efehan@attimo.com') {
     notifyTasks.push((async () => {
@@ -346,9 +425,10 @@ async function handleLeaveSubmit(payload) {
       });
     })());
   }
-  notifyTasks.push(slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested leave` }));
+  notifyTasks.push((async () => { const hr = await slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested leave` }); if (hr?.ok && hr.channel && hr.ts) refs.push({ channel: hr.channel, ts: hr.ts }); })());
   if (userId) notifyTasks.push(dmUser(userId, { text: 'Leave request submitted. Awaiting approval from your manager.' }));
   await Promise.all(notifyTasks);
+  if (refs.length) { try { await supabase.from('leaves').update({ approver_msgs: refs }).eq('id', inserted.id); } catch {} }
 
   return { response_action: 'clear' };
 }
@@ -410,10 +490,11 @@ async function handleShortLeaveSubmit(payload) {
     ]
   });
 
+  const refs = [];
   const notifyTasks = [];
   notifyTasks.push((async () => {
     const managerId = await lookupUser(managerEmail);
-    if (managerId) await dmUser(managerId, { blocks: card, text: `${requester.name} requested short leave` });
+    if (managerId) { const r = await dmUser(managerId, { blocks: card, text: `${requester.name} requested short leave` }); if (r?.ok && r.channel && r.ts) refs.push({ channel: r.channel, ts: r.ts }); }
   })());
   if (managerEmail !== 'efehan@attimo.com') {
     notifyTasks.push((async () => {
@@ -421,9 +502,10 @@ async function handleShortLeaveSubmit(payload) {
       if (efehanId) await dmUser(efehanId, { text: `FYI: *${requester.name}* requested short leave on ${isoToDateLabel(date)} (${start_time}–${end_time}, ${hours}h). Awaiting approval.` });
     })());
   }
-  notifyTasks.push(slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested short leave` }));
+  notifyTasks.push((async () => { const hr = await slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested short leave` }); if (hr?.ok && hr.channel && hr.ts) refs.push({ channel: hr.channel, ts: hr.ts }); })());
   if (userId) notifyTasks.push(dmUser(userId, { text: 'Short leave request submitted. Awaiting approval from your manager.' }));
   await Promise.all(notifyTasks);
+  if (refs.length) { try { await supabase.from('leaves').update({ approver_msgs: refs }).eq('id', inserted.id); } catch {} }
 
   return { response_action: 'clear' };
 }
@@ -568,6 +650,11 @@ export async function POST(req) {
     return Response.json(result);
   }
 
+  if (payload.type === 'view_submission' && payload.view.callback_id === 'reject_reason_submit') {
+    const result = await handleRejectReason(payload);
+    return Response.json(result);
+  }
+
   // Close modal views that don't need processing
   if (payload.type === 'view_submission' && ['balances_view', 'my_leave_view', 'holidays_view', 'policy_view', 'subscribe_view'].includes(payload.view?.callback_id)) {
     return Response.json({ response_action: 'clear' });
@@ -617,19 +704,43 @@ export async function POST(req) {
         return Response.json({ response_type: 'ephemeral', text: 'Only the manager or Efehan can act on this.' });
       }
 
-      const newStatus = decision === 'approve' ? 'approved' : 'rejected';
+      // Reject → ask for a reason first (modal); the rejection is applied on submit
+      if (decision === 'reject') {
+        await slackAPI('views.open', {
+          trigger_id: payload.trigger_id,
+          view: {
+            type: 'modal',
+            callback_id: 'reject_reason_submit',
+            private_metadata: JSON.stringify({ leaveId, approverName, approverEmail: finalEmail }),
+            title: { type: 'plain_text', text: 'Reject Leave' },
+            submit: { type: 'plain_text', text: 'Reject' },
+            close: { type: 'plain_text', text: 'Cancel' },
+            blocks: [
+              { type: 'section', text: { type: 'mrkdwn', text: `Rejecting *${leave.person}*'s ${isShort(leave) ? 'short leave' : leave.leave_type} request (${isShort(leave) ? `${isoToDateLabel(leave.start_date)} · ${shortWindow(leave)}` : `${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}`}).` } },
+              { type: 'input', block_id: 'rr', label: { type: 'plain_text', text: 'Reason for rejection' }, element: { type: 'plain_text_input', action_id: 'value', multiline: true, placeholder: { type: 'plain_text', text: 'Shared with the requester' } } }
+            ]
+          }
+        });
+        return Response.json({});
+      }
+
+      // Approve → immediate
       await supabase.from('leaves').update({
-        status: newStatus, approved_by: approverName, approved_by_email: finalEmail
+        status: 'approved', approved_by: approverName, approved_by_email: finalEmail
       }).eq('id', leaveId);
 
       // MUST await — these DMs + #general post die if left to run after return
-      try { await sendApprovalDecision(leave, newStatus, { email: finalEmail, name: approverName }); }
+      try { await sendApprovalDecision(leave, 'approved', { email: finalEmail, name: approverName }); }
       catch (e) { console.error('[slack-interactive] Approval decision err:', e); }
+
+      // Blank the buttons on every copy of the request (this DM, other approvers' DMs, #hr-module)
+      try { await clearApproverButtons(leave, 'approved', approverName); }
+      catch (e) { console.error('[slack-interactive] clear buttons err:', e); }
 
       return Response.json({
         replace_original: true,
         blocks: [
-          { type: 'header', text: { type: 'plain_text', text: `Leave ${newStatus.toUpperCase()}` } },
+          { type: 'header', text: { type: 'plain_text', text: 'Leave APPROVED' } },
           {
             type: 'section',
             fields: [
@@ -638,7 +749,44 @@ export async function POST(req) {
               { type: 'mrkdwn', text: `*${isShort(leave) ? 'When' : 'Dates'}:*\n${isShort(leave) ? `${isoToDateLabel(leave.start_date)} · ${shortWindow(leave)}` : `${isoToDateLabel(leave.start_date)}${leave.start_date !== leave.end_date ? ` → ${isoToDateLabel(leave.end_date)}` : ''}`}` }
             ]
           },
-          { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *${newStatus.toUpperCase()}* by ${approverName}` }] }
+          { type: 'context', elements: [{ type: 'mrkdwn', text: `Decision: *APPROVED* by ${approverName}` }] }
+        ]
+      });
+    }
+
+    const holMatch = action.action_id?.match(/^holiday_(approve|reject)_(\d+)$/);
+    if (holMatch) {
+      const [, decision, reqId] = holMatch;
+      const approverName = payload.user?.name || payload.user?.username || '';
+      let approverEmail = payload.user?.profile?.email || payload.user?.email || '';
+      if (!approverEmail && payload.user?.id) {
+        try {
+          const res = await fetch(`${SLACK_API}/users.info?user=${payload.user.id}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+          const d = await res.json();
+          approverEmail = d.user?.profile?.email || '';
+        } catch {}
+      }
+      const HOL_APPROVERS = ['efehan@attimo.com', 'laraib@attimo.com'];
+      if (approverEmail && !HOL_APPROVERS.includes(approverEmail.toLowerCase())) {
+        return Response.json({ response_type: 'ephemeral', text: 'Only Efehan or Laraib can decide public holidays.' });
+      }
+      const { data: hr } = await supabase.from('holiday_requests').select('*').eq('id', reqId).single();
+      if (!hr) return Response.json({ response_type: 'ephemeral', text: 'Holiday request not found.' });
+      if (hr.status !== 'pending') {
+        return Response.json({ replace_original: true, blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `This holiday was already *${hr.status}*.` } }] });
+      }
+      const newStatus = decision === 'approve' ? 'approved' : 'rejected';
+      await supabase.from('holiday_requests').update({ status: newStatus, decided_by: approverName }).eq('id', reqId);
+      if (newStatus === 'approved') {
+        try { await announceHoliday(hr); } catch (e) { console.error('[holiday] announce err', e); }
+      }
+      try { await clearHolidayButtons(hr, newStatus, approverName); } catch (e) { console.error('[holiday] clear err', e); }
+      return Response.json({
+        replace_original: true,
+        blocks: [
+          { type: 'header', text: { type: 'plain_text', text: `Holiday ${newStatus.toUpperCase()}` } },
+          { type: 'section', text: { type: 'mrkdwn', text: `*${hr.name}* (${hr.country}) on ${isoToDateLabel(hr.hol_date)}` } },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: `${newStatus === 'approved' ? 'Approved — announced in #general' : 'Rejected — not announced'} by ${approverName}` }] }
         ]
       });
     }
