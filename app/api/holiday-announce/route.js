@@ -14,8 +14,8 @@ const supabase = createClient(
 
 const SLACK_API = 'https://slack.com/api';
 const CHANNEL = '#general';
-const TZ_BY_COUNTRY = { TR: 'Europe/Istanbul', PK: 'Asia/Karachi' };
-const COUNTRY_LABEL = { TR: 'Turkey', PK: 'Pakistan' };
+const TZ_BY_COUNTRY = { TR: 'Europe/Istanbul', PK: 'Asia/Karachi', UK: 'Europe/London', GB: 'Europe/London' };
+const COUNTRY_LABEL = { TR: 'Turkey', PK: 'Pakistan', UK: 'United Kingdom', GB: 'United Kingdom' };
 
 async function slackPost(channel, blocks, fallbackText) {
   const token = process.env.SLACK_BOT_TOKEN;
@@ -63,8 +63,18 @@ async function run(req) {
   // often wrong in Google's calendar; a manual entry here OVERRIDES the feed for
   // that exact date. Add confirmed dates as your moon-sighting committee announces.
   const MANUAL = [
+    // Pakistan — moon-sighted (corrected vs Google)
     { d: "2026-06-25", l: "9 Muharram", c: "PK" },
     { d: "2026-06-26", l: "Ashura (10 Muharram)", c: "PK" },
+    // United Kingdom — fixed bank holidays 2026 (gov.uk, England & Wales)
+    { d: "2026-01-01", l: "New Year's Day", c: "UK" },
+    { d: "2026-04-03", l: "Good Friday", c: "UK" },
+    { d: "2026-04-06", l: "Easter Monday", c: "UK" },
+    { d: "2026-05-04", l: "Early May bank holiday", c: "UK" },
+    { d: "2026-05-25", l: "Spring bank holiday", c: "UK" },
+    { d: "2026-08-31", l: "Summer bank holiday", c: "UK" },
+    { d: "2026-12-25", l: "Christmas Day", c: "UK" },
+    { d: "2026-12-28", l: "Boxing Day (substitute)", c: "UK" },
   ];
 
   // Reuse the existing holidays feed (Google Calendar API + fallback)
@@ -75,9 +85,16 @@ async function run(req) {
     holidays = d.holidays || [];
   } catch (e) { holidays = []; }
 
+  // Additive merge: manual entries are added; for any country a manual entry
+  // covers tomorrow, the feed's entries for that same country are dropped
+  // (manual wins) so corrections replace and additions don't duplicate.
   const manualTomorrow = MANUAL.filter(m => m.d === tom.full);
-  const feedTomorrow = holidays.filter(h => (h.d || h.date) === tom.full);
-  const tomorrowHolidays = manualTomorrow.length ? manualTomorrow : feedTomorrow;
+  const manualCountries = new Set(manualTomorrow.map(m => (m.c || '').toUpperCase()));
+  const feedTomorrow = holidays.filter(h =>
+    (h.d || h.date) === tom.full &&
+    !(h.c || h.country || '').toUpperCase().split(',').some(c => manualCountries.has(c.trim()))
+  );
+  const tomorrowHolidays = [...manualTomorrow, ...feedTomorrow];
   if (tomorrowHolidays.length === 0) {
     return { ok: true, date: tom.full, matched: 0, note: 'no_holiday_tomorrow' };
   }
@@ -87,11 +104,12 @@ async function run(req) {
   const posted = [];
   const errors = [];
   for (const h of tomorrowHolidays) {
-    const country = (h.c || h.country || '').toUpperCase();
-    const tz = TZ_BY_COUNTRY[country];
-    const label = COUNTRY_LABEL[country] || country || 'Public';
+    // A holiday can cover more than one country (e.g. Eid "PK,TR") — name everyone affected.
+    const countries = (h.c || h.country || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+    const tzs = countries.map(c => TZ_BY_COUNTRY[c]).filter(Boolean);
+    const label = countries.map(c => COUNTRY_LABEL[c] || c).join(' & ') || 'Public';
     const name = h.l || h.name || 'Public Holiday';
-    const affected = (people || []).filter(p => tz && p.timezone === tz).map(p => p.name).filter(Boolean);
+    const affected = (people || []).filter(p => tzs.includes(p.timezone)).map(p => p.name).filter(Boolean);
     const whoLine = affected.length
       ? `\n\nOff for the day: ${affected.join(', ')}. Please plan around their availability.`
       : `\n\nTeammates in ${label} will be off.`;
