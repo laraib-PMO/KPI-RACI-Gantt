@@ -19,6 +19,10 @@
     {
       "path": "/api/birthdays",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/holiday-announce",
+      "schedule": "0 6 * * *"
     }
   ]
 }
