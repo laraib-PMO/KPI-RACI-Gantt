@@ -155,7 +155,9 @@ async function sendApprovalDecision(leave, decision, approver) {
     });
   }
 
-  if (decision === 'approved') {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+  const refDate = short ? leave.start_date : leave.end_date;
+  if (decision === 'approved' && refDate && refDate >= todayStr) {
     await slackAPI('chat.postMessage', {
       channel: '#general',
       text: short
@@ -351,12 +353,12 @@ async function handleShortLeaveSubmit(payload) {
   const { data: requester } = await supabase.from('user_roles').select('*').ilike('email', email).maybeSingle();
   if (!requester) return { response_action: 'errors', errors: { sl_date: 'Account not in roster — contact Laraib' } };
 
-  const { data: inserted } = await supabase.from('leaves').insert({
+  const { data: inserted, error: insErr } = await supabase.from('leaves').insert({
     person: requester.name, email, leave_type: 'short', half_day: false,
     start_date: date, end_date: date, days: 0,
     start_time, end_time, hours, reason, status: 'pending'
   }).select().single();
-  if (!inserted) return { response_action: 'errors', errors: { sl_date: 'Save failed' } };
+  if (insErr || !inserted) return { response_action: 'errors', errors: { sl_date: 'Save failed: ' + (insErr?.message || 'no row returned') } };
 
   let managerEmail = requester.manager_email || 'efehan@attimo.com';
   const today = new Date().toISOString().split('T')[0];
