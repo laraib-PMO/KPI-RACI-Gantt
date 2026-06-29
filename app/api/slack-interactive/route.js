@@ -271,18 +271,29 @@ async function handleRejectReason(payload) {
   return { response_action: 'clear' };
 }
 
+// Live-computed spent: sum approved leave days for an email + type in a year (optionally a month)
+async function computeSpent(email, typeKey, year, month) {
+  const prefix = month ? `${year}-${month}` : `${year}`;
+  const { data } = await supabase.from('leaves').select('half_day,days,start_date')
+    .ilike('email', email).eq('leave_type', typeKey).eq('status', 'approved');
+  return (data || [])
+    .filter(l => String(l.start_date || '').startsWith(prefix))
+    .reduce((s, l) => s + (l.half_day ? 0.5 : Number(l.days || 0)), 0);
+}
+
 async function openBalancesModal(trigger_id, email) {
   const year = new Date().getFullYear();
+  const mm = String(new Date().getMonth() + 1).padStart(2, '0');
   const { data: bals } = await supabase.from('leave_balances').select('*').ilike('email', email).eq('year', year);
   const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
   const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `*Your leave balances for ${year}*` } }, { type: 'divider' }];
   for (const t of (types || [])) {
     const b = (bals || []).find(x => x.leave_type === t.key) || {};
     const allowance = b.allowance_override != null ? Number(b.allowance_override) : t.annual_allowance;
-    const spent = Number(b.spent || 0);
+    const spent = await computeSpent(email, t.key, year);
     const available = allowance != null ? Math.max(0, allowance - spent) : null;
     const monthlyLimit = t.monthly_limit;
-    const spentMonth = Number(b.spent_this_month || 0);
+    const spentMonth = monthlyLimit != null ? await computeSpent(email, t.key, year, mm) : 0;
     const monthAvail = monthlyLimit != null ? Math.max(0, monthlyLimit - spentMonth) : null;
     blocks.push({
       type: 'section',
@@ -298,8 +309,38 @@ async function openBalancesModal(trigger_id, email) {
   });
 }
 
-async function openMyLeaveModal(trigger_id, email) {
+// Admin-only: everyone's balances at a glance (Annual / Sick / Casual), live-computed
+async function openTeamBalancesModal(trigger_id) {
+  const year = new Date().getFullYear();
+  const { data: users } = await supabase.from('user_roles').select('name,email').order('name');
+  const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
+  const { data: bals } = await supabase.from('leave_balances').select('*').eq('year', year);
+  const dayTypes = (types || []).filter(t => t.key !== 'short');
+  const { data: approved } = await supabase.from('leaves').select('email,leave_type,half_day,days,start_date,status').eq('status', 'approved');
+  const spentOf = (email, key) => (approved || [])
+    .filter(l => (l.email || '').toLowerCase() === (email || '').toLowerCase() && l.leave_type === key && String(l.start_date || '').startsWith(`${year}`))
+    .reduce((s, l) => s + (l.half_day ? 0.5 : Number(l.days || 0)), 0);
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `*Team leave balances — ${year}*` } }, { type: 'divider' }];
+  for (const u of (users || [])) {
+    if (u.email === 'efehan@attimo.com') continue; // CEO excluded from leave
+    const parts = dayTypes.map(t => {
+      const b = (bals || []).find(x => (x.email || '').toLowerCase() === (u.email || '').toLowerCase() && x.leave_type === t.key);
+      const allow = b?.allowance_override != null ? Number(b.allowance_override) : t.annual_allowance;
+      const spent = spentOf(u.email, t.key);
+      const avail = allow != null ? Math.max(0, allow - spent) : '∞';
+      return `${t.display_name}: *${avail}* left (${spent}/${allow ?? '∞'})`;
+    });
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${u.name}*\n${parts.join('  ·  ')}` } });
+  }
+  await slackAPI('views.open', {
+    trigger_id, view: { type: 'modal', callback_id: 'team_balances_view', title: { type: 'plain_text', text: 'Team Balances' }, close: { type: 'plain_text', text: 'Close' }, blocks }
+  });
+}
+
+
+async function myLeaveBlocks(email) {
   const today = new Date().toISOString().split('T')[0];
+  const istToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
   const { data: leaves } = await supabase.from('leaves').select('*').ilike('email', email).order('start_date', { ascending: false }).limit(15);
   const upcoming = (leaves || []).filter(l => l.end_date >= today);
   const past = (leaves || []).filter(l => l.end_date < today);
@@ -311,10 +352,25 @@ async function openMyLeaveModal(trigger_id, email) {
   };
   const blocks = [];
   blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Upcoming' } });
-  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: upcoming.length ? upcoming.map(fmt).join('\n') : '_No upcoming leave._' } });
+  if (!upcoming.length) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No upcoming leave._' } });
+  else for (const l of upcoming) {
+    const sec = { type: 'section', text: { type: 'mrkdwn', text: fmt(l) } };
+    const cancelable = (l.status === 'pending' || l.status === 'approved') && (l.start_date || '') >= istToday;
+    if (cancelable) sec.accessory = {
+      type: 'button', text: { type: 'plain_text', text: 'Cancel' }, style: 'danger',
+      action_id: `cancel_leave_${l.id}`, value: String(l.id),
+      confirm: { title: { type: 'plain_text', text: 'Cancel leave?' }, text: { type: 'mrkdwn', text: 'This cancels the request. Your approver will be notified.' }, confirm: { type: 'plain_text', text: 'Cancel leave' }, deny: { type: 'plain_text', text: 'Keep' } }
+    };
+    blocks.push(sec);
+  }
   blocks.push({ type: 'divider' });
   blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Past' } });
   blocks.push({ type: 'section', text: { type: 'mrkdwn', text: past.length ? past.slice(0, 10).map(fmt).join('\n') : '_No past leave._' } });
+  return blocks;
+}
+
+async function openMyLeaveModal(trigger_id, email) {
+  const blocks = await myLeaveBlocks(email);
   await slackAPI('views.open', {
     trigger_id, view: { type: 'modal', callback_id: 'my_leave_view', title: { type: 'plain_text', text: 'My Leave' }, close: { type: 'plain_text', text: 'Close' }, blocks }
   });
@@ -328,10 +384,10 @@ async function openHolidaysModal(trigger_id) {
     holidays = d.holidays || [];
   } catch { holidays = []; }
   const today = new Date().toISOString().split('T')[0];
-  const upcoming = holidays.filter(h => h.date >= today).slice(0, 20);
+  const upcoming = holidays.filter(h => (h.d || h.date) >= today).slice(0, 20);
   const blocks = [{ type: 'header', text: { type: 'plain_text', text: 'Public Holidays' } }];
   if (upcoming.length === 0) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No upcoming holidays._' } });
-  else for (const h of upcoming) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${isoToDateLabel(h.date)}* · ${h.name} _(${h.country || 'TR/PK'})_` } });
+  else for (const h of upcoming) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${isoToDateLabel(h.d || h.date)}* · ${h.l || h.name} _(${h.c || h.country || 'TR/PK'})_` } });
   await slackAPI('views.open', {
     trigger_id, view: { type: 'modal', callback_id: 'holidays_view', title: { type: 'plain_text', text: 'Public Holidays' }, close: { type: 'plain_text', text: 'Close' }, blocks }
   });
@@ -409,6 +465,19 @@ async function handleLeaveSubmit(payload) {
     .lte('start_date', today).gte('end_date', today).maybeSingle();
   if (managerOnLeave && managerEmail !== 'efehan@attimo.com') managerEmail = 'efehan@attimo.com';
 
+  // Soft balance check — warn only, approvers still decide
+  let overNote = '';
+  if (!half_day) {
+    const yr = new Date().getFullYear();
+    const { data: balRow } = await supabase.from('leave_balances').select('allowance_override').ilike('email', email).eq('leave_type', leave_type).eq('year', yr).maybeSingle();
+    const allowance = balRow?.allowance_override != null ? Number(balRow.allowance_override) : (typeRow?.annual_allowance ?? null);
+    if (allowance != null) {
+      const spent = await computeSpent(email, leave_type, yr);
+      const remaining = allowance - spent;
+      if (days > remaining) overNote = `This is ${days - remaining} day(s) over ${requester.name}'s remaining ${typeRow?.display_name || leave_type} balance (${Math.max(0, remaining)} left of ${allowance}).`;
+    }
+  }
+
   const card = [
     { type: 'header', text: { type: 'plain_text', text: 'New Leave Request' } },
     {
@@ -422,6 +491,7 @@ async function handleLeaveSubmit(payload) {
     }
   ];
   if (reason) card.push({ type: 'section', text: { type: 'mrkdwn', text: `*Reason:* ${reason}` } });
+  if (overNote) card.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `[OVER BALANCE] ${overNote}` }] });
   card.push({
     type: 'actions',
     elements: [
@@ -447,7 +517,7 @@ async function handleLeaveSubmit(payload) {
     })());
   }
   notifyTasks.push((async () => { const hr = await slackAPI('chat.postMessage', { channel: '#hr-module', blocks: card, text: `${requester.name} requested leave` }); if (hr?.ok && hr.channel && hr.ts) refs.push({ channel: hr.channel, ts: hr.ts }); })());
-  if (userId) notifyTasks.push(dmUser(userId, { text: 'Leave request submitted. Awaiting approval from your manager.' }));
+  if (userId) notifyTasks.push(dmUser(userId, { text: 'Leave request submitted. Awaiting approval from your manager.' + (overNote ? `\n\nNote: ${overNote}` : '') }));
   await Promise.all(notifyTasks);
   if (refs.length) { try { await supabase.from('leaves').update({ approver_msgs: refs }).eq('id', inserted.id); } catch {} }
 
@@ -541,6 +611,12 @@ async function handleHomeAction(payload, action) {
   } catch {}
 
   switch (action.action_id) {
+    case 'home_team_balances': {
+      const LEAVE_APPROVERS = ['nil@attimo.com', 'laraib@attimo.com', 'efehan@attimo.com'];
+      if (!LEAVE_APPROVERS.includes(email)) { await dmUser(userId, { text: 'Team balances are visible to leave approvers only.' }); return; }
+      await openTeamBalancesModal(trigger_id);
+      return;
+    }
     case 'home_request_leave': {
       if (email.toLowerCase() === 'efehan@attimo.com') {
         await dmUser(userId, { text: 'The CEO is excluded from leave requests.' });
@@ -677,7 +753,7 @@ export async function POST(req) {
   }
 
   // Close modal views that don't need processing
-  if (payload.type === 'view_submission' && ['balances_view', 'my_leave_view', 'holidays_view', 'policy_view', 'subscribe_view'].includes(payload.view?.callback_id)) {
+  if (payload.type === 'view_submission' && ['balances_view', 'team_balances_view', 'my_leave_view', 'holidays_view', 'policy_view', 'subscribe_view'].includes(payload.view?.callback_id)) {
     return Response.json({ response_action: 'clear' });
   }
 
@@ -695,6 +771,34 @@ export async function POST(req) {
     }
 
     if (action.action_id?.startsWith('add_') && action.action_id?.endsWith('_cal')) {
+      return Response.json({});
+    }
+
+    const cancelMatch = action.action_id?.match(/^cancel_leave_(\d+)$/);
+    if (cancelMatch) {
+      const [, leaveId] = cancelMatch;
+      let email = payload.user?.profile?.email || '';
+      if (!email && payload.user?.id) {
+        try {
+          const res = await fetch(`${SLACK_API}/users.info?user=${payload.user.id}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+          const d = await res.json();
+          email = d.user?.profile?.email || '';
+        } catch {}
+      }
+      // Reuse the same service-key endpoint the dashboard uses (ownership + future-only + notifications)
+      try {
+        await fetch('https://attimo-ops.vercel.app/api/cancel-leave', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: leaveId, email })
+        });
+      } catch (e) { console.error('[slack-interactive] cancel-leave call failed:', e); }
+      // Refresh the My Leave modal in place
+      if (payload.view?.id) {
+        try {
+          const blocks = await myLeaveBlocks(email);
+          await slackAPI('views.update', { view_id: payload.view.id, view: { type: 'modal', callback_id: 'my_leave_view', title: { type: 'plain_text', text: 'My Leave' }, close: { type: 'plain_text', text: 'Close' }, blocks } });
+        } catch (e) { console.error('[slack-interactive] views.update failed:', e); }
+      }
       return Response.json({});
     }
 
@@ -718,6 +822,26 @@ export async function POST(req) {
 
       const { data: leave } = await supabase.from('leaves').select('*').eq('id', leaveId).single();
       if (!leave) return Response.json({ response_type: 'ephemeral', text: 'Leave not found' });
+
+      // Idempotency: if already decided (e.g. a stale button on an old request), do nothing but tidy the message
+      if (leave.status && leave.status !== 'pending') {
+        if (payload.response_url) {
+          try {
+            await fetch(payload.response_url, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                replace_original: true,
+                blocks: [
+                  { type: 'header', text: { type: 'plain_text', text: `Leave ${String(leave.status).toUpperCase()}` } },
+                  { type: 'section', text: { type: 'mrkdwn', text: `*${leave.person}* — ${leave.leave_type}` } },
+                  { type: 'context', elements: [{ type: 'mrkdwn', text: `Already ${leave.status}${leave.approved_by ? ` by ${leave.approved_by}` : ''} — no action taken` }] }
+                ]
+              })
+            });
+          } catch {}
+        }
+        return Response.json({});
+      }
 
       const { data: requester } = await supabase.from('user_roles').select('manager_email').ilike('email', leave.email).maybeSingle();
       const allowedApprovers = [requester?.manager_email, 'efehan@attimo.com'].filter(Boolean).map(e => e.toLowerCase());
