@@ -283,17 +283,22 @@ async function computeSpent(email, typeKey, year, month) {
 
 async function openBalancesModal(trigger_id, email) {
   const year = new Date().getFullYear();
-  const mm = String(new Date().getMonth() + 1).padStart(2, '0');
-  const { data: bals } = await supabase.from('leave_balances').select('*').ilike('email', email).eq('year', year);
-  const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
+  const mm = `${year}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const [balsRes, typesRes, apprRes] = await Promise.all([
+    supabase.from('leave_balances').select('*').ilike('email', email).eq('year', year),
+    supabase.from('leave_types').select('*').order('sort_order'),
+    supabase.from('leaves').select('leave_type,half_day,days,start_date').ilike('email', email).eq('status', 'approved')
+  ]);
+  const bals = balsRes.data || [], types = typesRes.data || [], appr = apprRes.data || [];
+  const sum = (key, prefix) => appr.filter(l => l.leave_type === key && String(l.start_date || '').startsWith(prefix)).reduce((s, l) => s + (l.half_day ? 0.5 : Number(l.days || 0)), 0);
   const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `*Your leave balances for ${year}*` } }, { type: 'divider' }];
-  for (const t of (types || [])) {
-    const b = (bals || []).find(x => x.leave_type === t.key) || {};
+  for (const t of types) {
+    const b = bals.find(x => x.leave_type === t.key) || {};
     const allowance = b.allowance_override != null ? Number(b.allowance_override) : t.annual_allowance;
-    const spent = await computeSpent(email, t.key, year);
+    const spent = sum(t.key, `${year}`);
     const available = allowance != null ? Math.max(0, allowance - spent) : null;
     const monthlyLimit = t.monthly_limit;
-    const spentMonth = monthlyLimit != null ? await computeSpent(email, t.key, year, mm) : 0;
+    const spentMonth = monthlyLimit != null ? sum(t.key, mm) : 0;
     const monthAvail = monthlyLimit != null ? Math.max(0, monthlyLimit - spentMonth) : null;
     blocks.push({
       type: 'section',
@@ -844,9 +849,9 @@ export async function POST(req) {
       }
 
       const { data: requester } = await supabase.from('user_roles').select('manager_email').ilike('email', leave.email).maybeSingle();
-      const allowedApprovers = [requester?.manager_email, 'efehan@attimo.com'].filter(Boolean).map(e => e.toLowerCase());
+      const allowedApprovers = [requester?.manager_email, 'nil@attimo.com', 'laraib@attimo.com', 'efehan@attimo.com'].filter(Boolean).map(e => e.toLowerCase());
       if (finalEmail && !allowedApprovers.includes(finalEmail.toLowerCase())) {
-        return Response.json({ response_type: 'ephemeral', text: 'Only the manager or Efehan can act on this.' });
+        return Response.json({ response_type: 'ephemeral', text: 'Only the requester\u2019s manager or a leave approver (Nil, Laraib, Efehan) can act on this.' });
       }
 
       // Reject → ask for a reason first (modal); the rejection is applied on submit
