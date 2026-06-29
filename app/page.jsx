@@ -299,6 +299,22 @@ function ResultModal({data,onClose}){
   </div>;
 }
 
+function RejectReasonModal({person,onCancel,onConfirm}){
+  const[reason,setReason]=useState("");
+  return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onCancel}>
+    <div className="asc" onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:16,width:"min(420px,94vw)",padding:22,border:"1px solid var(--border)",boxShadow:"0 25px 60px rgba(0,0,0,.3)"}}>
+      <div style={{fontSize:11,fontWeight:800,letterSpacing:1,color:"#EF4444",marginBottom:4}}>[REJECT]</div>
+      <div style={{fontSize:16,fontWeight:800,color:"var(--fg)",marginBottom:6}}>Reject {person?`${person}'s`:""} leave</div>
+      <div style={{fontSize:12,color:"var(--fg2)",marginBottom:12}}>Add a reason — it will be shared with the requester on Slack.</div>
+      <textarea value={reason} onChange={e=>setReason(e.target.value)} autoFocus rows={3} placeholder="Reason for rejection" style={{width:"100%",padding:10,border:"1px solid var(--border)",borderRadius:8,fontSize:12,boxSizing:"border-box",background:"var(--bg2)",color:"var(--fg)",resize:"vertical",fontFamily:"inherit"}}/>
+      <div style={{display:"flex",gap:8,marginTop:14}}>
+        <button onClick={onCancel} style={{flex:1,padding:10,background:"var(--bg3)",color:"var(--fg2)",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancel</button>
+        <button onClick={()=>onConfirm(reason.trim())} className="btn-pop" style={{flex:2,padding:10,background:"#EF4444",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer"}}>Reject leave</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function AddModal({title,fields,onSave,onClose}){
   const[vals,setVals]=useState({});
   return <div className="af modal-overlay" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
@@ -916,7 +932,7 @@ export default function Home(){
     setPublicHolidays(merged);setHolidaySource(d.source)
   }}).catch(()=>{})},[]);
   const[view,setView]=useState("dashboard");const[sel,setSel]=useState(null);const[syncing,setSyncing]=useState(false);const[loading,setLoading]=useState(true);const[addModal,setAddModal]=useState(null);const[onboardModal,setOnboardModal]=useState(null);const[onboardTab,setOnboardTab]=useState("onboarding");const[deptFilter,setDeptFilter]=useState("all");const[meetFilter,setMeetFilter]=useState("all");const[ganttMode,setGanttMode]=useState("company");const[deptTasks,setDeptTasks]=useState(null);const[deptLoading,setDeptLoading]=useState(false);const[dvm,setDvm]=useState("list");const[lastSync,setLastSync]=useState("");
-  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);const[meetingNotes,setMeetingNotes]=useState(null);const[notesLoading,setNotesLoading]=useState(false);const[resultModal,setResultModal]=useState(null);
+  const[dark,setDark]=useState(false);const[dragId,setDragId]=useState(null);const[statusFilter,setStatusFilter]=useState("all");const[userMenu,setUserMenu]=useState(false);const[profileTab,setProfileTab]=useState("overview");const[confirmDlg,setConfirmDlg]=useState(null);const[perfMetrics,setPerfMetrics]=useState(null);const[perfLoading,setPerfLoading]=useState(false);const[leavePreFill,setLeavePreFill]=useState(null);const[slotFinder,setSlotFinder]=useState(null);const[slotAttendees,setSlotAttendees]=useState([]);const[slotLoading,setSlotLoading]=useState(false);const[newSlackMembers,setNewSlackMembers]=useState([]);const[meetingNotes,setMeetingNotes]=useState(null);const[notesLoading,setNotesLoading]=useState(false);const[resultModal,setResultModal]=useState(null);const[rejectDlg,setRejectDlg]=useState(null);
   const[user,setUser]=useState(null);const[role,setRole]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[userRoles,setUserRoles]=useState([]);
   const[toast,setToast]=useState("");const[personFilter,setPersonFilter]=useState("all");const[editMyName,setEditMyName]=useState(false);const[myNameVal,setMyNameVal]=useState("");const[showHoursModal,setShowHoursModal]=useState(false);const[hoursForm,setHoursForm]=useState({tz:"",start:"",end:""});const[slackStatus,setSlackStatus]=useState({});const[slackLoading,setSlackLoading]=useState(false);const[profileCard,setProfileCard]=useState(null);
   const[effectivePerms,setEffectivePerms]=useState(null);const[platformRole,setPlatformRole]=useState(null);const[settingsTab,setSettingsTab]=useState("team");const[docsTab,setDocsTab]=useState("knowledge");
@@ -1181,12 +1197,12 @@ export default function Home(){
     const isShortReq=v.duration==="short"||v.leave_type==="short";
     let payload,detail;
     if(isShortReq){const hours=hrsBetween(v.start_time,v.end_time);payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:'short',half_day:false,start_date:s,end_date:s,days:0,start_time:v.start_time||null,end_time:v.end_time||null,hours,reason:v.reason||'',status:'pending'};detail=`Short leave on ${fD(s)} · ${v.start_time}–${v.end_time} (${hours}h) is pending approval. Nil, Laraib, or Efehan will review it.`}
-    else{const hd=v.half_day==="Yes";const cc=tzToCountry(me?.timezone);const holSet=new Set((publicHolidays||[]).filter(h=>{const codes=(h.c||h.country||'').toUpperCase().split(',').map(x=>x.trim());return cc&&codes.includes(cc)}).map(h=>h.d||h.date));const d=hd?0.5:(s&&e?Math.max(1,countLeaveDays(s,e,holSet)):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const dl=s===e?fD(s):`${fD(s)} → ${fD(e)}`;payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'};detail=`${hd?"Half day":`${d} working day${d===1?"":"s"}`} of ${dbType} leave (${dl}) is pending approval. Nil, Laraib, or Efehan will review it.`}
+    else{const hd=v.half_day==="Yes";const cc=tzToCountry(me?.timezone);const holSet=new Set((publicHolidays||[]).filter(h=>{const codes=(h.c||h.country||'').toUpperCase().split(',').map(x=>x.trim());return cc&&codes.includes(cc)}).map(h=>h.d||h.date));const d=hd?0.5:(s&&e?Math.max(1,countLeaveDays(s,e,holSet)):1);const dbType=v.leave_type==="casual"?"personal":(v.leave_type||"annual");const dl=s===e?fD(s):`${fD(s)} → ${fD(e)}`;payload={person:v.person||user?.user_metadata?.full_name||'',email:user?.email||'',leave_type:dbType,half_day:hd,start_date:s,end_date:hd?s:e,days:d,reason:v.reason||'',status:'pending'};const _lt=leaveTypes.find(x=>x.key===dbType);const _bb=leaveBalances.find(x=>x.email===user?.email&&x.leave_type===dbType&&x.year===new Date().getFullYear());const _allow=_bb?.allowance_override!=null?Number(_bb.allowance_override):(_lt?.annual_allowance??null);const _used=leaves.filter(l=>l.email===user?.email&&l.leave_type===dbType&&l.status==="approved"&&l.start_date?.startsWith(String(new Date().getFullYear()))).reduce((a,l)=>a+(l.half_day?0.5:Number(l.days||0)),0);const _over=(!hd&&_allow!=null)?(d-(_allow-_used)):0;detail=`${hd?"Half day":`${d} working day${d===1?"":"s"}`} of ${dbType} leave (${dl}) is pending approval. Nil, Laraib, or Efehan will review it.${_over>0?` Note: this is ${_over} day(s) over your remaining ${dbType} balance — your approver will see it.`:""}`}
     const{data,error}=await supabase.from('leaves').insert(payload).select();
     if(error){showToast("Submit failed — "+(error.message||"try again"),"error");console.error("addLeave",error);return}
     if(data){setLeaves(p=>[...data,...p]);setResultModal({kind:"submitted",detail});
     try{await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:v.person||user?.user_metadata?.full_name,action:"requested",table:"leave",leave:data[0]})})}catch{}
-  }setAddModal(null);setLeavePreFill(null)},[user,userRoles,publicHolidays]);
+  }setAddModal(null);setLeavePreFill(null)},[user,userRoles,publicHolidays,leaveBalances,leaveTypes,leaves]);
 
   // Decisions CRUD
   const addDecision=useCallback(async v=>{if(!isEditor())return;const{data}=await supabase.from('decisions').insert({title:v.title||'',owner:v.owner||'',priority:v.priority||'medium',due_date:v.due_date||null,context:v.context||'',dept:v.dept||'Team',status:'open'}).select();if(data)setDecisions(p=>[...data,...p]);showToast("Decision added");setAddModal(null)},[]);
@@ -1282,6 +1298,7 @@ export default function Home(){
     else showToast("Leave "+u.status+" for "+(leave?.person||"employee"))
   }},[leaves,user]);
   const deleteLeave=useCallback(async id=>{if(!isAdmin()){showToast("Admin only","error");return}setLeaves(p=>p.filter(r=>r.id!==id));await supabase.from('leaves').delete().eq('id',id)},[]);
+  const cancelOwnLeave=useCallback(async(id)=>{const lv=leaves.find(l=>l.id===id);if(!lv)return;setLeaves(p=>p.map(r=>r.id===id?{...r,status:"cancelled"}:r));try{const res=await fetch('/api/cancel-leave',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,email:user?.email})});const j=await res.json();if(!j.ok){setLeaves(p=>p.map(r=>r.id===id?{...r,status:lv.status}:r));showToast("Couldn't cancel: "+(j.error||"try again"),"error");return}showToast("Leave cancelled")}catch{setLeaves(p=>p.map(r=>r.id===id?{...r,status:lv.status}:r));showToast("Couldn't cancel — network error","error")}},[leaves,user]);
 
   // Profile picture upload
   // Self profile — any user can update own name + photo
@@ -2474,10 +2491,11 @@ export default function Home(){
                         <td colSpan={6} style={{padding:"8px 10px",color:"var(--fg2)",fontSize:11}}><b style={{color:"var(--fg)"}}>{cntY.length}</b> taken this year ({hY}h) · <b style={{color:"var(--fg)"}}>{cntM.length}</b> this month ({hM}h) <span style={{opacity:.7}}>· counted in hours, not days</span></td>
                       </tr>;}
                     const b=myBals.find(x=>x.leave_type===t.key);
-                    const spent=Number(b?.spent||0);
+                    const _yr=String(new Date().getFullYear());const _mo=new Date().toISOString().slice(0,7);
+                    const spent=leaves.filter(l=>l.email===myEmail&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(_yr)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
                     const allow=b?.allowance_override!=null?Number(b.allowance_override):t.annual_allowance;
                     const avail=allow!=null?Math.max(0,allow-spent):null;
-                    const spentMo=Number(b?.spent_this_month||0);
+                    const spentMo=leaves.filter(l=>l.email===myEmail&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(_mo)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
                     const monthAvail=t.monthly_limit!=null?Math.max(0,t.monthly_limit-spentMo):null;
                     return <tr key={t.key} style={{borderBottom:"1px solid var(--border)"}}>
                       <td style={{padding:"8px 10px"}}><span style={{padding:"3px 10px",borderRadius:6,background:(t.color||"#6366F1")+"20",color:t.color||"#6366F1",fontWeight:600,fontSize:10}}>{t.display_name}</span></td>
@@ -2508,7 +2526,10 @@ export default function Home(){
                       <div style={{fontSize:11,fontWeight:600,color:"var(--fg)"}}>{dateLabel}</div>
                       <div style={{fontSize:9,color:"var(--fg2)"}}>{t.display_name||l.leave_type} · {isShort(l)?shortWin(l):l.half_day?"0.5 day":`${l.days} day${l.days>1?"s":""}`}{(l.status==="approved"||l.status==="rejected")&&l.approved_by?` · ${l.status==="approved"?"approved":"rejected"} by ${l.approved_by.split(" ")[0]}`:""}</div>
                     </div>
-                    <span style={{fontSize:9,padding:"3px 8px",borderRadius:99,background:l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7",color:l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E",fontWeight:700,letterSpacing:.5}}>{l.status.toUpperCase()}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:9,padding:"3px 8px",borderRadius:99,background:l.status==="approved"?"#DCFCE7":l.status==="rejected"?"#FEE2E2":"#FEF3C7",color:l.status==="approved"?"#166534":l.status==="rejected"?"#991B1B":"#92400E",fontWeight:700,letterSpacing:.5}}>{l.status.toUpperCase()}</span>
+                      {(l.status==="pending"||l.status==="approved")&&l.start_date>=today&&<button onClick={()=>setConfirmDlg({msg:`Cancel your ${t.display_name||l.leave_type} leave (${dateLabel})?`,fn:()=>cancelOwnLeave(l.id)})} style={{background:"none",border:"1px solid var(--border)",color:"#DC2626",cursor:"pointer",fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:6}} className="btn-pop">Cancel</button>}
+                    </div>
                   </div>;
                 })}
               </div>}
@@ -2528,6 +2549,14 @@ export default function Home(){
             </div>
           </div>
 
+          {isLeaveApprover&&(()=>{const yr=String(new Date().getFullYear());const dayTypes=leaveTypes.filter(t=>t.key!=="short");return <div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"230ms",marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:10}}>Team Leave Balances <span style={{fontSize:9,color:"var(--fg2)",fontWeight:400}}>· {yr} · approver view</span></div>
+            <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead><tr style={{borderBottom:"1px solid var(--border)",textAlign:"left"}}><th style={{padding:"6px 10px",color:"var(--fg2)",fontWeight:600}}>Person</th>{dayTypes.map(t=><th key={t.key} style={{padding:"6px 10px",color:"var(--fg2)",fontWeight:600}}>{t.display_name}</th>)}</tr></thead>
+              <tbody>{userRoles.filter(u=>u.email!=="efehan@attimo.com").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(u=>{return <tr key={u.id} style={{borderBottom:"1px solid var(--border)"}}><td style={{padding:"6px 10px",fontWeight:600,color:"var(--fg)"}}>{u.name}</td>{dayTypes.map(t=>{const bb=leaveBalances.find(x=>x.email===u.email&&x.leave_type===t.key&&x.year===new Date().getFullYear());const allow=bb?.allowance_override!=null?Number(bb.allowance_override):t.annual_allowance;const used=leaves.filter(l=>l.email===u.email&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(yr)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);const avail=allow!=null?Math.max(0,allow-used):null;return <td key={t.key} style={{padding:"6px 10px"}}><span style={{fontWeight:700,color:avail===0?"#EF4444":avail!=null&&avail<3?"#F59E0B":"var(--fg)"}}>{avail!=null?avail:"∞"}</span> <span style={{color:"var(--fg2)",fontSize:9}}>({used}/{allow??"∞"})</span></td>})}</tr>})}</tbody>
+            </table></div>
+          </div>})()}
+
           {/* Admin section — all leave requests */}
           {isLeaveApprover&&<div className="asl" style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:16,animationDelay:"250ms"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -2543,7 +2572,7 @@ export default function Home(){
               <span style={{fontSize:10,color:"var(--fg)"}}>{l.start_date===l.end_date?fD(l.start_date):`${fD(l.start_date)} → ${fD(l.end_date)}`}{isShort(l)?` · ${l.start_time}–${l.end_time}`:""}</span>,
               <span style={{fontSize:10,color:"var(--fg2)"}}>{isShort(l)?`${l.hours||hrsBetween(l.start_time,l.end_time)}h`:l.half_day?"0.5d":`${l.days}d`}</span>,
               <span style={{fontSize:9,color:"var(--fg2)",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",display:"inline-block",whiteSpace:"nowrap"}}>{l.reason||"—"}</span>,
-              <InEdit value={l.status} onChange={v=>{updateLeave(l.id,{status:v,approved_by:v==="approved"||v==="rejected"?user?.user_metadata?.full_name||user?.email:"",approved_by_email:user?.email||""})}} type="select" options={["pending","approved","rejected","cancelled"]}/>,
+              <InEdit value={l.status} onChange={v=>{if(v==="rejected"){setRejectDlg({id:l.id,person:l.person})}else{updateLeave(l.id,{status:v,approved_by:v==="approved"?user?.user_metadata?.full_name||user?.email:"",approved_by_email:user?.email||""})}}} type="select" options={["pending","approved","rejected","cancelled"]}/>,
               <span style={{fontSize:10,color:"var(--fg2)"}}>{l.approved_by||"—"}</span>,
               <button onClick={()=>setConfirmDlg({msg:"Delete this leave record?",fn:()=>deleteLeave(l.id)})} className="act-del" style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontSize:11}}>✕</button>
             ])}/>
@@ -3013,6 +3042,7 @@ export default function Home(){
     </div>}
 
     {/* Confirm Dialog Modal */}
+    {rejectDlg&&<RejectReasonModal person={rejectDlg.person} onCancel={()=>setRejectDlg(null)} onConfirm={(reason)=>{updateLeave(rejectDlg.id,{status:"rejected",reject_reason:reason,approved_by:user?.user_metadata?.full_name||user?.email,approved_by_email:user?.email||""});setRejectDlg(null)}}/>}
     {confirmDlg&&<ConfirmDialog message={confirmDlg.msg} onConfirm={()=>{confirmDlg.fn();setConfirmDlg(null)}} onCancel={()=>setConfirmDlg(null)}/>}
 
     {/* Close user menu on outside click */}
