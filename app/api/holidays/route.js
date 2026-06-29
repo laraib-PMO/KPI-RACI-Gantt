@@ -24,6 +24,7 @@ export async function GET() {
   const calendars = [
     { id: 'en.pk%23holiday%40group.v.calendar.google.com', country: 'PK', label: 'Pakistan' },
     { id: 'en.turkish%23holiday%40group.v.calendar.google.com', country: 'TR', label: 'Turkey' },
+    { id: 'en.uk%23holiday%40group.v.calendar.google.com', country: 'UK', label: 'United Kingdom' },
   ];
 
   const allHolidays = [];
@@ -61,11 +62,24 @@ export async function GET() {
     }
   }
 
+  // Correct moon-sighted PK Muharram dates (Google estimates these and is often a day off)
+  const corrected = allHolidays.filter(h => !(/(muharram|ashura|ashoora|aşure)/i.test(h.l || '') && (h.c || '').includes('PK')));
+  corrected.push({ d: '2026-06-25', l: '9 Muharram', c: 'PK' }, { d: '2026-06-26', l: 'Ashura (10 Muharram)', c: 'PK' });
+
+  // Guarantee UK bank holidays are present even if the UK calendar fetch returned nothing
+  const UK_2026 = [
+    { d: '2026-01-01', l: "New Year's Day", c: 'UK' }, { d: '2026-04-03', l: 'Good Friday', c: 'UK' },
+    { d: '2026-04-06', l: 'Easter Monday', c: 'UK' }, { d: '2026-05-04', l: 'Early May Bank Holiday', c: 'UK' },
+    { d: '2026-05-25', l: 'Spring Bank Holiday', c: 'UK' }, { d: '2026-08-31', l: 'Summer Bank Holiday', c: 'UK' },
+    { d: '2026-12-25', l: 'Christmas Day', c: 'UK' }, { d: '2026-12-28', l: 'Boxing Day (substitute)', c: 'UK' }
+  ];
+  UK_2026.forEach(u => { if (!corrected.some(h => h.d === u.d && (h.c || '').includes('UK'))) corrected.push(u); });
+
   // Sort by date
-  allHolidays.sort((a, b) => a.d.localeCompare(b.d));
+  corrected.sort((a, b) => a.d.localeCompare(b.d));
 
   return Response.json({
-    holidays: allHolidays,
+    holidays: corrected,
     source: 'google_calendar',
     year,
     timestamp: new Date().toISOString()
@@ -82,7 +96,7 @@ function getHardcodedHolidays() {
     {d:"2026-05-19",l:"Commemoration of Atatürk / Youth Day",c:"TR"},
     {d:"2026-05-26",l:"Hajj Day",c:"PK"},
     {d:"2026-05-27",l:"Eid-ul-Adha Day 1",c:"PK,TR"},{d:"2026-05-28",l:"Eid-ul-Adha Day 2",c:"PK,TR"},{d:"2026-05-29",l:"Eid-ul-Adha Day 3",c:"PK"},{d:"2026-05-30",l:"Kurban Bayramı Day 4",c:"TR"},
-    {d:"2026-06-24",l:"9 Muharram",c:"PK"},{d:"2026-06-25",l:"Ashura (10 Muharram)",c:"PK"},
+    {d:"2026-06-25",l:"9 Muharram",c:"PK"},{d:"2026-06-26",l:"Ashura (10 Muharram)",c:"PK"},
     {d:"2026-07-15",l:"Democracy & National Unity Day",c:"TR"},
     {d:"2026-08-14",l:"Independence Day",c:"PK"},
     {d:"2026-08-25",l:"Eid Milad-un-Nabi",c:"PK,TR"},
@@ -90,5 +104,6 @@ function getHardcodedHolidays() {
     {d:"2026-10-29",l:"Republic Day",c:"TR"},
     {d:"2026-11-09",l:"Iqbal Day",c:"PK"},
     {d:"2026-12-25",l:"Quaid-e-Azam Day",c:"PK"},
+    {d:"2026-01-01",l:"New Year's Day",c:"UK"},{d:"2026-04-03",l:"Good Friday",c:"UK"},{d:"2026-04-06",l:"Easter Monday",c:"UK"},{d:"2026-05-04",l:"Early May Bank Holiday",c:"UK"},{d:"2026-05-25",l:"Spring Bank Holiday",c:"UK"},{d:"2026-08-31",l:"Summer Bank Holiday",c:"UK"},{d:"2026-12-25",l:"Christmas Day",c:"UK"},{d:"2026-12-28",l:"Boxing Day (substitute)",c:"UK"},
   ];
 }
