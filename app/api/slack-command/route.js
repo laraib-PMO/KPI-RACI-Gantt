@@ -17,6 +17,52 @@ const supabase = createClient(
 
 const LEAVE_CMDS = ['/leave', '/applyleave', '/apply-leave', '/leaverequest', '/timeoff', '/holiday'];
 const SHORT_CMDS = ['/shortleave', '/short-leave', '/short', '/shortleaverequest'];
+const BAL_CMDS = ['/leavebalance', '/leavebalances', '/balance', '/mybalance'];
+const LEAVE_APPROVER_EMAILS = ['nil@attimo.com', 'laraib@attimo.com', 'efehan@attimo.com'];
+
+// Sum approved leave days for an email + type in a year (optionally a YYYY-MM month)
+async function spentSum(email, typeKey, year, month) {
+  const prefix = month ? `${year}-${month}` : `${year}`;
+  const { data } = await supabase.from('leaves').select('half_day,days,start_date')
+    .ilike('email', email).eq('leave_type', typeKey).eq('status', 'approved');
+  return (data || []).filter(l => String(l.start_date || '').startsWith(prefix))
+    .reduce((s, l) => s + (l.half_day ? 0.5 : Number(l.days || 0)), 0);
+}
+
+async function buildOwnBalancesView(email) {
+  const year = new Date().getFullYear();
+  const mm = String(new Date().getMonth() + 1).padStart(2, '0');
+  const { data: bals } = await supabase.from('leave_balances').select('*').ilike('email', email).eq('year', year);
+  const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `*Your leave balances for ${year}*` } }, { type: 'divider' }];
+  for (const t of (types || [])) {
+    const b = (bals || []).find(x => x.leave_type === t.key) || {};
+    const allowance = b.allowance_override != null ? Number(b.allowance_override) : t.annual_allowance;
+    const spent = await spentSum(email, t.key, year);
+    const available = allowance != null ? Math.max(0, allowance - spent) : null;
+    const monthlyLimit = t.monthly_limit;
+    const spentMonth = monthlyLimit != null ? await spentSum(email, t.key, year, mm) : 0;
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${t.display_name}*\nSpent: *${spent}* · Allowance: *${allowance ?? '∞'}* · Available: *${available ?? '∞'}*` + (monthlyLimit != null ? `\n_This month:_ ${spentMonth}/${monthlyLimit} used` : '') } });
+  }
+  return { type: 'modal', callback_id: 'balances_view', title: { type: 'plain_text', text: 'My Balances' }, close: { type: 'plain_text', text: 'Close' }, blocks };
+}
+
+async function buildTeamBalancesView() {
+  const year = new Date().getFullYear();
+  const { data: users } = await supabase.from('user_roles').select('name,email').order('name');
+  const { data: types } = await supabase.from('leave_types').select('*').order('sort_order');
+  const { data: bals } = await supabase.from('leave_balances').select('*').eq('year', year);
+  const { data: approved } = await supabase.from('leaves').select('email,leave_type,half_day,days,start_date').eq('status', 'approved');
+  const dayTypes = (types || []).filter(t => t.key !== 'short');
+  const spentOf = (email, key) => (approved || []).filter(l => (l.email || '').toLowerCase() === (email || '').toLowerCase() && l.leave_type === key && String(l.start_date || '').startsWith(`${year}`)).reduce((s, l) => s + (l.half_day ? 0.5 : Number(l.days || 0)), 0);
+  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: `*Team leave balances — ${year}*` } }, { type: 'divider' }];
+  for (const u of (users || [])) {
+    if (u.email === 'efehan@attimo.com') continue;
+    const parts = dayTypes.map(t => { const b = (bals || []).find(x => (x.email || '').toLowerCase() === (u.email || '').toLowerCase() && x.leave_type === t.key); const allow = b?.allowance_override != null ? Number(b.allowance_override) : t.annual_allowance; const spent = spentOf(u.email, t.key); const avail = allow != null ? Math.max(0, allow - spent) : '∞'; return `${t.display_name}: *${avail}* (${spent}/${allow ?? '∞'})`; });
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*${u.name}*\n${parts.join('  ·  ')}` } });
+  }
+  return { type: 'modal', callback_id: 'team_balances_view', title: { type: 'plain_text', text: 'Team Balances' }, close: { type: 'plain_text', text: 'Close' }, blocks };
+}
 
 function verifySlackSignature(rawBody, timestamp, signature) {
   const secret = process.env.SLACK_SIGNING_SECRET;
@@ -137,8 +183,24 @@ export async function POST(req) {
   const command = params.get('command');
   const trigger_id = params.get('trigger_id');
   const userId = params.get('user_id');
+  const text = params.get('text') || '';
 
   console.log('[slack-command] received:', command, 'from', userId);
+
+  if (BAL_CMDS.includes(command)) {
+    let email = '';
+    try {
+      const r = await fetch(`https://slack.com/api/users.info?user=${userId}`, { headers: { 'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}` } });
+      const j = await r.json();
+      email = j.user?.profile?.email || '';
+    } catch (e) { console.error('[slack-command] users.info failed:', e.message); }
+    const wantsTeam = ['team', 'all', 'everyone'].includes(text.trim().toLowerCase());
+    const isApprover = LEAVE_APPROVER_EMAILS.includes(email.toLowerCase());
+    const view = (wantsTeam && isApprover) ? await buildTeamBalancesView() : await buildOwnBalancesView(email);
+    const result = await openView(trigger_id, view, 'balances');
+    if (!result.ok) return Response.json({ response_type: 'ephemeral', text: `Could not open balances (${result.error}). Ping Laraib.` });
+    return new Response('', { status: 200 });
+  }
 
   const isLeave = LEAVE_CMDS.includes(command);
   const isShort = SHORT_CMDS.includes(command);
