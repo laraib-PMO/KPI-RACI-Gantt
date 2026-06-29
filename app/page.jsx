@@ -2416,9 +2416,10 @@ export default function Home(){
         const yr=new Date().getFullYear();
         const today=new Date().toISOString().split("T")[0];
         const myEmail=user?.email||"";
-        const isEfehan=myEmail.toLowerCase()==="efehan@attimo.com";
-        const myBals=leaveBalances.filter(b=>b.email===myEmail);
-        const myUpcoming=leaves.filter(l=>l.email===myEmail&&l.end_date>=today).sort((a,b)=>a.start_date.localeCompare(b.start_date));
+        const myEmailL=myEmail.toLowerCase();
+        const isEfehan=myEmailL==="efehan@attimo.com";
+        const myBals=leaveBalances.filter(b=>(b.email||"").toLowerCase()===myEmailL);
+        const myUpcoming=leaves.filter(l=>(l.email||"").toLowerCase()===myEmailL&&l.end_date>=today).sort((a,b)=>a.start_date.localeCompare(b.start_date));
         const onLeaveToday=leaves.filter(l=>l.status==="approved"&&l.start_date<=today&&l.end_date>=today);
         const upcomingHolidays=publicHolidays.filter(h=>(h.d||h.date)>=today).slice(0,10);
         const myTeam=userRoles.filter(r=>r.dept===me?.dept&&r.email!==myEmail);
@@ -2485,17 +2486,17 @@ export default function Home(){
                 </tr></thead>
                 <tbody>
                   {leaveTypes.map(t=>{
-                    if(t.key==="short"){const yr=String(new Date().getFullYear());const mo=new Date().toISOString().slice(0,7);const mine=leaves.filter(l=>isShort(l)&&l.email===myEmail&&l.status==="approved");const cntY=mine.filter(l=>l.start_date?.startsWith(yr));const cntM=mine.filter(l=>l.start_date?.startsWith(mo));const hY=cntY.reduce((s,l)=>s+Number(l.hours||0),0);const hM=cntM.reduce((s,l)=>s+Number(l.hours||0),0);
+                    if(t.key==="short"){const yr=String(new Date().getFullYear());const mo=new Date().toISOString().slice(0,7);const mine=leaves.filter(l=>isShort(l)&&(l.email||"").toLowerCase()===myEmailL&&l.status==="approved");const cntY=mine.filter(l=>l.start_date?.startsWith(yr));const cntM=mine.filter(l=>l.start_date?.startsWith(mo));const hY=cntY.reduce((s,l)=>s+Number(l.hours||0),0);const hM=cntM.reduce((s,l)=>s+Number(l.hours||0),0);
                       return <tr key={t.key} style={{borderBottom:"1px solid var(--border)"}}>
                         <td style={{padding:"8px 10px"}}><span style={{padding:"3px 10px",borderRadius:6,background:(t.color||"#14B8A6")+"20",color:t.color||"#14B8A6",fontWeight:600,fontSize:10}}>{t.display_name||"Short Leave"}</span></td>
                         <td colSpan={6} style={{padding:"8px 10px",color:"var(--fg2)",fontSize:11}}><b style={{color:"var(--fg)"}}>{cntY.length}</b> taken this year ({hY}h) · <b style={{color:"var(--fg)"}}>{cntM.length}</b> this month ({hM}h) <span style={{opacity:.7}}>· counted in hours, not days</span></td>
                       </tr>;}
                     const b=myBals.find(x=>x.leave_type===t.key);
                     const _yr=String(new Date().getFullYear());const _mo=new Date().toISOString().slice(0,7);
-                    const spent=leaves.filter(l=>l.email===myEmail&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(_yr)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+                    const spent=leaves.filter(l=>(l.email||"").toLowerCase()===myEmailL&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(_yr)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
                     const allow=b?.allowance_override!=null?Number(b.allowance_override):t.annual_allowance;
                     const avail=allow!=null?Math.max(0,allow-spent):null;
-                    const spentMo=leaves.filter(l=>l.email===myEmail&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(_mo)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
+                    const spentMo=leaves.filter(l=>(l.email||"").toLowerCase()===myEmailL&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(_mo)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);
                     const monthAvail=t.monthly_limit!=null?Math.max(0,t.monthly_limit-spentMo):null;
                     return <tr key={t.key} style={{borderBottom:"1px solid var(--border)"}}>
                       <td style={{padding:"8px 10px"}}><span style={{padding:"3px 10px",borderRadius:6,background:(t.color||"#6366F1")+"20",color:t.color||"#6366F1",fontWeight:600,fontSize:10}}>{t.display_name}</span></td>
@@ -2553,7 +2554,7 @@ export default function Home(){
             <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:10}}>Team Leave Balances <span style={{fontSize:9,color:"var(--fg2)",fontWeight:400}}>· {yr} · approver view</span></div>
             <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
               <thead><tr style={{borderBottom:"1px solid var(--border)",textAlign:"left"}}><th style={{padding:"6px 10px",color:"var(--fg2)",fontWeight:600}}>Person</th>{dayTypes.map(t=><th key={t.key} style={{padding:"6px 10px",color:"var(--fg2)",fontWeight:600}}>{t.display_name}</th>)}</tr></thead>
-              <tbody>{userRoles.filter(u=>u.email!=="efehan@attimo.com").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(u=>{return <tr key={u.id} style={{borderBottom:"1px solid var(--border)"}}><td style={{padding:"6px 10px",fontWeight:600,color:"var(--fg)"}}>{u.name}</td>{dayTypes.map(t=>{const bb=leaveBalances.find(x=>x.email===u.email&&x.leave_type===t.key&&x.year===new Date().getFullYear());const allow=bb?.allowance_override!=null?Number(bb.allowance_override):t.annual_allowance;const used=leaves.filter(l=>l.email===u.email&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(yr)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);const avail=allow!=null?Math.max(0,allow-used):null;return <td key={t.key} style={{padding:"6px 10px"}}><span style={{fontWeight:700,color:avail===0?"#EF4444":avail!=null&&avail<3?"#F59E0B":"var(--fg)"}}>{avail!=null?avail:"∞"}</span> <span style={{color:"var(--fg2)",fontSize:9}}>({used}/{allow??"∞"})</span></td>})}</tr>})}</tbody>
+              <tbody>{userRoles.filter(u=>u.email!=="efehan@attimo.com").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(u=>{return <tr key={u.id} style={{borderBottom:"1px solid var(--border)"}}><td style={{padding:"6px 10px",fontWeight:600,color:"var(--fg)"}}>{u.name}</td>{dayTypes.map(t=>{const bb=leaveBalances.find(x=>(x.email||"").toLowerCase()===(u.email||"").toLowerCase()&&x.leave_type===t.key&&x.year===new Date().getFullYear());const allow=bb?.allowance_override!=null?Number(bb.allowance_override):t.annual_allowance;const used=leaves.filter(l=>(l.email||"").toLowerCase()===(u.email||"").toLowerCase()&&l.leave_type===t.key&&l.status==="approved"&&l.start_date?.startsWith(yr)).reduce((s,l)=>s+(l.half_day?0.5:Number(l.days||0)),0);const avail=allow!=null?Math.max(0,allow-used):null;return <td key={t.key} style={{padding:"6px 10px"}}><span style={{fontWeight:700,color:avail===0?"#EF4444":avail!=null&&avail<3?"#F59E0B":"var(--fg)"}}>{avail!=null?avail:"∞"}</span> <span style={{color:"var(--fg2)",fontSize:9}}>({used}/{allow??"∞"})</span></td>})}</tr>})}</tbody>
             </table></div>
           </div>})()}
 
