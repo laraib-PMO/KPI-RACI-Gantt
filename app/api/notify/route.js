@@ -144,7 +144,8 @@ export async function POST(req) {
         const msg = short
           ? `Your *Short Leave* on ${leave.start_date} (${shortWindow(leave)}) was *${action}* by ${user || 'admin'}.`
           : `Your *${leave.leave_type}* leave for ${dateRange} was *${action}* by ${user || 'admin'}.`;
-        await slackPost(empId, [{ type: 'section', text: { type: 'mrkdwn', text: msg } }], `Leave ${action}`);
+        const fullMsg = (action === 'rejected' && leave.reject_reason) ? `${msg}\n\n*Reason:* ${leave.reject_reason}` : msg;
+        await slackPost(empId, [{ type: 'section', text: { type: 'mrkdwn', text: fullMsg } }], `Leave ${action}`);
       }
 
       // Announce in #general if approved AND the leave has not already passed
