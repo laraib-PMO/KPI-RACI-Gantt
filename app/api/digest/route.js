@@ -223,7 +223,9 @@ async function postToSlack(blocks) {
   }).catch(() => {});
 }
 
-export async function POST() {
+export async function POST(req) {
+  const _a = req.headers.get('authorization') || '';
+  if (process.env.CRON_SECRET && _a !== `Bearer ${process.env.CRON_SECRET}` && !req.headers.get('x-vercel-cron')) return new Response('Unauthorized', { status: 401 });
   const today = new Date().toISOString().split('T')[0];
   const dayName = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -270,4 +272,4 @@ export async function POST() {
   });
 }
 
-export async function GET() { return POST(); }
+export async function GET(req) { return POST(req); }
