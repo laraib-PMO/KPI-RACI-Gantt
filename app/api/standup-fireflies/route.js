@@ -162,8 +162,10 @@ async function gemini(transcriptText, nameHints) {
     '- "done": each distinct thing they completed or worked on recently\n' +
     '- "tomorrow": each distinct thing they plan to do next\n' +
     '- "blockers": each blocker, or an empty list if none\n\n' +
-    'Split multiple items into SEPARATE list entries — one short line per task, never ' +
-    'one combined run-on sentence. Keep each entry to a single concise line with no ' +
+    'Split into SEPARATE entries — exactly ONE atomic update per entry. When a person ' +
+    'mentions several things in one sentence (joined by "and", commas, or "then"), break ' +
+    'each distinct update into its own separate entry; never join two updates in a single ' +
+    'entry with the word "and". Each entry is one short, self-contained action with no ' +
     'leading bullet character or numbering. Return ONLY valid JSON (no markdown, no ' +
     "commentary): an object mapping each person's spoken name to " +
     '{"done":["..."],"tomorrow":["..."],"blockers":["..."]}. Omit anyone who only ' +
