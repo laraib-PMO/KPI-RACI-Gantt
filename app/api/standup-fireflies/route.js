@@ -156,21 +156,27 @@ function parseActionItems(ai) {
 }
 
 async function gemini(transcriptText, nameHints) {
+  const roster = nameHints.join(', ');
   const prompt =
-    'You are parsing a daily engineering standup transcript. For each person who ' +
-    'spoke, extract what THEY said into three lists:\n' +
-    '- "done": each distinct thing they completed or worked on recently\n' +
-    '- "tomorrow": each distinct thing they plan to do next\n' +
-    '- "blockers": each blocker, or an empty list if none\n\n' +
-    'Split into SEPARATE entries — exactly ONE atomic update per entry. When a person ' +
-    'mentions several things in one sentence (joined by "and", commas, or "then"), break ' +
-    'each distinct update into its own separate entry; never join two updates in a single ' +
-    'entry with the word "and". Each entry is one short, self-contained action with no ' +
-    'leading bullet character or numbering. Return ONLY valid JSON (no markdown, no ' +
-    "commentary): an object mapping each person's spoken name to " +
-    '{"done":["..."],"tomorrow":["..."],"blockers":["..."]}. Omit anyone who only ' +
-    'greeted or said nothing substantive. When a speaker matches one of these team ' +
-    'members, use that exact name: ' + nameHints.join(', ') + '.\n\nTRANSCRIPT:\n' + transcriptText;
+    'You are parsing a daily engineering standup transcript. For each person who spoke, ' +
+    'extract what THEY said into three lists:\n' +
+    '- "done": things they completed or worked on recently\n' +
+    '- "tomorrow": things they plan to do next\n' +
+    '- "blockers": anything blocking them (empty list if none)\n\n' +
+    'ONE TASK = ONE ENTRY. Each list entry must be exactly one task. If a person mentions ' +
+    'several tasks in one sentence (joined by "and", commas, or "then"), separate them so ' +
+    'every task is its own entry — never put two tasks in a single entry joined by "and". ' +
+    'Do not split a single task into fragments, though: a task that merely contains "and" ' +
+    '(e.g. "calendar and drive connection", or "coordinated with X and Y") stays one entry. ' +
+    'Each entry is one short, self-contained task, with no leading bullet or numbering.\n\n' +
+    'NAMES: the official team roster and correct spellings are: ' + roster + '. Use these ' +
+    'exact spellings everywhere — both for whose update it is and for any teammate ' +
+    'mentioned inside an update. If the transcript mishears or misspells a teammate, ' +
+    'correct it to the matching roster spelling.\n\n' +
+    'Return ONLY valid JSON (no markdown, no commentary): an object whose keys are each ' +
+    "person's name (use the roster spelling when they are on the roster) and whose values " +
+    'are {"done":["..."],"tomorrow":["..."],"blockers":["..."]}. Omit anyone who only ' +
+    'greeted or said nothing substantive.\n\nTRANSCRIPT:\n' + transcriptText;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
