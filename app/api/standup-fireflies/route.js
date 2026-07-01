@@ -1,7 +1,9 @@
 // app/api/standup-fireflies/route.js
 // Pulls the daily standup transcript from Fireflies, splits it per person into
-// completed / tomorrow / blockers, and writes it into the standups table
-// (source='fireflies'). Runs on a Vercel cron and is also callable manually.
+// completed / tomorrow / blockers (one line per distinct task), and writes it into
+// the standups table (source='fireflies'). Runs on a Vercel cron and is also
+// callable manually. The dashboard cards split each field on newlines, so returning
+// per-task line items renders them as separate bullets.
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -34,6 +36,13 @@ function json(obj, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+// Accepts an array (one entry per task) or a string; returns newline-joined text so
+// the dashboard renders one bullet per line.
+function toLines(x) {
+  if (Array.isArray(x)) return x.map((s) => String(s).trim()).filter(Boolean).join('\n');
+  return String(x || '').trim();
 }
 
 // Turkish-safe, accent-insensitive normaliser.
@@ -129,7 +138,7 @@ function buildTranscriptText(sentences) {
   return lines.join(' ').trim().slice(0, 100000);
 }
 
-// Fallback: Fireflies' own per-person action items -> the "tomorrow" column.
+// Fallback: Fireflies' own per-person action items -> one "tomorrow" line each.
 // Format is "**Name**\nline (mm:ss)\nline\n**Name2**\n...".
 function parseActionItems(ai) {
   const out = {};
@@ -137,12 +146,11 @@ function parseActionItems(ai) {
   const parts = ai.split(/\*\*/).map((s) => s.trim()).filter(Boolean);
   for (let i = 0; i + 1 < parts.length; i += 2) {
     const name = parts[i].replace(/[:*]/g, '').trim();
-    const body = parts[i + 1]
+    const lines = parts[i + 1]
       .split('\n')
       .map((l) => l.replace(/\(\d{1,2}:\d{2}\)/g, '').trim())
-      .filter(Boolean)
-      .join('; ');
-    if (name && body) out[name] = { done: '', tomorrow: body, blockers: '' };
+      .filter(Boolean);
+    if (name && lines.length) out[name] = { done: [], tomorrow: lines, blockers: [] };
   }
   return out;
 }
@@ -150,15 +158,17 @@ function parseActionItems(ai) {
 async function gemini(transcriptText, nameHints) {
   const prompt =
     'You are parsing a daily engineering standup transcript. For each person who ' +
-    'spoke, extract three things strictly from what THEY said:\n' +
-    '- "done": what they reported completing or working on recently\n' +
-    '- "tomorrow": what they plan to do next\n' +
-    '- "blockers": anything blocking them, or an empty string if none\n\n' +
-    'Return ONLY valid JSON (no markdown, no commentary): an object mapping each ' +
-    "person's spoken name to {\"done\":\"...\",\"tomorrow\":\"...\",\"blockers\":\"...\"}. " +
-    'Keep each field to at most two short sentences. Omit anyone who only greeted or ' +
-    'said nothing substantive. When a speaker matches one of these team members, use ' +
-    'that exact name: ' + nameHints.join(', ') + '.\n\nTRANSCRIPT:\n' + transcriptText;
+    'spoke, extract what THEY said into three lists:\n' +
+    '- "done": each distinct thing they completed or worked on recently\n' +
+    '- "tomorrow": each distinct thing they plan to do next\n' +
+    '- "blockers": each blocker, or an empty list if none\n\n' +
+    'Split multiple items into SEPARATE list entries — one short line per task, never ' +
+    'one combined run-on sentence. Keep each entry to a single concise line with no ' +
+    'leading bullet character or numbering. Return ONLY valid JSON (no markdown, no ' +
+    "commentary): an object mapping each person's spoken name to " +
+    '{"done":["..."],"tomorrow":["..."],"blockers":["..."]}. Omit anyone who only ' +
+    'greeted or said nothing substantive. When a speaker matches one of these team ' +
+    'members, use that exact name: ' + nameHints.join(', ') + '.\n\nTRANSCRIPT:\n' + transcriptText;
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
@@ -233,7 +243,7 @@ async function run(request) {
     .filter((r) => !EXCLUDE_EMAILS.includes((r.email || '').toLowerCase()))
     .map((r) => ({ ...r, nrmName: normalize(r.name) }));
 
-  // 4. Structure the transcript. Gemini first (clean 3-column split), with the
+  // 4. Structure the transcript. Gemini first (clean per-task line items), with the
   //    action-items fallback if there's no key, the call fails, or it comes back empty.
   let method = 'action_items';
   let geminiError = null;
@@ -264,14 +274,14 @@ async function run(request) {
   for (const [rawName, v] of Object.entries(parsed || {})) {
     const person = matchPerson(rawName, roles);
     if (!person) { unmatched.push(rawName); continue; }
-    const done = ((v && (v.done || v.completed)) || '').toString().trim();
-    const tomorrow = ((v && v.tomorrow) || '').toString().trim();
-    const blockers = ((v && v.blockers) || '').toString().trim();
+    const done = toLines(v && (v.done || v.completed));
+    const tomorrow = toLines(v && v.tomorrow);
+    const blockers = toLines(v && v.blockers);
     const existing = rows.find((r) => r.person === person.name);
     if (existing) {
-      existing.completed = [existing.completed, done].filter(Boolean).join('; ');
-      existing.tomorrow = [existing.tomorrow, tomorrow].filter(Boolean).join('; ');
-      existing.blockers = [existing.blockers, blockers].filter(Boolean).join('; ');
+      existing.completed = [existing.completed, done].filter(Boolean).join('\n');
+      existing.tomorrow = [existing.tomorrow, tomorrow].filter(Boolean).join('\n');
+      existing.blockers = [existing.blockers, blockers].filter(Boolean).join('\n');
     } else {
       rows.push({
         person: person.name,
