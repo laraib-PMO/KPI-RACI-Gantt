@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import PermissionsMatrix from './components/PermissionsMatrix';
 import KnowledgeHub from './components/KnowledgeHub';
-import VitalsChat from './components/VitalsChat';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL||'', process.env.NEXT_PUBLIC_SUPABASE_KEY||'');
 
@@ -2023,11 +2022,9 @@ export default function Home(){
         <div style={{fontSize:14,fontWeight:800,color:"var(--fg)"}}>Daily Standup</div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setAddModal("standup")} className="act-add" style={{background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>+ Add Update</button>
-          <button onClick={()=>{showToast("Syncing standups...");fetch('/api/digest').then(r=>r.json()).then(()=>{showToast("Standup synced");supabase.from('standups').select('*').order('standup_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).then(({data})=>{if(data)setStandups(data)})}).catch(()=>showToast("Sync failed","error"))}} style={{background:"var(--bg3)",color:"var(--fg)",border:"1px solid var(--border)",padding:"6px 14px",borderRadius:8,fontWeight:600,fontSize:11,cursor:"pointer"}}>Sync from Linear + Asana</button>
-          <a href="https://attimo-labs.slack.com/archives/daily-standup" target="_blank" rel="noopener" style={{fontSize:11,color:"#3B82F6",fontWeight:600,textDecoration:"none",background:"#EFF6FF",padding:"6px 14px",borderRadius:8,display:"flex",alignItems:"center"}}>Open #daily-standup</a>
         </div>
       </div>
-      <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)",marginBottom:16}}>Updates from Slack workflow and manual entries. Syncs when you click Sync All. Slack workflow sends DMs at 5pm daily.</div>
+      <div style={{background:"var(--bg2)",padding:"8px 12px",borderRadius:8,fontSize:11,color:"var(--fg2)",marginBottom:16}}>Auto-populated from the daily standup meeting via Fireflies. Add or edit entries manually anytime.</div>
       {/* Not Submitted callout */}
       {(()=>{const todayStr=today;const submitted=standups.filter(s=>String(s.standup_date).split('T')[0]===todayStr&&s.person!=="Efehan Maleri").map(s=>s.person);const allNames=userRoles.filter(ur=>ur.name!=="Efehan Maleri").map(ur=>ur.name);const missing=allNames.filter(n=>!submitted.includes(n));
         const nowH=new Date().getHours();
@@ -2038,7 +2035,7 @@ export default function Home(){
       {(()=>{
         const byDate={};standups.filter(s=>s.person!=="Efehan Maleri").forEach(s=>{const d=String(s.standup_date).split('T')[0];if(!byDate[d])byDate[d]=[];byDate[d].push(s)});
         const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
-        if(dates.length===0)return <div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No standup updates yet. Click "+ Add Update" or wait for the 5pm Slack workflow.</div>;
+        if(dates.length===0)return <div style={{textAlign:"center",padding:40,color:"var(--fg2)"}}>No standup updates yet — they populate automatically after the daily standup meeting, or click "+ Add Update".</div>;
         return dates.map(date=><div key={date} className="asl" style={{marginBottom:20}}>
           <div style={{fontSize:13,fontWeight:700,color:"var(--fg)",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
             <div style={{width:4,height:16,borderRadius:2,background:"#3B82F6"}}/>
@@ -2096,7 +2093,7 @@ export default function Home(){
     </div>}
 
     {/* VITALS · OVERVIEW — company acceleration + dept health summary */}
-    {view==="vitals"&&vitalsTab==="assistant"&&<VitalsChat tasks={tasks} risks={risks} leaves={leaves} decisions={decisions} kpis={kpis} roles={roles} metricsData={metricsData} config={config} perfMetrics={perfMetrics} userRoles={userRoles} rND={rND} />}
+    {view==="vitals"&&vitalsTab==="assistant"&&<div style={{textAlign:"center",padding:40,color:"var(--fg2)",fontSize:12}}>AI assistant coming soon.</div>}
     {view==="vitals"&&vitalsTab==="overview"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
       <VitalsIntel raci={raci} risks={risks} kpis={kpis} roles={roles} leaves={leaves} userRoles={userRoles}/>
       {/* Big company acceleration */}
