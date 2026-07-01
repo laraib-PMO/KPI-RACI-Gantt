@@ -38,6 +38,7 @@ export async function GET(req) {
     if (cronSecret) return new Response('Unauthorized', { status: 401 });
   }
 
+  try {
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
@@ -111,4 +112,7 @@ export async function GET(req) {
     slack_ok: result.ok,
     slack_error: result.error
   });
+  } catch (e) {
+    return Response.json({ ok: false, error: e.message }, { status: 500 });
+  }
 }
