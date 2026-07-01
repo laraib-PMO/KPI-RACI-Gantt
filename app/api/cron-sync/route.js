@@ -358,8 +358,8 @@ async function autoFillRoles() {
 
 // ─── Main Cron Handler ──────────────────────────────────────────────────────
 export async function GET(req) {
-  const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const authHeader = req.headers.get('authorization') || '';
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}` && !req.headers.get('x-vercel-cron')) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
