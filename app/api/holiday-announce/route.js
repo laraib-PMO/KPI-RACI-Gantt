@@ -149,10 +149,14 @@ async function run(req) {
 }
 
 export async function GET(req) {
+  const _a = req.headers.get('authorization') || '';
+  if (process.env.CRON_SECRET && _a !== `Bearer ${process.env.CRON_SECRET}` && !req.headers.get('x-vercel-cron')) return new Response('Unauthorized', { status: 401 });
   try { return Response.json(await run(req)); }
   catch (e) { return Response.json({ ok: false, error: e.message }); }
 }
 export async function POST(req) {
+  const _a = req.headers.get('authorization') || '';
+  if (process.env.CRON_SECRET && _a !== `Bearer ${process.env.CRON_SECRET}` && !req.headers.get('x-vercel-cron')) return new Response('Unauthorized', { status: 401 });
   try { return Response.json(await run(req)); }
   catch (e) { return Response.json({ ok: false, error: e.message }); }
 }
