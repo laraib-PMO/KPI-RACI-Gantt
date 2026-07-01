@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import PermissionsMatrix from './components/PermissionsMatrix';
 import KnowledgeHub from './components/KnowledgeHub';
+import VitalsChat from './components/VitalsChat';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL||'', process.env.NEXT_PUBLIC_SUPABASE_KEY||'');
 
@@ -995,7 +996,7 @@ export default function Home(){
     return()=>{alive=false;supabase.removeChannel(ch)};
   },[]);
   useEffect(()=>{if(raciGrid)setRaci(gridToRaci(raciGrid))},[raciGrid]);
-  useEffect(()=>{if(((view==="perf")||(view==="vitals"&&vitalsTab==="people"))&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view,vitalsTab]);
+  useEffect(()=>{if(((view==="perf")||(view==="vitals"&&(vitalsTab==="people"||vitalsTab==="assistant")))&&!perfMetrics&&!perfLoading){setPerfLoading(true);fetch('/api/performance').then(r=>r.json()).then(d=>{setPerfMetrics(d);setPerfLoading(false)}).catch(()=>setPerfLoading(false))}},[view,vitalsTab]);
   useEffect(()=>{try{const v=localStorage.getItem('attimo_view');const ok=["dashboard","vitals","timeline","board","calendar","standup","meet","leave","onboard","hrdocs","settings"];if(v&&ok.includes(v))setView(v)}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem('attimo_view',view)}catch{}},[view]);
   useEffect(()=>{fetch('/api/birthdays',{method:'POST'}).catch(()=>{});fetch('/api/holiday-announce',{method:'POST'}).catch(()=>{})},[]);
@@ -2090,11 +2091,12 @@ export default function Home(){
         <button onClick={async()=>{showToast("Computing metrics...");try{const r=await fetch('/api/compute-metrics');const d=await r.json();if(d.ok){showToast("Metrics refreshed");const{data}=await supabase.from('metrics').select('*').order('computed_at',{ascending:false});if(data){const latest={};data.forEach(r=>{if(!latest[r.dept])latest[r.dept]=r});setMetricsData(latest)}}else showToast("Compute failed","error")}catch(e){showToast("Compute failed","error")}}} className="btn-pop" style={{padding:"7px 14px",background:"linear-gradient(135deg,#3B82F6,#8B5CF6)",color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>↻ Recompute Now</button>
       </div>
       <div style={{display:"flex",gap:4,background:"var(--bg3)",borderRadius:8,padding:3,marginBottom:16,flexWrap:"wrap"}}>
-        {[{id:"overview",l:"Overview"},{id:"departments",l:"Departments"},{id:"people",l:"People"},{id:"accountability",l:"Accountability"},{id:"risks",l:"Risks"},{id:"hiring",l:"Hiring"}].map(t=><button key={t.id} onClick={()=>setVitalsTab(t.id)} style={{padding:"7px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:vitalsTab===t.id?"var(--fg)":"transparent",color:vitalsTab===t.id?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>{t.l}</button>)}
+        {[{id:"overview",l:"Overview"},{id:"departments",l:"Departments"},{id:"people",l:"People"},{id:"accountability",l:"Accountability"},{id:"risks",l:"Risks"},{id:"hiring",l:"Hiring"},{id:"assistant",l:"Ask AI"}].map(t=><button key={t.id} onClick={()=>setVitalsTab(t.id)} style={{padding:"7px 14px",borderRadius:6,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",background:vitalsTab===t.id?"var(--fg)":"transparent",color:vitalsTab===t.id?"var(--bg)":"var(--fg2)",transition:"all .2s"}}>{t.l}</button>)}
       </div>
     </div>}
 
     {/* VITALS · OVERVIEW — company acceleration + dept health summary */}
+    {view==="vitals"&&vitalsTab==="assistant"&&<VitalsChat tasks={tasks} risks={risks} leaves={leaves} decisions={decisions} kpis={kpis} roles={roles} metricsData={metricsData} config={config} perfMetrics={perfMetrics} userRoles={userRoles} rND={rND} />}
     {view==="vitals"&&vitalsTab==="overview"&&<div className="af" style={{display:"flex",flexDirection:"column",gap:16}}>
       <VitalsIntel raci={raci} risks={risks} kpis={kpis} roles={roles} leaves={leaves} userRoles={userRoles}/>
       {/* Big company acceleration */}
