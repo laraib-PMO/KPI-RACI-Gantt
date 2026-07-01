@@ -16,6 +16,8 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC
 const FIREFLIES_API_KEY = process.env.FIREFLIES_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
+const SLACK_STANDUP_CHANNEL = 'C0B04KX1WB1'; // #daily-standup-meetings
 
 const FIREFLIES_URL = 'https://api.fireflies.ai/graphql';
 const TITLE_MATCH = 'standup';        // case-insensitive substring on the meeting title
@@ -138,6 +140,25 @@ function buildTranscriptText(sentences) {
   return lines.join(' ').trim().slice(0, 100000);
 }
 
+// One consolidated standup summary for the #daily-standup Slack channel.
+function buildSlackText(day, rows) {
+  const label = new Date(day + 'T00:00:00').toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const out = [`*Daily Standup — ${label}*   ${rows.length} update${rows.length === 1 ? '' : 's'}`];
+  for (const r of rows) {
+    const done = (r.completed || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const next = (r.tomorrow || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const block = (r.blockers || '').split('\n').map((s) => s.trim())
+      .filter((l) => l && l !== 'None' && l !== 'none');
+    out.push('', `*${r.person}*`);
+    if (done.length) out.push('Done:', ...done.map((d) => `  •  ${d}`));
+    if (next.length) out.push('Next:', ...next.map((d) => `  •  ${d}`));
+    if (block.length) out.push('Blockers:', ...block.map((d) => `  •  ${d}`));
+  }
+  return out.join('\n');
+}
+
 // Fallback: Fireflies' own per-person action items -> one "tomorrow" line each.
 // Format is "**Name**\nline (mm:ss)\nline\n**Name2**\n...".
 function parseActionItems(ai) {
@@ -203,10 +224,11 @@ async function gemini(transcriptText, nameHints) {
 async function run(request) {
   // Inbound auth: if CRON_SECRET is set, require it (Vercel cron sends it as a
   // Bearer header). A ?key= param is accepted for manual runs.
+  const url = new URL(request.url);
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const auth = request.headers.get('authorization') || '';
-    const key = new URL(request.url).searchParams.get('key') || '';
+    const key = url.searchParams.get('key') || '';
     if (auth !== `Bearer ${secret}` && key !== secret) {
       return json({ ok: false, error: 'unauthorized' }, 401);
     }
@@ -315,6 +337,33 @@ async function run(request) {
     if (insErr) throw new Error('Supabase insert: ' + insErr.message);
   }
 
+  // 7. Optional Slack summary to #daily-standup-meetings. Gated on ?slack=1 so manual
+  //    re-runs don't spam the channel; the daily cron passes slack=1. One message only.
+  let slackPosted = false;
+  let slackError = null;
+  if (url.searchParams.get('slack') === '1' && rows.length > 0 && SLACK_BOT_TOKEN) {
+    try {
+      const sr = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        },
+        body: JSON.stringify({
+          channel: SLACK_STANDUP_CHANNEL,
+          text: buildSlackText(day, rows),
+          unfurl_links: false,
+          unfurl_media: false,
+        }),
+      });
+      const sd = await sr.json();
+      if (sd.ok) slackPosted = true;
+      else slackError = sd.error || 'unknown';
+    } catch (e) {
+      slackError = e.message;
+    }
+  }
+
   return json({
     ok: true,
     standup_date: day,
@@ -326,6 +375,8 @@ async function run(request) {
     people_written: rows.length,
     matched,
     unmatched,
+    slack_posted: slackPosted,
+    slack_error: slackError || undefined,
   });
 }
 
